@@ -30,6 +30,7 @@ ENV/
 env.bak/
 venv.bak/
 .venv/
+myenv/
 
 # Django
 *.log
@@ -38,6 +39,7 @@ venv.bak/
 db.sqlite3
 db.sqlite3-journal
 /staticfiles/
+backend/staticfiles/
 /media/
 *.log
 
