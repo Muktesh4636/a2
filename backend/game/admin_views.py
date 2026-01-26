@@ -26,7 +26,7 @@ from .admin_utils import (
     super_admin_required, admin_required, permission_required,
     get_admin_permissions, has_menu_permission
 )
-from .utils import get_game_setting
+from .utils import get_game_setting, calculate_current_timer
 from django.db.models import Sum, Q
 from django.core.paginator import Paginator
 
@@ -187,8 +187,7 @@ def admin_dashboard(request):
         if current_round:
             status = current_round.status
             if current_round.start_time:
-                elapsed = (timezone.now() - current_round.start_time).total_seconds()
-                timer = int(elapsed) % get_game_setting('ROUND_END_TIME', 80)
+                timer = calculate_current_timer(current_round.start_time)
 
     total_bets = Bet.objects.count()
     total_amount = Bet.objects.aggregate(Sum('chip_amount'))['chip_amount__sum'] or 0
@@ -252,8 +251,7 @@ def set_dice_result_view(request):
                     if not round_obj:
                         round_obj = GameRound.objects.order_by('-start_time').first()
                         if round_obj and round_obj.start_time:
-                            elapsed = (timezone.now() - round_obj.start_time).total_seconds()
-                            timer = int(elapsed) % round_obj.round_end_seconds
+                            timer = calculate_current_timer(round_obj.start_time, round_obj.round_end_seconds)
 
                     # Check if timer is within allowed window (use round-specific timing)
                     dice_result_time = round_obj.dice_result_seconds if round_obj else get_game_setting('DICE_RESULT_TIME', 40)
@@ -395,8 +393,7 @@ def admin_dashboard_data(request):
         if current_round:
             status = current_round.status
             if current_round.start_time:
-                elapsed = (timezone.now() - current_round.start_time).total_seconds()
-                timer = int(elapsed) % settings.GAME_SETTINGS.get('ROUND_END_TIME', 80)
+                timer = calculate_current_timer(current_round.start_time)
     
     # Get stats for current round
     current_round_total_amount = 0
@@ -478,8 +475,7 @@ def set_individual_dice_view(request):
         if not round_obj:
             round_obj = GameRound.objects.order_by('-start_time').first()
             if round_obj and round_obj.start_time:
-                elapsed = (timezone.now() - round_obj.start_time).total_seconds()
-                timer = int(elapsed) % settings.GAME_SETTINGS.get('ROUND_END_TIME', 80)
+                timer = calculate_current_timer(round_obj.start_time)
         
         # Check timer restriction only if NOT in manual adjust mode
         if not manual_adjust:
@@ -681,8 +677,7 @@ def dice_control(request):
         if current_round:
             status = current_round.status
             if current_round.start_time:
-                elapsed = (timezone.now() - current_round.start_time).total_seconds()
-                timer = int(elapsed) % settings.GAME_SETTINGS.get('ROUND_END_TIME', 80)
+                timer = calculate_current_timer(current_round.start_time)
     
     # Get stats for current round
     current_round_total_amount = 0

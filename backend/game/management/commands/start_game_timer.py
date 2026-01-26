@@ -14,6 +14,7 @@ from game.utils import (
     apply_dice_values_to_round,
     extract_dice_values,
     get_game_setting,
+    calculate_current_timer,
 )
 
 
@@ -323,8 +324,8 @@ class Command(BaseCommand):
                             pipe.execute()  # Execute both writes in one round trip
                         self.stdout.write(self.style.SUCCESS(f'New round started: {round_obj.round_id}'))
                     else:
-                        # Calculate timer from elapsed time (1 to round_end_time)
-                        timer = int(elapsed) + 1
+                        # Calculate timer using helper (1 to round_end_time)
+                        timer = calculate_current_timer(round_obj.start_time, round_end_time)
                         
                         # Determine status based on timer value
                         if timer <= betting_close_time:

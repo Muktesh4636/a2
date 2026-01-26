@@ -67,6 +67,28 @@ def extract_dice_values(round_obj, round_data=None, fallback=None):
     return values
 
 
+def calculate_current_timer(start_time, round_end_time=None):
+    """
+    Calculate current timer value (1-indexed, capped at round_end_time).
+    Consistent with start_game_timer.py and consumers.py.
+    """
+    if not start_time:
+        return 1
+    
+    if round_end_time is None:
+        round_end_time = get_game_setting('ROUND_END_TIME', 80)
+        
+    elapsed = (timezone.now() - start_time).total_seconds()
+    timer = int(elapsed) + 1
+    
+    if timer > round_end_time:
+        timer = round_end_time
+    elif timer < 1:
+        timer = 1
+        
+    return timer
+
+
 def sync_round_to_redis(round_obj, redis_client):
     """
     Sync a GameRound object from database to Redis.
@@ -79,13 +101,8 @@ def sync_round_to_redis(round_obj, redis_client):
         # Get dynamic round_end_time from settings
         round_end_time = get_game_setting('ROUND_END_TIME', 80)
         
-        # Calculate timer based on elapsed time (1 to round_end_time)
-        elapsed = (timezone.now() - round_obj.start_time).total_seconds()
-        timer = int(elapsed) + 1
-        
-        # Ensure timer stays within 1 to round_end_time
-        if timer > round_end_time:
-            timer = round_end_time
+        # Calculate timer using helper
+        timer = calculate_current_timer(round_obj.start_time, round_end_time)
         
         # Build round data dict
         round_data = {

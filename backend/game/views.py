@@ -13,7 +13,7 @@ import json
 
 from .models import GameRound, Bet, DiceResult, GameSettings
 from .serializers import GameRoundSerializer, BetSerializer, CreateBetSerializer, DiceResultSerializer
-from .utils import get_game_setting, get_all_game_settings
+from .utils import get_game_setting, get_all_game_settings, calculate_current_timer
 from accounts.models import Wallet, Transaction
 
 # Redis connection using connection pool (optimized for scalability)
@@ -120,8 +120,7 @@ def current_round(request):
         if redis_client:
             try:
                 # Calculate timer from start time
-                elapsed = (timezone.now() - round_obj.start_time).total_seconds()
-                timer = int(elapsed) % get_game_setting('ROUND_END_TIME', 80)
+                timer = calculate_current_timer(round_obj.start_time)
                 
                 round_data = {
                     'round_id': round_obj.round_id,
@@ -150,8 +149,7 @@ def current_round(request):
             pass
             
     if timer <= 0:
-        elapsed = (timezone.now() - round_obj.start_time).total_seconds()
-        timer = int(elapsed) % round_obj.round_end_seconds
+        timer = calculate_current_timer(round_obj.start_time, round_obj.round_end_seconds)
         
     data['timer'] = timer
     return Response(data)
@@ -193,8 +191,7 @@ def place_bet(request):
 
     # Calculate timer from start time if Redis not available or timer seems wrong
     if not redis_client or timer == 0:
-        elapsed = (timezone.now() - round_obj.start_time).total_seconds()
-        timer = int(elapsed) % get_game_setting('ROUND_END_TIME', 80)
+        timer = calculate_current_timer(round_obj.start_time)
     
     # Check if betting is open based on timer AND status
     betting_close_time = get_game_setting('BETTING_CLOSE_TIME', 30)
@@ -302,8 +299,7 @@ def remove_bet(request, number):
 
     # Calculate timer from start time if Redis not available or timer seems wrong
     if not redis_client or timer == 0:
-        elapsed = (timezone.now() - round_obj.start_time).total_seconds()
-        timer = int(elapsed) % get_game_setting('ROUND_END_TIME', 80)
+        timer = calculate_current_timer(round_obj.start_time)
     
     # Check if betting is open based on timer AND status
     betting_close_time = get_game_setting('BETTING_CLOSE_TIME', 30)
@@ -571,8 +567,7 @@ def set_dice_result(request):
             pass
             
     if timer <= 0:
-        elapsed = (timezone.now() - round_obj.start_time).total_seconds()
-        timer = int(elapsed) % round_obj.round_end_seconds
+        timer = calculate_current_timer(round_obj.start_time, round_obj.round_end_seconds)
         
     data['timer'] = timer
     return Response(data)

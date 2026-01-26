@@ -16,6 +16,7 @@ from .utils import (
     sync_database_to_redis,
     sync_round_to_redis,
     get_game_setting,
+    calculate_current_timer,
 )
 
 # Redis connection using connection pool (optimized for scalability)
@@ -173,8 +174,8 @@ class GameConsumer(AsyncWebsocketConsumer):
                             timer = 1  # Start new round at 1
                             status = 'WAITING'
                         else:
-                            # Calculate timer (1 to round_end_time)
-                            timer = int(elapsed) + 1
+                            # Calculate timer using helper (1 to round_end_time)
+                            timer = calculate_current_timer(round_obj.start_time, round_end_time)
                             status = round_obj.status
                         # Try to sync to Redis if available
                         if redis_client:
