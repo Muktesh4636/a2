@@ -145,11 +145,9 @@ class ApiService {
     return this.handleResponse(response);
   }
 
-  async submitDepositRequest({ amount, paymentLink, paymentReference, screenshot }) {
+  async submitDepositRequest({ amount, screenshot }) {
     const formData = new FormData();
     formData.append('amount', amount);
-    if (paymentLink) formData.append('payment_link', paymentLink);
-    if (paymentReference) formData.append('payment_reference', paymentReference);
     if (screenshot) formData.append('screenshot', screenshot);
 
     const response = await fetch(`${API_BASE_URL}/auth/deposits/upload-proof/`, {

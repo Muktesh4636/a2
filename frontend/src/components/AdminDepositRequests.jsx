@@ -74,9 +74,6 @@ export default function AdminDepositRequests({ onActionComplete }) {
                   ₹{parseFloat(request.amount).toFixed(2)}
                 </span>
               </div>
-              {request.payment_reference && (
-                <p className="text-xs mb-2">Reference: {request.payment_reference}</p>
-              )}
               {request.screenshot_url && (
                 <img
                   src={request.screenshot_url}

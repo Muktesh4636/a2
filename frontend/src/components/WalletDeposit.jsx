@@ -3,17 +3,13 @@ import api from '../services/api';
 
 export default function WalletDeposit({ user, onSuccess }) {
   const [amount, setAmount] = useState('');
-  const [paymentLink, setPaymentLink] = useState('');
-  const [paymentReference, setPaymentReference] = useState('');
   const [screenshotFile, setScreenshotFile] = useState(null);
   const [statusMessage, setStatusMessage] = useState('');
-  const [isGeneratingLink, setIsGeneratingLink] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [requests, setRequests] = useState([]);
   const [loadingRequests, setLoadingRequests] = useState(false);
   const [paymentMethods, setPaymentMethods] = useState([]);
   const [selectedMethod, setSelectedMethod] = useState(null);
-  const [isExtractingUtr, setIsExtractingUtr] = useState(false);
 
   const loadRequests = async () => {
     try {
@@ -44,54 +40,15 @@ export default function WalletDeposit({ user, onSuccess }) {
     loadPaymentMethods();
   }, []);
 
-  const handleScreenshotChange = async (e) => {
+  const handleScreenshotChange = (e) => {
     const file = e.target.files[0];
     if (!file) return;
-    
     setScreenshotFile(file);
-    
-    // Auto-extract UTR using the new advanced API
-    try {
-      setIsExtractingUtr(true);
-      setStatusMessage('Analyzing screenshot for UTR...');
-      const result = await api.processScreenshot(file, user?.id, amount);
-      if (result.success && result.utr) {
-        setPaymentReference(result.utr);
-        setStatusMessage('UTR extracted automatically!');
-      } else {
-        setStatusMessage(result.message || 'Could not extract UTR automatically. Please enter it manually.');
-      }
-    } catch (err) {
-      console.log('UTR extraction failed or not available:', err);
-      setStatusMessage('OCR service error. Please enter UTR manually.');
-    } finally {
-      setIsExtractingUtr(false);
-    }
   };
 
   const resetForm = () => {
     setAmount('');
-    setPaymentLink('');
-    setPaymentReference('');
     setScreenshotFile(null);
-  };
-
-  const handleGenerateLink = async () => {
-    if (!amount) {
-      setStatusMessage('Enter an amount first.');
-      return;
-    }
-    try {
-      setIsGeneratingLink(true);
-      setStatusMessage('');
-      const data = await api.createDepositLink(amount);
-      setPaymentLink(data.payment_link);
-      setStatusMessage('Payment link generated. Complete payment then upload the screenshot. Your deposit will be reviewed and approved by admin.');
-    } catch (err) {
-      setStatusMessage(err.message);
-    } finally {
-      setIsGeneratingLink(false);
-    }
   };
 
   const handleSubmit = async (event) => {
@@ -105,8 +62,6 @@ export default function WalletDeposit({ user, onSuccess }) {
       setStatusMessage('');
       await api.submitDepositRequest({
         amount,
-        paymentLink,
-        paymentReference,
         screenshot: screenshotFile,
       });
       setStatusMessage('Deposit request submitted successfully! Your request is pending admin approval. Funds will be added to your wallet once approved.');
@@ -190,41 +145,45 @@ export default function WalletDeposit({ user, onSuccess }) {
               Payment Details for {selectedMethod.name}
             </h4>
             
-            {selectedMethod.qr_code && (
-              <div className="flex flex-col items-center gap-2 py-2">
-                <img 
-                  src={selectedMethod.qr_code} 
-                  alt="QR Code" 
-                  className="w-48 h-48 rounded-lg bg-white p-2"
-                />
-                <span className="text-xs text-indigo-200">Scan QR to pay</span>
-              </div>
-            )}
-
             <div className="grid grid-cols-1 gap-2 text-sm">
-              {selectedMethod.account_name && (
-                <div className="flex justify-between border-b border-white/5 py-1">
-                  <span className="text-white/60">Name:</span>
-                  <span className="text-white font-mono">{selectedMethod.account_name}</span>
-                </div>
-              )}
               {selectedMethod.upi_id && (
                 <div className="flex justify-between border-b border-white/5 py-1">
                   <span className="text-white/60">UPI ID:</span>
                   <span className="text-white font-mono">{selectedMethod.upi_id}</span>
                 </div>
               )}
-              {selectedMethod.account_number && (
-                <div className="flex justify-between border-b border-white/5 py-1">
-                  <span className="text-white/60">Account:</span>
-                  <span className="text-white font-mono">{selectedMethod.account_number}</span>
+              {selectedMethod.link && (
+                <div className="flex flex-col border-b border-white/5 py-1 gap-1">
+                  <span className="text-white/60">Payment Link:</span>
+                  <a 
+                    href={selectedMethod.link} 
+                    target="_blank" 
+                    rel="noopener noreferrer" 
+                    className="text-indigo-400 font-mono break-all hover:underline text-xs"
+                  >
+                    {selectedMethod.link}
+                  </a>
                 </div>
               )}
-              {selectedMethod.ifsc_code && (
-                <div className="flex justify-between border-b border-white/5 py-1">
-                  <span className="text-white/60">IFSC:</span>
-                  <span className="text-white font-mono">{selectedMethod.ifsc_code}</span>
-                </div>
+              {selectedMethod.account_number && (
+                <>
+                  <div className="flex justify-between border-b border-white/5 py-1">
+                    <span className="text-white/60">Account Holder:</span>
+                    <span className="text-white">{selectedMethod.account_name}</span>
+                  </div>
+                  <div className="flex justify-between border-b border-white/5 py-1">
+                    <span className="text-white/60">Bank Name:</span>
+                    <span className="text-white">{selectedMethod.bank_name}</span>
+                  </div>
+                  <div className="flex justify-between border-b border-white/5 py-1">
+                    <span className="text-white/60">Account Number:</span>
+                    <span className="text-white font-mono">{selectedMethod.account_number}</span>
+                  </div>
+                  <div className="flex justify-between border-b border-white/5 py-1">
+                    <span className="text-white/60">IFSC Code:</span>
+                    <span className="text-white font-mono">{selectedMethod.ifsc_code}</span>
+                  </div>
+                </>
               )}
             </div>
             
@@ -235,7 +194,7 @@ export default function WalletDeposit({ user, onSuccess }) {
         )}
 
         <form className="space-y-4" onSubmit={handleSubmit}>
-          {/* Step 4: Screenshot & Reference */}
+          {/* Step 4: Screenshot */}
           <div className="space-y-3">
             <label className="block text-white/80 text-sm mb-1">3. Proof of Payment</label>
             
@@ -247,23 +206,6 @@ export default function WalletDeposit({ user, onSuccess }) {
                 className="w-full text-sm text-white/60 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-indigo-600 file:text-white hover:file:bg-indigo-700"
                 required
               />
-              {isExtractingUtr && (
-                <div className="mt-2 flex items-center gap-2 text-xs text-indigo-300">
-                  <span className="animate-spin text-lg">⏳</span>
-                  Analyzing screenshot for UTR...
-                </div>
-              )}
-            </div>
-
-            <div>
-              <input
-                type="text"
-                value={paymentReference}
-                onChange={(e) => setPaymentReference(e.target.value)}
-                className="w-full px-3 py-2 rounded bg-white/10 text-white border border-white/20 focus:outline-none"
-                placeholder="Transaction ID / UTR / Reference"
-              />
-              <span className="text-[10px] text-white/40 mt-1 block">Usually 12 digits for UPI</span>
             </div>
           </div>
 
@@ -315,9 +257,6 @@ export default function WalletDeposit({ user, onSuccess }) {
                   }`}>
                     <strong>Admin Message:</strong> {request.admin_note}
                   </div>
-                )}
-                {request.payment_reference && (
-                  <p className="text-xs mt-1">Reference: {request.payment_reference}</p>
                 )}
                 {request.screenshot_url && (
                   <a
