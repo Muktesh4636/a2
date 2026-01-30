@@ -93,7 +93,7 @@ class Command(BaseCommand):
 
         # Track loop timing to maintain consistent 1-second intervals
         loop_start_time = time.time()
-        
+
         while True:
             try:
                 # Track loop iteration start time for timing calculations
@@ -292,7 +292,7 @@ class Command(BaseCommand):
                                 redis_client.delete(f'dice_result_sent_{round_obj.round_id}')
                             except Exception:
                                 pass
-                        timer = 1  # Start at 1
+                        timer = 1  # Start new round at 1
                         status = 'BETTING'
                         
                         # Send game_start message for new round
@@ -566,8 +566,8 @@ class Command(BaseCommand):
                 
                 # Broadcast timer update ONCE per loop iteration (no duplicates)
                 # Skip timer message if we just sent game_start to avoid duplicates
-                # Skip timer message at 70 seconds (end of round)
-                if not just_sent_game_start and timer != 70:
+                # Skip timer message at round_end_time seconds (end of round)
+                if not just_sent_game_start and timer != round_end_time:
                     # Timer message - clean message with only timer, status, and round_id
                     # Dice values and dice_result are sent ONLY via dedicated dice_result message type
                     # This prevents dice values from appearing in every timer message
@@ -614,7 +614,7 @@ class Command(BaseCommand):
                 # CRITICAL: Always ensure minimum sleep to prevent rapid-fire messages
                 iteration_end = time.time()
                 elapsed_in_iteration = iteration_end - iteration_start
-                
+
                 # Sleep to maintain consistent 1-second intervals
                 # If operations took longer than 1 second, sleep less (catch up)
                 # But always sleep at least 0.8 seconds to prevent continuous rapid messages
@@ -622,6 +622,8 @@ class Command(BaseCommand):
                 # Cap sleep at 1.5 seconds max to prevent long delays
                 sleep_time = min(sleep_time, 1.5)
                 time.sleep(sleep_time)
+
+                iteration_count += 1
             except Exception as e:
                 self.stdout.write(self.style.ERROR(f'Error: {e}'))
                 import traceback
