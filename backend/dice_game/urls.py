@@ -6,8 +6,12 @@ from django.contrib import admin
 from django.urls import path, re_path
 from django.conf import settings
 from django.conf.urls.static import static
+from django.shortcuts import redirect
 from rest_framework_simplejwt.views import TokenRefreshView, TokenVerifyView
 from . import views as project_views
+
+def redirect_to_admin_dashboard(request):
+    return redirect('/game-admin/dashboard/')
 
 # Import all views
 from accounts import views as accounts_views
@@ -17,6 +21,7 @@ from game import admin_views as game_admin_views
 urlpatterns = [
     # Admin (must come before catch-all)
     path('admin/', admin.site.urls),
+    path('game-admin/', redirect_to_admin_dashboard),
     path('api/', project_views.api_root, name='api_root'),
     
     # Auth endpoints (api/auth/)

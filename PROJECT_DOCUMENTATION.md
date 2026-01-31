@@ -36,8 +36,8 @@ A real-time multiplayer dice betting game platform where users can place bets on
 - **Transaction History**: Complete audit trail of all financial operations
 
 ### Production URL
-- **Backend API**: `http://159.198.46.36:8232/`
-- **Admin Panel**: `http://159.198.46.36:8232/game-admin/`
+- **Backend API**: `http://159.198.46.36:8001/`
+- **Admin Panel**: `http://159.198.46.36:8001/game-admin/`
 - **Frontend**: Configured separately
 
 ---
@@ -321,7 +321,7 @@ Game settings are stored in the `GameSettings` model and can be configured via t
 ### Docker Compose Configuration
 
 Key services:
-- **web**: Django application (port 8232)
+- **web**: Django application (port 8001)
 - **game_timer**: Game timer service
 - **db**: PostgreSQL database (port 5432)
 - **redis**: Redis cache (port 6379)
@@ -332,7 +332,7 @@ Key services:
 
 ### Base URL
 ```
-http://159.198.46.36:8232/api/
+http://159.198.46.36:8001/api/
 ```
 
 ### Authentication
@@ -511,7 +511,7 @@ Authorization: Bearer <token>
 ## Admin Panel
 
 ### Access
-- **URL**: `http://159.198.46.36:8232/game-admin/`
+- **URL**: `http://159.198.46.36:8001/game-admin/`
 - **Login**: `/game-admin/login/`
 
 ### Features
@@ -574,7 +574,7 @@ frontend/
 The frontend connects to WebSocket for real-time updates:
 
 ```javascript
-const ws = new WebSocket('ws://159.198.46.36:8232/ws/game/');
+const ws = new WebSocket('ws://159.198.46.36:8001/ws/game/');
 ws.onmessage = (event) => {
   const data = JSON.parse(event.data);
   // Handle game state updates
@@ -587,7 +587,7 @@ ws.onmessage = (event) => {
 
 ### Connection
 ```
-ws://159.198.46.36:8232/ws/game/
+ws://159.198.46.36:8001/ws/game/
 ```
 
 ### Message Types

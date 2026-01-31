@@ -120,5 +120,6 @@ class AdminPermissions(models.Model):
             'transactions': self.can_view_transactions,
             'game_settings': self.can_view_game_settings,
             'admin_management': self.can_view_admin_management,
+            'payment_methods': self.can_manage_payment_methods,
         }
 

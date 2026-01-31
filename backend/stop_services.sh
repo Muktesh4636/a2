@@ -14,7 +14,7 @@ else
 fi
 
 # Stop Django server
-pkill -f "daphne -b 0.0.0.0 -p 8232 dice_game.asgi:application" 2>/dev/null
+pkill -f "daphne -b 0.0.0.0 -p 8001 dice_game.asgi:application" 2>/dev/null
 if [ $? -eq 0 ]; then
     echo "✅ Daphne ASGI server stopped"
 else
@@ -25,7 +25,7 @@ sleep 1
 
 # Verify all services are stopped
 TIMER_COUNT=$(ps aux | grep -E "start_game_timer" | grep -v grep | wc -l | tr -d ' ')
-SERVER_COUNT=$(ps aux | grep -E "daphne -b 0.0.0.0 -p 8232 dice_game.asgi:application" | grep -v grep | wc -l | tr -d ' ')
+SERVER_COUNT=$(ps aux | grep -E "daphne -b 0.0.0.0 -p 8001 dice_game.asgi:application" | grep -v grep | wc -l | tr -d ' ')
 
 if [ "$TIMER_COUNT" -eq 0 ] && [ "$SERVER_COUNT" -eq 0 ]; then
     echo ""

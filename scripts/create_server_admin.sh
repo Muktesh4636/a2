@@ -82,7 +82,7 @@ try:
     print(f'  Staff: {user.is_staff}')
     print(f'  Active: {user.is_active}')
     print('')
-    print(f'🔐 Login URL: http://${SERVER_HOST}:8232/game-admin/login/')
+    print(f'🔐 Login URL: http://${SERVER_HOST}:8001/game-admin/login/')
     
 except Exception as e:
     print(f'❌ Error: {e}')
@@ -143,7 +143,7 @@ try:
     print(f'  Staff: {user.is_staff}')
     print(f'  Active: {user.is_active}')
     print('')
-    print(f'🔐 Login URL: http://${SERVER_HOST}:8232/game-admin/login/')
+    print(f'🔐 Login URL: http://${SERVER_HOST}:8001/game-admin/login/')
     
 except Exception as e:
     print(f'❌ Error: {e}')

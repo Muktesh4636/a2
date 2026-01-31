@@ -24,7 +24,7 @@ echo ""
 # 3. Test HTTP endpoint
 echo "3. Testing HTTP Endpoint:"
 echo "========================"
-HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8232/ 2>/dev/null || echo "000")
+HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8001/ 2>/dev/null || echo "000")
 if [ "$HTTP_CODE" = "200" ]; then
     echo "✅ Server responding (HTTP $HTTP_CODE)"
 else
@@ -35,7 +35,7 @@ echo ""
 # 4. Test API endpoint
 echo "4. Testing API Endpoint:"
 echo "======================="
-API_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8232/api/ 2>/dev/null || echo "000")
+API_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8001/api/ 2>/dev/null || echo "000")
 if [ "$API_CODE" = "200" ] || [ "$API_CODE" = "401" ] || [ "$API_CODE" = "404" ]; then
     echo "✅ API responding (HTTP $API_CODE)"
 else
@@ -86,8 +86,8 @@ echo ""
 if [ "$HTTP_CODE" = "200" ] && [ "$ALL_UP" = "4" ]; then
     echo "✅ All services are running and responding!"
     echo ""
-    echo "🌐 Server URL: http://159.198.46.36:8232/"
-    echo "🔌 WebSocket: ws://159.198.46.36:8232/ws/game/"
+    echo "🌐 Server URL: http://159.198.46.36:8001/"
+    echo "🔌 WebSocket: ws://159.198.46.36:8001/ws/game/"
 else
     echo "⚠️  Some services may need attention"
     echo ""

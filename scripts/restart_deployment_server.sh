@@ -59,7 +59,7 @@ docker compose ps
 
 echo '🔍 Testing server response...'
 sleep 5
-HTTP_CODE=\$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8232/ || echo '000')
+HTTP_CODE=\$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8001/ || echo '000')
 if [ \"\$HTTP_CODE\" = '200' ]; then
     echo '✅ Server is responding (HTTP 200)'
 else

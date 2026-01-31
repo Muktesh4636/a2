@@ -41,7 +41,7 @@ echo ''
 
 echo '🔍 Testing server response...'
 sleep 5
-HTTP_CODE=\$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8232/ 2>/dev/null || echo '000')
+HTTP_CODE=\$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8001/ 2>/dev/null || echo '000')
 if [ \"\$HTTP_CODE\" = '200' ]; then
     echo '✅ Server is responding (HTTP 200)'
 else
@@ -50,8 +50,8 @@ fi
 
 echo ''
 echo '✅ Deployment complete!'
-echo '🌐 Server URL: http://${SERVER_HOST}:8232/'
-echo '🔐 Admin Login: http://${SERVER_HOST}:8232/game-admin/login/'
+echo '🌐 Server URL: http://${SERVER_HOST}:8001/'
+echo '🔐 Admin Login: http://${SERVER_HOST}:8001/game-admin/login/'
 "
 
 # Check if running locally or need to SSH

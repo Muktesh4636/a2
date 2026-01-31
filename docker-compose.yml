@@ -6,11 +6,10 @@ services:
     environment:
       POSTGRES_DB: ${DB_NAME:-dice_game}
       POSTGRES_USER: ${DB_USER:-postgres}
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres_secure_pass_123}
     volumes:
       - postgres_data:/var/lib/postgresql/data
-    ports:
-      - "5432:5432"
+    # Removed public port mapping for security
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres}"]
       interval: 10s
@@ -27,8 +26,8 @@ services:
     command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-redis_password_change_me}
     volumes:
       - redis_data:/data
-    ports:
-      - "6379:6379"
+    # ports:
+    #   - "6379:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-redis_password_change_me}", "ping"]
       interval: 10s
@@ -49,7 +48,7 @@ services:
         python manage.py protect_users --warn-only || echo '⚠️  User check warning' &&
         python manage.py migrate &&
         python manage.py collectstatic --noinput &&
-        daphne -b 0.0.0.0 -p 8232 dice_game.asgi:application
+        daphne -b 0.0.0.0 -p 8001 dice_game.asgi:application
       "
     volumes:
       - ./backend:/app
@@ -57,7 +56,7 @@ services:
       - media_volume:/app/media
       - logs_volume:/app/logs
     ports:
-      - "8232:8232"
+      - "8001:8001"
     environment:
       - DEBUG=${DEBUG:-False}
       - SECRET_KEY=${SECRET_KEY:-change-this-in-production}

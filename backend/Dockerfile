@@ -16,6 +16,8 @@ RUN apt-get update && apt-get install -y \
     libjpeg-dev \
     zlib1g-dev \
     libpng-dev \
+    tesseract-ocr \
+    libtesseract-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Python dependencies
@@ -32,8 +34,8 @@ RUN mkdir -p /app/media /app/staticfiles /app/logs
 # RUN python manage.py collectstatic --noinput
 
 # Expose port
-EXPOSE 8232
+EXPOSE 8001
 
 # Default command (can be overridden in docker-compose)
-CMD ["daphne", "-b", "0.0.0.0", "-p", "8232", "dice_game.asgi:application"]
+CMD ["daphne", "-b", "0.0.0.0", "-p", "8001", "dice_game.asgi:application"]
 

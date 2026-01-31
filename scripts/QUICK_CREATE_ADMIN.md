@@ -46,7 +46,7 @@ bash scripts/create_server_admin.sh local
 
 ## Login After Creation
 
-- **URL:** http://159.198.46.36:8232/game-admin/login/
+- **URL:** http://159.198.46.36:8001/game-admin/login/
 - **Username:** muktesh
 - **Password:** muktesh123
 

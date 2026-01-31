@@ -93,6 +93,7 @@ class Command(BaseCommand):
 
         # Track loop timing to maintain consistent 1-second intervals
         loop_start_time = time.time()
+        iteration_count = 0
 
         while True:
             try:

@@ -55,7 +55,7 @@ echo ""
 # Test server response
 echo "🧪 Testing server response..."
 sleep 5
-HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8232/ 2>/dev/null || echo "000")
+HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8001/ 2>/dev/null || echo "000")
 
 if [ "$HTTP_CODE" = "200" ]; then
     echo "✅ Server is responding (HTTP 200)"
@@ -89,7 +89,7 @@ echo ""
 echo "🔍 Useful commands:"
 echo "  - View logs: docker compose logs -f web"
 echo "  - Check status: docker compose ps"
-echo "  - Test API: curl http://localhost:8232/api/"
+echo "  - Test API: curl http://localhost:8001/api/"
 echo ""
 
 
