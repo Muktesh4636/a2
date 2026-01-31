@@ -10,6 +10,9 @@ from datetime import timedelta
 from decimal import Decimal
 import redis
 import json
+import logging
+
+logger = logging.getLogger('game')
 
 from .models import GameRound, Bet, DiceResult, GameSettings
 from .serializers import GameRoundSerializer, BetSerializer, CreateBetSerializer, DiceResultSerializer
@@ -63,6 +66,7 @@ def set_dice_mode(mode):
 @permission_classes([IsAuthenticated])
 def current_round(request):
     """Get current game round status"""
+    logger.info(f"User {request.user.username} (ID: {request.user.id}) fetching current round")
     # Get current round from Redis or database
     round_obj = None
     
@@ -74,9 +78,9 @@ def current_round(request):
                 try:
                     round_obj = GameRound.objects.get(round_id=round_data['round_id'])
                 except GameRound.DoesNotExist:
-                    pass
-        except Exception:
-            pass
+                    logger.warning(f"Round {round_data['round_id']} found in Redis but not in DB")
+        except Exception as e:
+            logger.error(f"Redis error in current_round: {e}")
     
     # Fallback to latest round or create new one
     if not round_obj:
@@ -87,17 +91,21 @@ def current_round(request):
         should_create_new = False
         if not round_obj:
             should_create_new = True
+            logger.info("No existing rounds found, creating new one")
         else:
             elapsed = (timezone.now() - round_obj.start_time).total_seconds()
             if round_obj.status == 'COMPLETED':
                 should_create_new = True
+                logger.info(f"Round {round_obj.round_id} is completed, creating new one")
             elif round_obj.status in ['RESULT', 'CLOSED']:
                 # Check if round is old (past ROUND_END_TIME seconds) - create new round
                 if elapsed >= round_end_time:
                     should_create_new = True
+                    logger.info(f"Round {round_obj.round_id} is stale (Status: {round_obj.status}), creating new one")
             elif elapsed >= round_end_time:
                 # Round is stale even if status wasn't updated (e.g., still BETTING/WAITING)
                 should_create_new = True
+                logger.info(f"Round {round_obj.round_id} is stale (Elapsed: {elapsed}s), creating new one")
         
         if should_create_new:
             # Mark old round as completed if it exists
@@ -105,6 +113,7 @@ def current_round(request):
                 round_obj.status = 'COMPLETED'
                 round_obj.end_time = timezone.now()
                 round_obj.save()
+                logger.info(f"Marked round {round_obj.round_id} as completed")
             
             # Create new round
             round_obj = GameRound.objects.create(
@@ -115,6 +124,7 @@ def current_round(request):
                 dice_result_seconds=get_game_setting('DICE_RESULT_TIME', 51),
                 round_end_seconds=get_game_setting('ROUND_END_TIME', 80)
             )
+            logger.info(f"Created new round: {round_obj.round_id}")
         
         # Store in Redis if available (use pipeline for efficient batch writes)
         if redis_client:
@@ -131,9 +141,10 @@ def current_round(request):
                 pipe = redis_client.pipeline()
                 pipe.set('current_round', json.dumps(round_data))
                 pipe.set('round_timer', str(timer))
-                pipe.execute()  # Execute both writes in one round trip
-            except Exception:
-                pass
+                pipe.execute()
+                logger.info(f"Synced round {round_obj.round_id} to Redis")
+            except Exception as e:
+                logger.error(f"Failed to sync round to Redis: {e}")
     
     serializer = GameRoundSerializer(round_obj)
     data = serializer.data
@@ -161,10 +172,12 @@ def place_bet(request):
     """Place a bet on a number"""
     serializer = CreateBetSerializer(data=request.data)
     if not serializer.is_valid():
+        logger.warning(f"User {request.user.username} provided invalid bet data: {serializer.errors}")
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     number = serializer.validated_data['number']
     chip_amount = serializer.validated_data['chip_amount']
+    logger.info(f"Bet attempt by user {request.user.username} (ID: {request.user.id}): Number {number}, Amount {chip_amount}")
 
     # Get current round
     round_obj = None
@@ -180,13 +193,14 @@ def place_bet(request):
                     round_obj = GameRound.objects.get(round_id=round_data['round_id'])
                 except GameRound.DoesNotExist:
                     pass
-        except Exception:
-            pass
+        except Exception as e:
+            logger.error(f"Redis error in place_bet: {e}")
     
     # Fallback to latest round
     if not round_obj:
         round_obj = GameRound.objects.order_by('-start_time').first()
         if not round_obj:
+            logger.warning(f"Bet failed for user {request.user.username}: No active round")
             return Response({'error': 'No active round'}, status=status.HTTP_400_BAD_REQUEST)
 
     # Calculate timer from start time if Redis not available or timer seems wrong
@@ -206,56 +220,67 @@ def place_bet(request):
     # Also check if round is very old (past 60s) - should create new round
     elapsed_total = (timezone.now() - round_obj.start_time).total_seconds()
     if elapsed_total >= round_end_time:
+        logger.warning(f"Bet failed for user {request.user.username}: Round {round_obj.round_id} has ended")
         return Response({'error': 'Round has ended. Please refresh to see the new round.'}, status=status.HTTP_400_BAD_REQUEST)
     
     if not is_within_betting_window or not is_round_active:
         if timer >= betting_close_time:
+            logger.warning(f"Bet failed for user {request.user.username}: Betting period ended (Timer: {timer}s, Limit: {betting_close_time}s)")
             return Response({'error': f'Betting period has ended. Betting closes at {betting_close_time} seconds.'}, status=status.HTTP_400_BAD_REQUEST)
         else:
+            logger.warning(f"Bet failed for user {request.user.username}: Round {round_obj.round_id} status is {round_obj.status}")
             return Response({'error': 'Betting is closed'}, status=status.HTTP_400_BAD_REQUEST)
 
     # Get user wallet
     try:
         wallet = Wallet.objects.get(user=request.user)
     except Wallet.DoesNotExist:
+        logger.error(f"Wallet not found for user {request.user.username}")
         return Response({'error': 'Wallet not found'}, status=status.HTTP_404_NOT_FOUND)
 
     # Check balance
     if wallet.balance < chip_amount:
+        logger.warning(f"Bet failed for user {request.user.username}: Insufficient balance (Balance: {wallet.balance}, Requested: {chip_amount})")
         return Response({'error': 'Insufficient balance'}, status=status.HTTP_400_BAD_REQUEST)
 
     # Create or update bet
-    bet, created = Bet.objects.get_or_create(
-        user=request.user,
-        round=round_obj,
-        number=number,
-        defaults={'chip_amount': chip_amount}
-    )
+    try:
+        with db_transaction.atomic():
+            bet, created = Bet.objects.get_or_create(
+                user=request.user,
+                round=round_obj,
+                number=number,
+                defaults={'chip_amount': chip_amount}
+            )
 
-    balance_before = wallet.balance
-    if not created:
-        # Increment existing bet amount
-        bet.chip_amount += chip_amount
-        bet.save()
+            balance_before = wallet.balance
+            if not created:
+                # Increment existing bet amount
+                bet.chip_amount += chip_amount
+                bet.save()
 
-    # Deduct from wallet
-    wallet.deduct(chip_amount)
-    balance_after = wallet.balance
+            # Deduct from wallet
+            wallet.deduct(chip_amount)
+            balance_after = wallet.balance
 
-    # Create transaction for the additional wager
-    Transaction.objects.create(
-        user=request.user,
-        transaction_type='BET',
-        amount=chip_amount,
-        balance_before=balance_before,
-        balance_after=balance_after,
-        description=f"Bet on number {number} in round {round_obj.round_id}"
-    )
+            # Create transaction for the additional wager
+            Transaction.objects.create(
+                user=request.user,
+                transaction_type='BET',
+                amount=chip_amount,
+                balance_before=balance_before,
+                balance_after=balance_after,
+                description=f"Bet on number {number} in round {round_obj.round_id}"
+            )
 
-    # Update round stats
-    round_obj.total_bets += 1
-    round_obj.total_amount += chip_amount
-    round_obj.save()
+            # Update round stats
+            round_obj.total_bets += 1
+            round_obj.total_amount += chip_amount
+            round_obj.save()
+            logger.info(f"Bet placed successfully: User {request.user.username}, Round {round_obj.round_id}, Num {number}, Amount {chip_amount}")
+    except Exception as e:
+        logger.exception(f"Unexpected error placing bet for user {request.user.username}: {e}")
+        return Response({'error': 'Internal server error during betting'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     serializer = BetSerializer(bet)
     response_data = {
@@ -274,6 +299,7 @@ def place_bet(request):
 @permission_classes([IsAuthenticated])
 def remove_bet(request, number):
     """Remove a bet for a specific number"""
+    logger.info(f"Remove bet request by user {request.user.username} (ID: {request.user.id}) for number {number}")
     # Get current round
     round_obj = None
     timer = 0
@@ -288,13 +314,14 @@ def remove_bet(request, number):
                     round_obj = GameRound.objects.get(round_id=round_data['round_id'])
                 except GameRound.DoesNotExist:
                     pass
-        except Exception:
-            pass
+        except Exception as e:
+            logger.error(f"Redis error in remove_bet: {e}")
     
     # Fallback to latest round
     if not round_obj:
         round_obj = GameRound.objects.order_by('-start_time').first()
         if not round_obj:
+            logger.warning(f"Remove bet failed for user {request.user.username}: No active round")
             return Response({'error': 'No active round'}, status=status.HTTP_400_BAD_REQUEST)
 
     # Calculate timer from start time if Redis not available or timer seems wrong
@@ -314,46 +341,56 @@ def remove_bet(request, number):
     # Also check if round is very old (past 60s) - should create new round
     elapsed_total = (timezone.now() - round_obj.start_time).total_seconds()
     if elapsed_total >= round_end_time:
+        logger.warning(f"Remove bet failed for user {request.user.username}: Round {round_obj.round_id} has ended")
         return Response({'error': 'Round has ended. Please refresh to see the new round.'}, status=status.HTTP_400_BAD_REQUEST)
     
     if not is_within_betting_window or not is_round_active:
         if timer >= betting_close_time:
+            logger.warning(f"Remove bet failed for user {request.user.username}: Betting period ended (Timer: {timer}s, Limit: {betting_close_time}s)")
             return Response({'error': f'Betting period has ended. Betting closes at {betting_close_time} seconds.'}, status=status.HTTP_400_BAD_REQUEST)
         else:
+            logger.warning(f"Remove bet failed for user {request.user.username}: Betting is closed (Status: {round_obj.status})")
             return Response({'error': 'Betting is closed'}, status=status.HTTP_400_BAD_REQUEST)
 
     # Get the bet
     try:
         bet = Bet.objects.get(user=request.user, round=round_obj, number=number)
     except Bet.DoesNotExist:
+        logger.warning(f"Remove bet failed for user {request.user.username}: Bet on number {number} not found in round {round_obj.round_id}")
         return Response({'error': 'Bet not found'}, status=status.HTTP_404_NOT_FOUND)
 
     # Store bet amount before deleting
     refund_amount = bet.chip_amount
 
-    # Refund the bet amount
-    wallet = request.user.wallet
-    balance_before = wallet.balance
-    wallet.add(refund_amount)
-    balance_after = wallet.balance
+    try:
+        with db_transaction.atomic():
+            # Refund the bet amount
+            wallet = request.user.wallet
+            balance_before = wallet.balance
+            wallet.add(refund_amount)
+            balance_after = wallet.balance
 
-    # Update round stats before deleting bet
-    round_obj.total_bets = max(0, round_obj.total_bets - 1)
-    round_obj.total_amount = max(Decimal('0.00'), round_obj.total_amount - refund_amount)
-    round_obj.save()
+            # Update round stats before deleting bet
+            round_obj.total_bets = max(0, round_obj.total_bets - 1)
+            round_obj.total_amount = max(Decimal('0.00'), round_obj.total_amount - refund_amount)
+            round_obj.save()
 
-    # Create refund transaction
-    Transaction.objects.create(
-        user=request.user,
-        transaction_type='REFUND',
-        amount=refund_amount,
-        balance_before=balance_before,
-        balance_after=balance_after,
-        description=f"Refund bet on number {number} in round {round_obj.round_id}"
-    )
+            # Create refund transaction
+            Transaction.objects.create(
+                user=request.user,
+                transaction_type='REFUND',
+                amount=refund_amount,
+                balance_before=balance_before,
+                balance_after=balance_after,
+                description=f"Refund bet on number {number} in round {round_obj.round_id}"
+            )
 
-    # Delete the bet
-    bet.delete()
+            # Delete the bet
+            bet.delete()
+            logger.info(f"Bet removed and refunded: User {request.user.username}, Round {round_obj.round_id}, Num {number}, Amount {refund_amount}")
+    except Exception as e:
+        logger.exception(f"Unexpected error removing bet for user {request.user.username}: {e}")
+        return Response({'error': 'Internal server error during refund'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     return Response({
         'message': f'Bet on number {number} removed',
@@ -371,6 +408,7 @@ def remove_bet(request, number):
 @permission_classes([IsAuthenticated])
 def my_bets(request):
     """Get user's bets for current round"""
+    logger.info(f"User {request.user.username} fetching their bets for the current round")
     # Get current round
     round_obj = None
     if redis_client:
@@ -382,8 +420,8 @@ def my_bets(request):
                     round_obj = GameRound.objects.get(round_id=round_data['round_id'])
                 except GameRound.DoesNotExist:
                     pass
-        except Exception:
-            pass
+        except Exception as e:
+            logger.error(f"Redis error in my_bets: {e}")
     
     # Fallback to latest round
     if not round_obj:
@@ -402,6 +440,7 @@ def my_bets(request):
 def betting_history(request):
     """Get user's betting history (all bets, not just current round)"""
     limit = int(request.query_params.get('limit', 50))
+    logger.info(f"User {request.user.username} fetching betting history (limit: {limit})")
     
     bets = Bet.objects.filter(user=request.user).select_related('round').order_by('-created_at')[:limit]
     serializer = BetSerializer(bets, many=True)
@@ -415,11 +454,13 @@ def round_results(request, round_id=None):
     Get user's results for a specific round.
     Returns: user's bets, wins/losses, payouts, and wallet balance.
     """
+    logger.info(f"User {request.user.username} fetching results for round {round_id or 'current'}")
     # Get round by ID or use current round
     if round_id:
         try:
             round_obj = GameRound.objects.get(round_id=round_id)
         except GameRound.DoesNotExist:
+            logger.warning(f"Round {round_id} not found for user {request.user.username}")
             return Response({'error': 'Round not found'}, status=status.HTTP_404_NOT_FOUND)
     else:
         # Get current/latest round
@@ -433,13 +474,14 @@ def round_results(request, round_id=None):
                         round_obj = GameRound.objects.get(round_id=round_data['round_id'])
                     except GameRound.DoesNotExist:
                         pass
-            except Exception:
-                pass
+            except Exception as e:
+                logger.error(f"Redis error in round_results: {e}")
         
         if not round_obj:
             round_obj = GameRound.objects.order_by('-start_time').first()
         
         if not round_obj:
+            logger.warning(f"No rounds found for user {request.user.username}")
             return Response({'error': 'No round found'}, status=status.HTTP_404_NOT_FOUND)
     
     # Get user's bets for this round
@@ -458,6 +500,7 @@ def round_results(request, round_id=None):
     # Serialize bets
     bets_data = BetSerializer(bets, many=True).data
     
+    logger.info(f"Results fetched for user {request.user.username}, Round {round_obj.round_id}: Net {net_result}")
     return Response({
         'round': {
             'round_id': round_obj.round_id,
@@ -486,7 +529,9 @@ def round_results(request, round_id=None):
 def set_dice_result(request):
     """Admin: Set dice result for current round"""
     result = request.data.get('result')
+    logger.info(f"Admin {request.user.username} setting dice result: {result}")
     if not result or result < 1 or result > 6:
+        logger.warning(f"Admin {request.user.username} provided invalid result: {result}")
         return Response({'error': 'Invalid dice result (1-6)'}, status=status.HTTP_400_BAD_REQUEST)
 
     # Get current round
@@ -500,14 +545,15 @@ def set_dice_result(request):
                     round_obj = GameRound.objects.get(round_id=round_data['round_id'])
                 except GameRound.DoesNotExist:
                     pass
-        except Exception:
-            pass
+        except Exception as e:
+            logger.error(f"Redis error in set_dice_result: {e}")
     
     # Fallback to latest round
     if not round_obj:
         round_obj = GameRound.objects.order_by('-start_time').first()
     
     if not round_obj:
+        logger.warning(f"Admin {request.user.username} failed to set result: No active round")
         return Response({'error': 'No active round'}, status=status.HTTP_400_BAD_REQUEST)
 
     # Check if individual dice values are set - if so, recalculate result from them
@@ -518,40 +564,47 @@ def set_dice_result(request):
         # Individual dice values are set - recalculate result from them
         from .utils import determine_winning_number
         result = determine_winning_number(dice_values)
+        logger.info(f"Recalculated result from individual dice: {result}")
     
-    # Set dice result (either from parameter or recalculated from dice values)
-    round_obj.dice_result = result
-    round_obj.status = 'RESULT'
-    round_obj.result_time = timezone.now()
-    round_obj.save()
+    try:
+        with db_transaction.atomic():
+            # Set dice result (either from parameter or recalculated from dice values)
+            round_obj.dice_result = result
+            round_obj.status = 'RESULT'
+            round_obj.result_time = timezone.now()
+            round_obj.save()
 
-    # Create dice result record
-    DiceResult.objects.update_or_create(
-        round=round_obj,
-        defaults={
-            'result': result,
-            'set_by': request.user
-        }
-    )
+            # Create dice result record
+            DiceResult.objects.update_or_create(
+                round=round_obj,
+                defaults={
+                    'result': result,
+                    'set_by': request.user
+                }
+            )
 
-    # Update Redis if available
-    if redis_client:
-        try:
-            round_data = redis_client.get('current_round')
-            if round_data:
-                round_data = json.loads(round_data)
-                round_data['dice_result'] = result
-                round_data['status'] = 'RESULT'
-                redis_client.set('current_round', json.dumps(round_data))
-        except Exception:
-            pass
+            # Update Redis if available
+            if redis_client:
+                try:
+                    round_data = redis_client.get('current_round')
+                    if round_data:
+                        round_data = json.loads(round_data)
+                        round_data['dice_result'] = result
+                        round_data['status'] = 'RESULT'
+                        redis_client.set('current_round', json.dumps(round_data))
+                except Exception as e:
+                    logger.error(f"Redis sync error in set_dice_result: {e}")
 
-    # Calculate payouts - get dice values from round
-    dice_values = [
-        round_obj.dice_1, round_obj.dice_2, round_obj.dice_3,
-        round_obj.dice_4, round_obj.dice_5, round_obj.dice_6
-    ]
-    calculate_payouts(round_obj, dice_result=result, dice_values=dice_values)
+            # Calculate payouts - get dice values from round
+            dice_values = [
+                round_obj.dice_1, round_obj.dice_2, round_obj.dice_3,
+                round_obj.dice_4, round_obj.dice_5, round_obj.dice_6
+            ]
+            calculate_payouts(round_obj, dice_result=result, dice_values=dice_values)
+            logger.info(f"Result {result} set successfully for round {round_obj.round_id} and payouts calculated")
+    except Exception as e:
+        logger.exception(f"Unexpected error in set_dice_result by admin {request.user.username}: {e}")
+        return Response({'error': 'Internal server error setting result'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     serializer = GameRoundSerializer(round_obj)
     data = serializer.data
@@ -579,11 +632,15 @@ def dice_mode(request):
     """Get or set dice mode (manual/random)"""
     if request.method == 'GET':
         mode = get_dice_mode()
+        logger.info(f"Admin {request.user.username} fetched dice mode: {mode}")
         return Response({'mode': mode})
     else:
         mode = request.data.get('mode')
+        logger.info(f"Admin {request.user.username} setting dice mode to: {mode}")
         if set_dice_mode(mode):
+            logger.info(f"Dice mode updated successfully to: {mode}")
             return Response({'mode': mode, 'message': f'Dice mode set to {mode}'})
+        logger.warning(f"Admin {request.user.username} provided invalid dice mode: {mode}")
         return Response({'error': 'Invalid mode. Use "manual" or "random"'}, status=status.HTTP_400_BAD_REQUEST)
 
 
@@ -880,6 +937,7 @@ def winning_results(request, round_id=None):
 @permission_classes([IsAdminUser])
 def game_stats(request):
     """Admin: Get game statistics"""
+    logger.info(f"Admin {request.user.username} fetching game statistics")
     # Get current round
     current_round_obj = None
     if redis_client:
@@ -891,8 +949,8 @@ def game_stats(request):
                     current_round_obj = GameRound.objects.get(round_id=round_data['round_id'])
                 except GameRound.DoesNotExist:
                     pass
-        except Exception:
-            pass
+        except Exception as e:
+            logger.error(f"Redis error in game_stats: {e}")
     
     # Fallback to latest round
     if not current_round_obj:
@@ -914,15 +972,16 @@ def game_stats(request):
 @permission_classes([AllowAny])  # Public endpoint - no authentication required
 def game_settings_api(request):
     """API endpoint to get current game settings (public)"""
+    logger.info("Public settings API access")
     from .utils import get_game_setting
     
-    settings = {
+    settings_data = {
         'betting_close_time': get_game_setting('BETTING_CLOSE_TIME', 30),
         'dice_result_time': get_game_setting('DICE_RESULT_TIME', 51),
         'round_end_time': get_game_setting('ROUND_END_TIME', 70),
     }
     
-    return Response(settings)
+    return Response(settings_data)
 
 
 @api_view(['GET'])
@@ -933,12 +992,14 @@ def last_round_results(request):
     API endpoint to get the last completed round results.
     Returns: round_id and all 6 dice results (dice_1 through dice_6).
     """
+    logger.info("Public last round results API access")
     # Get the last completed round (status is 'RESULT' or 'COMPLETED')
     last_round = GameRound.objects.filter(
         status__in=['RESULT', 'COMPLETED']
     ).order_by('-start_time').first()
     
     if not last_round:
+        logger.warning("Last round results requested but no completed rounds found")
         return Response({
             'error': 'No completed round found'
         }, status=status.HTTP_404_NOT_FOUND)
@@ -969,6 +1030,7 @@ def pending_payments(request):
     - user_id: (optional) Filter by specific user ID (admin only)
     - limit: (optional) Limit number of results (default: 100)
     """
+    logger.info(f"User {request.user.username} fetching pending payments")
     from accounts.models import PendingPayment
     from django.db.models import Sum
     

@@ -1,5 +1,8 @@
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
+import logging
+
+logger = logging.getLogger('game.admin')
 from django.contrib.auth import logout
 from django.contrib.auth.decorators import login_required
 from django.utils import timezone
@@ -86,6 +89,7 @@ def admin_login(request):
     if request.user.is_authenticated and is_admin(request.user):
         # Already logged in and is admin, redirect to dashboard
         next_url = request.GET.get('next', '/game-admin/dashboard/')
+        logger.debug(f"Admin user {request.user.username} already authenticated, redirecting to {next_url}")
         return redirect(next_url)
     
     error_message = None
@@ -93,6 +97,7 @@ def admin_login(request):
         username = request.POST.get('username')
         password = request.POST.get('password')
         next_url = request.POST.get('next', '/game-admin/dashboard/')
+        logger.info(f"Admin login attempt: {username}")
         
         if username and password:
             from django.contrib.auth import authenticate, login
@@ -100,13 +105,17 @@ def admin_login(request):
             if user is not None:
                 if is_admin(user):
                     login(request, user)
+                    logger.info(f"Admin user {user.username} logged in successfully")
                     messages.success(request, f'Welcome, {user.username}!')
                     return redirect(next_url)
                 else:
+                    logger.warning(f"User {user.username} authenticated but lacks admin permissions")
                     error_message = 'You do not have permission to access the admin panel.'
             else:
+                logger.warning(f"Admin login failed: Invalid credentials for {username}")
                 error_message = 'Invalid username or password.'
         else:
+            logger.warning(f"Admin login failed: Missing credentials for {username}")
             error_message = 'Please provide both username and password.'
     
     context = {
@@ -118,6 +127,7 @@ def admin_login(request):
 
 def admin_logout(request):
     """Logout view for game admin panel"""
+    logger.info(f"Admin logout: {request.user.username}")
     logout(request)
     messages.success(request, 'You have been successfully logged out.')
     return redirect('admin_login')

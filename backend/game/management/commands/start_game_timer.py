@@ -1,5 +1,8 @@
 import json
+import logging
 import time
+
+logger = logging.getLogger('game.timer')
 import redis
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
@@ -22,6 +25,7 @@ class Command(BaseCommand):
     help = 'Start the game timer task'
 
     def handle(self, *args, **options):
+        logger.info('Starting game timer management command')
         self.stdout.write(self.style.SUCCESS('Starting game timer...'))
         
         # Setup Redis connection with reconnection logic
@@ -54,8 +58,10 @@ class Command(BaseCommand):
         
         redis_client = get_or_reconnect_redis()
         if redis_client:
+            logger.info('Redis connected successfully for game timer')
             self.stdout.write(self.style.SUCCESS('Redis connected'))
         else:
+            logger.warning('Redis not available for game timer - using database only')
             self.stdout.write(self.style.WARNING('Redis not available - using database only'))
         
         # Setup channel layer
@@ -64,6 +70,7 @@ class Command(BaseCommand):
             try:
                 return get_channel_layer()
             except Exception as e:
+                logger.error(f"Channel layer connection error: {e}")
                 self.stdout.write(self.style.WARNING(f'Channel layer connection error: {e}'))
                 # Try to reconnect after a short delay
                 import time
@@ -75,8 +82,10 @@ class Command(BaseCommand):
         
         channel_layer = get_or_reconnect_channel_layer()
         if channel_layer:
+            logger.info('Channel layer connected successfully for game timer')
             self.stdout.write(self.style.SUCCESS('Channel layer connected'))
         else:
+            logger.warning('Channel layer not available for game timer - WebSocket broadcasts will be skipped')
             self.stdout.write(self.style.WARNING('Channel layer not available - WebSocket broadcasts will be skipped'))
         
         # Log initial settings and track for changes
@@ -112,6 +121,7 @@ class Command(BaseCommand):
                     dice_rolling_time != last_dice_rolling or 
                     dice_result_time != last_dice_result or 
                     round_end_time != last_round_end):
+                    logger.info(f"Game settings updated: Betting={betting_close_time}s, Rolling={dice_rolling_time}s, Result={dice_result_time}s, End={round_end_time}s")
                     self.stdout.write(self.style.WARNING('⚙️  Game settings updated:'))
                     if betting_close_time != last_betting_close:
                         self.stdout.write(self.style.WARNING(f'  Betting close: {last_betting_close}s → {betting_close_time}s'))
@@ -243,6 +253,7 @@ class Command(BaseCommand):
                         except Exception:
                             pass
                     
+                    logger.info(f"New round created: {round_obj.round_id}")
                     self.stdout.write(self.style.SUCCESS(f'New round started: {round_obj.round_id}'))
                 else:
                     # Calculate timer from elapsed time (1-round_end_time, not 0-(round_end_time-1))
@@ -323,6 +334,7 @@ class Command(BaseCommand):
                             pipe.set('current_round', json.dumps(round_data))
                             pipe.set('round_timer', '1')
                             pipe.execute()  # Execute both writes in one round trip
+                        logger.info(f"New round created: {round_obj.round_id}")
                         self.stdout.write(self.style.SUCCESS(f'New round started: {round_obj.round_id}'))
                     else:
                         # Calculate timer using helper (1 to round_end_time)
@@ -437,10 +449,11 @@ class Command(BaseCommand):
                             # Calculate payouts
                             calculate_payouts(round_obj, dice_result=result, dice_values=dice_values)
 
-                            if dice_mode == 'random':
-                                self.stdout.write(self.style.SUCCESS(f'🎲 Dice rolled automatically (random mode) at {timer}s: {result}'))
-                            else:
-                                self.stdout.write(self.style.WARNING(f'⚠️ Manual mode fallback: No admin input detected by {timer}s, auto-rolling result {result}'))
+                            logger.info(f"Dice rolled automatically (random mode) at {timer}s for round {round_obj.round_id}: Result={result}")
+                            self.stdout.write(self.style.SUCCESS(f'🎲 Dice rolled automatically (random mode) at {timer}s: {result}'))
+                        else:
+                            logger.info(f"Manual mode fallback: Auto-rolling at {timer}s for round {round_obj.round_id}: Result={result}")
+                            self.stdout.write(self.style.WARNING(f'⚠️ Manual mode fallback: No admin input detected by {timer}s, auto-rolling result {result}'))
                         
                         # If we didn't just roll, ensure dice values are available for broadcast
                         if not just_rolled:
@@ -587,11 +600,13 @@ class Command(BaseCommand):
                                 'game_room',
                                 timer_message
                             )
+                            logger.debug(f"Broadcasted timer: {timer}s, Status: {status}")
                             # Log every 10 seconds to avoid spam
                             if timer % 10 == 0:
                                 self.stdout.write(self.style.SUCCESS(f'📤 Broadcast timer: {timer}s, Status: {status}'))
                         except Exception as e:
                             # Don't let broadcast errors stop the timer loop
+                            logger.error(f"Failed to broadcast at {timer}s: {e}")
                             if timer % 30 == 0:  # Only log errors every 30 seconds to avoid spam
                                 self.stdout.write(self.style.ERROR(f'❌ Failed to broadcast: {e}'))
                             # Try to reconnect channel layer silently
@@ -625,7 +640,10 @@ class Command(BaseCommand):
                 time.sleep(sleep_time)
 
                 iteration_count += 1
+                if iteration_count % 60 == 0:
+                    logger.debug(f"Game timer loop iteration {iteration_count}")
             except Exception as e:
+                logger.exception(f"Critical error in game timer loop: {e}")
                 self.stdout.write(self.style.ERROR(f'Error: {e}'))
                 import traceback
                 traceback.print_exc()

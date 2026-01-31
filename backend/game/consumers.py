@@ -8,7 +8,7 @@ from django.conf import settings
 import redis
 from .models import GameRound, Bet
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger('game.websocket')
 from .utils import (
     generate_random_dice_values,
     apply_dice_values_to_round,
@@ -62,6 +62,7 @@ class GameConsumer(AsyncWebsocketConsumer):
                     self.room_group_name,
                     self.channel_name
                 )
+                logger.info(f"User {user} joined room group: {self.room_group_name}")
             except Exception as group_error:
                 logger.warning(f"Failed to join game group: {group_error}")
             
@@ -76,9 +77,9 @@ class GameConsumer(AsyncWebsocketConsumer):
                 except Exception as admin_group_error:
                     logger.warning(f"Failed to join admin group: {admin_group_error}")
             else:
-                logger.warning(f"User {user} is NOT staff, skipping admin notifications group")
+                logger.debug(f"User {user} is NOT staff, skipping admin notifications group")
             
-            logger.info(f"WebSocket connected: {self.channel_name}")
+            logger.info(f"WebSocket connected successfully: {self.channel_name}")
             
             # Send current state
             try:
@@ -86,10 +87,12 @@ class GameConsumer(AsyncWebsocketConsumer):
             except Exception as state_error:
                 logger.error(f"Failed to send initial state: {state_error}")
         except Exception as e:
-            logger.error(f"WebSocket connect error: {e}", exc_info=True)
+            logger.exception(f"WebSocket connect error: {e}")
 
     async def disconnect(self, close_code):
         # Leave room groups
+        user = self.scope.get('user')
+        logger.info(f"WebSocket disconnected for user {user}: {self.channel_name} (Code: {close_code})")
         try:
             if hasattr(self, 'room_group_name'):
                 await self.channel_layer.group_discard(
@@ -102,13 +105,15 @@ class GameConsumer(AsyncWebsocketConsumer):
                     self.channel_name
                 )
         except Exception as e:
-            logger.error(f"WebSocket disconnect error: {e}", exc_info=True)
+            logger.exception(f"WebSocket disconnect error: {e}")
 
     async def receive(self, text_data):
         """Handle incoming WebSocket messages - NEVER closes connection on error"""
+        user = self.scope.get('user')
         try:
             data = json.loads(text_data)
             message_type = data.get('type')
+            logger.debug(f"WebSocket message received from {user}: {message_type}")
 
             if message_type == 'get_state':
                 await self.send_current_state()
@@ -116,9 +121,9 @@ class GameConsumer(AsyncWebsocketConsumer):
                 # Respond to ping with pong to keep connection alive
                 await self.send(text_data=json.dumps({'type': 'pong'}))
         except json.JSONDecodeError as e:
-            logger.warning(f"Invalid JSON received: {e}, but keeping connection alive")
+            logger.warning(f"Invalid JSON received from {user}: {e}, but keeping connection alive")
         except Exception as e:
-            logger.warning(f"Error handling received message (connection remains open): {e}")
+            logger.warning(f"Error handling received message from {user}: {e}")
 
     async def send_current_state(self):
         """Send current game state to client - NEVER closes connection on error"""
