@@ -680,6 +680,7 @@
                 </div>
             </div>
             
+            {% if not search_query %}
             <!-- Recent Bets Table -->
             <div class="control-panel">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; flex-wrap: wrap; gap: 16px;">
@@ -687,13 +688,6 @@
                         <span>💵</span>
                         <span>Recent Bets</span>
                     </h2>
-                    {% if search_query %}
-                    <div style="padding: 8px 12px; background: #edf2f7; border-radius: 6px;">
-                        <span style="font-size: 14px; color: #4a5568;">
-                            Showing bets for: "{{ search_query }}"
-                        </span>
-                    </div>
-                    {% endif %}
                 </div>
                 <div class="table-wrapper">
                     <table>
@@ -756,6 +750,7 @@
                     </table>
                 </div>
             </div>
+            {% endif %}
         </div>
     </div>
 
