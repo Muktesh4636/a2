@@ -269,7 +269,7 @@
                             <button class="btn btn-icon" onclick="showEditModal('{{ method.pk }}', '{{ method.name|escapejs }}', '{{ method.method_type|escapejs }}', '{{ method.upi_id|escapejs }}', '{{ method.link|escapejs }}', '{{ method.account_name|escapejs }}', '{{ method.bank_name|escapejs }}', '{{ method.account_number|escapejs }}', '{{ method.ifsc_code|escapejs }}', '{{ method.is_active|yesno:'true,false' }}')">
                                 ✏️
                             </button>
-                            {% if method.name not in 'Bank Transfer,Google Pay,PhonePe,Paytm,UPI' %}
+                            {% if method.name != 'Bank Transfer' and method.name != 'Google Pay' and method.name != 'PhonePe' and method.name != 'Paytm' and method.name != 'UPI' %}
                             <form action="{% url 'delete_payment_method' method.pk %}" method="post" style="display: inline;" onsubmit="return confirm('Are you sure you want to delete this payment method?')">
                                 {% csrf_token %}
                                 <button type="submit" class="btn btn-icon btn-danger">🗑️</button>
