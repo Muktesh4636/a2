@@ -257,13 +257,7 @@
                                         </div>
                                     {% endif %}
 
-                                    {% if method.link %}
-                                        <div style="margin-top: 8px;">
-                                            <a href="{{ method.link }}" target="_blank" style="display: inline-flex; align-items: center; gap: 6px; color: #4f46e5; text-decoration: none; font-size: 13px; font-weight: 500;">
-                                                <span>🔗</span> Payment Link
-                                            </a>
-                                        </div>
-                                    {% endif %}
+                                    {% comment %} Removed Payment Link display for UPI methods as requested {% endcomment %}
                                 </p>
                             </div>
                         </div>
@@ -370,7 +364,7 @@
             } else {
                 bankFields.style.display = 'none';
                 upiFields.style.display = 'block';
-                linkFields.style.display = 'block';
+                linkFields.style.display = 'none'; // Hide link field for UPI methods
                 methodType.value = 'PHONEPE';
             }
         }
