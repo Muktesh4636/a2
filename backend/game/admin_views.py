@@ -440,21 +440,17 @@ def admin_dashboard_data(request):
 @admin_required
 def set_individual_dice_view(request):
     """Admin view to set individual dice values (1-6 for each of 6 dice)
-    Supports manual adjustment mode where time restrictions are bypassed and partial updates are allowed
+    All dice values must be provided and time restrictions are enforced
     """
     if request.method == 'POST':
-        # Check if this is manual adjustment mode
-        manual_adjust = request.POST.get('manual_adjust', 'false').lower() == 'true'
-        
         # Get current round state using helper
         from .utils import get_current_round_state, get_game_setting
         round_obj, timer, status, _ = get_current_round_state(redis_client)
-        
-        # Get dice result time (needed for both restriction check and finalization logic)
+
+        # Get dice result time (needed for restriction check and finalization logic)
         dice_result_time = get_game_setting('DICE_RESULT_TIME', 51)
-        
-        # Check timer restriction only if NOT in manual adjust mode
-        if not manual_adjust:
+
+        # Check timer restriction
             if timer >= dice_result_time:
                 messages.error(request, f'Cannot set dice values after {dice_result_time} seconds. Use Manual Adjust mode to override.')
                 return redirect('dice_control')
@@ -463,17 +459,15 @@ def set_individual_dice_view(request):
             messages.error(request, 'No active round')
             return redirect('dice_control')
         
-        # Collect dice values (allow partial updates in manual adjust mode)
-        dice_updates = {}  # Store only dice that are being updated
+        # Collect dice values (all dice required)
         dice_values_list = []  # For calculating result
-        
+
         for i in range(1, 7):
             dice_value = request.POST.get(f'dice_{i}', '').strip()
             if dice_value:
                 try:
                     value = int(dice_value)
                     if 1 <= value <= 6:
-                        dice_updates[f'dice_{i}'] = value
                         dice_values_list.append(value)
                     else:
                         messages.error(request, f'Dice {i} value must be between 1-6')
@@ -482,37 +476,8 @@ def set_individual_dice_view(request):
                     messages.error(request, f'Invalid value for dice {i}')
                     return redirect('dice_control')
             else:
-                # In manual adjust mode, use existing value if not provided
-                # Otherwise, require all values
-                if not manual_adjust:
-                    messages.error(request, f'Dice {i} value is required')
-                    return redirect('dice_control')
-                else:
-                    # Use existing value or None
-                    existing_value = getattr(round_obj, f'dice_{i}', None)
-                    if existing_value:
-                        dice_values_list.append(existing_value)
-                    else:
-                        # If no existing value and in manual adjust mode, skip it
-                        # We'll handle partial updates
-                        pass
-        
-        # In manual adjust mode, merge with existing values
-        if manual_adjust:
-            final_dice_values = []
-            for i in range(1, 7):
-                if f'dice_{i}' in dice_updates:
-                    final_dice_values.append(dice_updates[f'dice_{i}'])
-                else:
-                    existing = getattr(round_obj, f'dice_{i}', None)
-                    if existing is not None:
-                        final_dice_values.append(existing)
-                    else:
-                        # If no value exists, we can't calculate proper result
-                        # But allow partial update - use 1 as placeholder for calculation
-                        final_dice_values.append(1)
-            
-            dice_values_list = final_dice_values
+                messages.error(request, f'Dice {i} value is required')
+                return redirect('dice_control')
         else:
             # Normal mode - must have all 6 values
             if len(dice_values_list) != 6:
@@ -533,10 +498,8 @@ def set_individual_dice_view(request):
                 
                 round_obj.dice_result = most_common
                 
-                # Only finalize the round (status, payouts, broadcast) if we are at or past result time,
-                # or if we are in manual adjust mode (which usually means a past or forced update)
-                # This allows admin to "pre-set" dice before the result time
-                should_finalize = timer >= dice_result_time or manual_adjust
+                # Only finalize the round (status, payouts, broadcast) if we are at or past result time
+                should_finalize = timer >= dice_result_time
                 
                 if should_finalize:
                     round_obj.status = 'RESULT'
@@ -605,9 +568,7 @@ def set_individual_dice_view(request):
                         except Exception:
                             pass
                 
-                mode_text = " (Manual Adjust)" if manual_adjust else ""
-                if not should_finalize:
-                    mode_text = " (Pre-set)"
+                mode_text = " (Pre-set)" if not should_finalize else ""
                 
                 updated_text = ", ".join([f"D{i+1}:{v}" for i, v in enumerate(dice_updates.values())])
                 messages.success(request, f'Dice values updated{mode_text}: {updated_text} | Result: {most_common}')
