@@ -1942,9 +1942,44 @@ def payment_methods(request):
     if not has_menu_permission(request.user, 'payment_methods'):
         messages.error(request, 'You do not have permission to manage payment methods.')
         return redirect('admin_dashboard')
-    
+
+    # Create default payment methods if none exist
+    if not PaymentMethod.objects.exists():
+        default_methods = [
+            {
+                'name': 'Bank Transfer',
+                'method_type': 'BANK',
+                'is_active': True,
+            },
+            {
+                'name': 'Google Pay',
+                'method_type': 'GPAY',
+                'is_active': True,
+            },
+            {
+                'name': 'PhonePe',
+                'method_type': 'PHONEPE',
+                'is_active': True,
+            },
+            {
+                'name': 'Paytm',
+                'method_type': 'PAYTM',
+                'is_active': True,
+            },
+            {
+                'name': 'UPI',
+                'method_type': 'UPI_QR',
+                'is_active': True,
+            },
+        ]
+
+        for method_data in default_methods:
+            PaymentMethod.objects.create(**method_data)
+
+        messages.info(request, 'Created default payment methods. Please edit them with your actual payment details.')
+
     methods = PaymentMethod.objects.all().order_by('-is_active', 'method_type')
-    
+
     context = get_admin_context(request, {
         'payment_methods': methods,
         'page': 'payment-methods',

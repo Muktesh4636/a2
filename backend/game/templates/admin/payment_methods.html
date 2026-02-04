@@ -216,8 +216,8 @@
 
             {% if messages %}
                 {% for message in messages %}
-                    <div class="alert alert-{{ message.tags }}" style="padding: 16px 24px; border-radius: 12px; margin-bottom: 32px; border: 1px solid; display: flex; align-items: center; gap: 12px; {% if message.tags == 'success' %}background: #f0fdf4; color: #166534; border-color: #bbf7d0;{% else %}background: #fef2f2; color: #991b1b; border-color: #fecaca;{% endif %}">
-                        <span style="font-size: 20px;">{% if message.tags == 'success' %}✅{% else %}⚠️{% endif %}</span>
+                    <div class="alert alert-{{ message.tags }}" style="padding: 16px 24px; border-radius: 12px; margin-bottom: 32px; border: 1px solid; display: flex; align-items: center; gap: 12px; {% if message.tags == 'success' %}background: #f0fdf4; color: #166534; border-color: #bbf7d0;{% elif message.tags == 'info' %}background: #f0f9ff; color: #0c4a6e; border-color: #bae6fd;{% else %}background: #fef2f2; color: #991b1b; border-color: #fecaca;{% endif %}">
+                        <span style="font-size: 20px;">{% if message.tags == 'success' %}✅{% elif message.tags == 'info' %}ℹ️{% else %}⚠️{% endif %}</span>
                         <span style="font-weight: 500;">{{ message }}</span>
                     </div>
                 {% endfor %}
