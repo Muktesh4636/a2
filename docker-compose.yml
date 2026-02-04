@@ -1,24 +1,4 @@
 services:
-  # PostgreSQL Database
-  db:
-    image: postgres:15-alpine
-    container_name: dice_game_db
-    environment:
-      POSTGRES_DB: ${DB_NAME:-dice_game}
-      POSTGRES_USER: ${DB_USER:-postgres}
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres_secure_pass_123}
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    # Removed public port mapping for security
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres}"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    restart: unless-stopped
-    networks:
-      - dice_game_network
-
   # Redis Cache & Channel Layer
   redis:
     image: redis:7-alpine
@@ -26,8 +6,8 @@ services:
     command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-redis_password_change_me}
     volumes:
       - redis_data:/data
-    # ports:
-    #   - "6379:6379"
+    ports:
+      - "6379:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-redis_password_change_me}", "ping"]
       interval: 10s
@@ -45,7 +25,6 @@ services:
     container_name: dice_game_web
     command: >
       sh -c "
-        python manage.py protect_users --warn-only || echo '⚠️  User check warning' &&
         python manage.py migrate &&
         python manage.py collectstatic --noinput &&
         daphne -b 0.0.0.0 -p 8001 dice_game.asgi:application
@@ -62,9 +41,9 @@ services:
       - SECRET_KEY=${SECRET_KEY:-change-this-in-production}
       - USE_SQLITE=${USE_SQLITE:-False}
       - DB_NAME=${DB_NAME:-dice_game}
-      - DB_USER=${DB_USER:-postgres}
-      - DB_PASSWORD=${DB_PASSWORD:-postgres}
-      - DB_HOST=db
+      - DB_USER=${DB_USER:-muktesh}
+      - DB_PASSWORD=${DB_PASSWORD:-muktesh123}
+      - DB_HOST=72.61.254.74
       - DB_PORT=5432
       - REDIS_HOST=redis
       - REDIS_PORT=6379
@@ -74,8 +53,6 @@ services:
       - ALLOWED_HOSTS=${ALLOWED_HOSTS:-*}
       - AUTOBAHN_USE_NVX=0
     depends_on:
-      db:
-        condition: service_healthy
       redis:
         condition: service_healthy
     restart: unless-stopped
@@ -105,9 +82,9 @@ services:
       - SECRET_KEY=${SECRET_KEY:-change-this-in-production}
       - USE_SQLITE=${USE_SQLITE:-False}
       - DB_NAME=${DB_NAME:-dice_game}
-      - DB_USER=${DB_USER:-postgres}
-      - DB_PASSWORD=${DB_PASSWORD:-postgres}
-      - DB_HOST=db
+      - DB_USER=${DB_USER:-muktesh}
+      - DB_PASSWORD=${DB_PASSWORD:-muktesh123}
+      - DB_HOST=72.61.254.74
       - DB_PORT=5432
       - REDIS_HOST=redis
       - REDIS_PORT=6379
@@ -116,8 +93,6 @@ services:
       - REDIS_POOL_SIZE=${REDIS_POOL_SIZE:-50}
       - AUTOBAHN_USE_NVX=0
     depends_on:
-      db:
-        condition: service_healthy
       redis:
         condition: service_healthy
       web:
@@ -135,14 +110,8 @@ services:
           memory: 128M
 
 volumes:
-  # CRITICAL: These volumes store persistent data
-  # NEVER delete these volumes - they contain all database data
-  postgres_data:
-    driver: local
-    # Data persists even if container is removed
   redis_data:
     driver: local
-    # Redis data persists across restarts
   static_volume:
     driver: local
   media_volume:
@@ -153,4 +122,3 @@ volumes:
 networks:
   dice_game_network:
     driver: bridge
-

@@ -190,6 +190,31 @@
         .password-icon::before {
             content: '🔒';
         }
+
+        .password-wrapper {
+            position: relative;
+            display: flex;
+            align-items: center;
+        }
+
+        .password-toggle {
+            position: absolute;
+            right: 12px;
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #a0aec0;
+            transition: color 0.2s;
+            z-index: 10;
+        }
+
+        .password-toggle:hover {
+            color: #4a5568;
+        }
     </style>
 </head>
 <body>
@@ -236,14 +261,19 @@
             
             <div class="form-group">
                 <label for="password">Password</label>
-                <div class="input-icon password-icon">
-                    <input 
-                        type="password" 
-                        id="password" 
-                        name="password" 
-                        required
-                        placeholder="Enter your password"
-                    >
+                <div class="password-wrapper">
+                    <div class="input-icon password-icon" style="flex: 1;">
+                        <input 
+                            type="password" 
+                            id="password" 
+                            name="password" 
+                            required
+                            placeholder="Enter your password"
+                        >
+                    </div>
+                    <button type="button" class="password-toggle" onclick="togglePasswordVisibility('password')">
+                        <span class="eye-icon">👁️</span>
+                    </button>
                 </div>
             </div>
             
@@ -254,6 +284,22 @@
             <a href="/">← Back to Game</a>
         </div>
     </div>
+
+    <script>
+        function togglePasswordVisibility(inputId) {
+            const input = document.getElementById(inputId);
+            const container = input.closest('.password-wrapper');
+            const icon = container.querySelector('.eye-icon');
+            
+            if (input.type === 'password') {
+                input.type = 'text';
+                icon.textContent = '🙈';
+            } else {
+                input.type = 'password';
+                icon.textContent = '👁️';
+            }
+        }
+    </script>
 </body>
 </html>
 

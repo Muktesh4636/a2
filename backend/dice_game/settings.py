@@ -52,6 +52,7 @@ INSTALLED_APPS = [
 TESSERACT_CMD = os.getenv('TESSERACT_CMD', '/opt/homebrew/bin/tesseract')
 
 MIDDLEWARE = [
+    'dice_game.middleware.NormalizePathMiddleware',  # Fix double slashes
     'django.middleware.security.SecurityMiddleware',
     # 'dice_game.cloudflare_middleware.CloudflareOnlyMiddleware',  # SECURITY: Block direct IP access
     # 'dice_game.anonymization_middleware.AnonymizationMiddleware',  # SECURITY: Prevent tracing
@@ -62,6 +63,7 @@ MIDDLEWARE = [
     'django.contrib.sessions.middleware.SessionMiddleware',
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.common.CommonMiddleware',
+    'dice_game.middleware.DisableCSRFMiddleware',  # Disable CSRF for API (after path normalization)
     'django.middleware.csrf.CsrfViewMiddleware',  # Standard CSRF middleware
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
@@ -294,11 +296,11 @@ REST_FRAMEWORK = {
         'rest_framework.throttling.UserRateThrottle'
     ],
     'DEFAULT_THROTTLE_RATES': {
-        'anon': '100/hour',  # Anonymous users: 100 requests per hour
-        'user': '1000/hour',  # Authenticated users: 1000 requests per hour
-        'login': '5/minute',  # Login attempts: 5 per minute
-        'bet': '60/minute',  # Betting: 60 bets per minute
-        'api': '200/hour',  # API endpoints: 200 requests per hour per IP
+        'anon': '10000/hour',  # Increased for testing
+        'user': '100000/hour',  # Increased for testing
+        'login': '100/minute',  # Increased for testing
+        'bet': '1000/minute',  # Increased for testing
+        'api': '10000/hour',  # Increased for testing
     }
 }
 
@@ -328,8 +330,8 @@ CORS_ALLOWED_ORIGINS = [
 # Only allow credentials from trusted origins
 CORS_ALLOW_CREDENTIALS = True
 
-# CORS Security: Block all other origins
-CORS_ALLOW_ALL_ORIGINS = False
+# CORS Security: Allow all origins for APK compatibility
+CORS_ALLOW_ALL_ORIGINS = True
 
 # Redis Configuration
 REDIS_HOST = os.getenv('REDIS_HOST', 'localhost')

@@ -453,7 +453,7 @@ class Command(BaseCommand):
                         
                         # If dice were already set (e.g., by admin pre-set), but payouts haven't been calculated for this round
                         # We use the dice_result_sent lock to ensure this only runs once at dice_result_time
-                        elif timer == dice_result_time:
+                        if timer == dice_result_time:
                             # Extract dice values and calculate payouts for the pre-set dice
                             existing_result = round_obj.dice_result
                             dice_values_for_payout = [

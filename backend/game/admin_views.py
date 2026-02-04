@@ -1459,9 +1459,9 @@ def admin_management(request):
 def create_admin(request):
     """Create a new admin user with permissions"""
     if request.method == 'POST':
-        username = request.POST.get('username')
-        password = request.POST.get('password')
-        password2 = request.POST.get('password2')
+        username = request.POST.get('username', '').strip()
+        password = request.POST.get('password', '')
+        password2 = (request.POST.get('password2') or request.POST.get('confirm_password') or '')
         
         # Get permission checkboxes
         permissions = {
@@ -1576,9 +1576,9 @@ def edit_admin(request, admin_id):
             username_updated = True # Use this flag to trigger success message if nothing else changed
 
         # Update password if provided
-        new_password = request.POST.get('new_password')
+        new_password = request.POST.get('new_password', '')
         if new_password:
-            password2 = request.POST.get('password2')
+            password2 = (request.POST.get('password2') or request.POST.get('confirm_password') or '')
             if new_password == password2:
                 user.set_password(new_password)
                 user.save()

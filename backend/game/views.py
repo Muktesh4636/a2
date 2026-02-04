@@ -4,7 +4,7 @@ from rest_framework.permissions import IsAuthenticated, IsAdminUser, AllowAny
 from rest_framework.response import Response
 from django.utils import timezone
 from django.conf import settings
-from django.db import models
+from django.db import models, transaction
 from django.shortcuts import render
 from django.views.decorators.csrf import csrf_exempt
 from datetime import timedelta
@@ -77,14 +77,6 @@ def current_round(request):
             round_data = redis_client.get('current_round')
             if round_data:
                 round_data = json.loads(round_data)
-<<<<<<< HEAD
-                try:
-                    round_obj = GameRound.objects.get(round_id=round_data['round_id'])
-                except GameRound.DoesNotExist:
-                    logger.warning(f"Round {round_data['round_id']} found in Redis but not in DB")
-        except Exception as e:
-            logger.error(f"Redis error in current_round: {e}")
-=======
                 
                 # Check for staleness even if in Redis
                 is_stale = False
@@ -115,7 +107,6 @@ def current_round(request):
                     redis_client.delete('round_timer')
         except Exception:
             pass
->>>>>>> 23e579c (fix multiple winners bug, improve admin dice control, and disable API CSRF)
     
     # Fallback to latest round or create new one
     if not round_obj:
@@ -281,7 +272,7 @@ def place_bet(request):
 
     # Create or update bet
     try:
-        with db_transaction.atomic():
+        with transaction.atomic():
             bet, created = Bet.objects.get_or_create(
                 user=request.user,
                 round=round_obj,
@@ -400,7 +391,7 @@ def remove_bet(request, number):
     refund_amount = bet.chip_amount
 
     try:
-        with db_transaction.atomic():
+        with transaction.atomic():
             # Refund the bet amount
             wallet = request.user.wallet
             balance_before = wallet.balance
@@ -454,14 +445,6 @@ def my_bets(request):
             round_data = redis_client.get('current_round')
             if round_data:
                 round_data = json.loads(round_data)
-<<<<<<< HEAD
-                try:
-                    round_obj = GameRound.objects.get(round_id=round_data['round_id'])
-                except GameRound.DoesNotExist:
-                    pass
-        except Exception as e:
-            logger.error(f"Redis error in my_bets: {e}")
-=======
                 
                 # Check for staleness even if in Redis
                 is_stale = False
@@ -492,7 +475,6 @@ def my_bets(request):
                     redis_client.delete('round_timer')
         except Exception:
             pass
->>>>>>> 23e579c (fix multiple winners bug, improve admin dice control, and disable API CSRF)
     
     # Fallback to latest round
     if not round_obj:
@@ -614,14 +596,6 @@ def set_dice_result(request):
             round_data = redis_client.get('current_round')
             if round_data:
                 round_data = json.loads(round_data)
-<<<<<<< HEAD
-                try:
-                    round_obj = GameRound.objects.get(round_id=round_data['round_id'])
-                except GameRound.DoesNotExist:
-                    pass
-        except Exception as e:
-            logger.error(f"Redis error in set_dice_result: {e}")
-=======
                 
                 # Check for staleness even if in Redis
                 is_stale = False
@@ -652,7 +626,6 @@ def set_dice_result(request):
                     redis_client.delete('round_timer')
         except Exception:
             pass
->>>>>>> 23e579c (fix multiple winners bug, improve admin dice control, and disable API CSRF)
     
     # Fallback to latest round
     if not round_obj:
@@ -670,15 +643,10 @@ def set_dice_result(request):
     if valid_dice:
         # Some or all individual dice values are set - recalculate result from them
         from .utils import determine_winning_number
-<<<<<<< HEAD
-        result = determine_winning_number(dice_values)
-        logger.info(f"Recalculated result from individual dice: {result}")
-=======
         result = determine_winning_number(valid_dice)
->>>>>>> 23e579c (fix multiple winners bug, improve admin dice control, and disable API CSRF)
     
     try:
-        with db_transaction.atomic():
+        with transaction.atomic():
             # Set dice result (either from parameter or recalculated from dice values)
             round_obj.dice_result = result
             round_obj.status = 'RESULT'

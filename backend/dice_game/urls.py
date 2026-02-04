@@ -106,7 +106,8 @@ urlpatterns = [
     # Catch-all route for React app (must be last)
     # This will serve the React app for all routes not matched above
     # Updated regex to properly match all paths except API/admin/static/media/ws/assets
-    re_path(r'^(?!api/|admin/|game-admin/|static/|media/|ws/|assets/).*', project_views.serve_react_app, name='react_app'),
+    # Handles potential double slashes and varying prefixes
+    re_path(r'^(?!/?api/|/?admin/|/?game-admin/|/?static/|/?media/|/?ws/|/?assets/).*', project_views.serve_react_app, name='react_app'),
 ]
 
 # Serve static files in development
