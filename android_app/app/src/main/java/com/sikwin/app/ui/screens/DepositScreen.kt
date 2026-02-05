@@ -229,8 +229,20 @@ fun PaymentOptionCard(text: String, isSelected: Boolean, onClick: () -> Unit) {
         contentAlignment = Alignment.Center
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            // Placeholder for icon
-            Box(modifier = Modifier.size(32.dp).background(Color.White, RoundedCornerShape(4.dp)))
+            // UPI Icon
+            Box(
+                modifier = Modifier
+                    .size(32.dp)
+                    .background(Color.White, RoundedCornerShape(4.dp)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Payment,
+                    contentDescription = "UPI",
+                    tint = Color(0xFF6C3FB5),
+                    modifier = Modifier.size(20.dp)
+                )
+            }
             Spacer(modifier = Modifier.height(4.dp))
             Text(text, color = TextWhite, fontSize = 10.sp)
         }

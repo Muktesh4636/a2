@@ -235,6 +235,25 @@ class GunduAtaViewModel(private val sessionManager: SessionManager) : ViewModel(
         }
     }
 
+    fun deleteBankDetail(id: Int) {
+        viewModelScope.launch {
+            isLoading = true
+            errorMessage = null
+            try {
+                val response = RetrofitClient.apiService.deleteBankDetail(id)
+                if (response.isSuccessful) {
+                    fetchBankDetails()
+                } else {
+                    errorMessage = "Failed to delete bank detail: ${response.message()}"
+                }
+            } catch (e: Exception) {
+                errorMessage = "Error: ${e.message}"
+            } finally {
+                isLoading = false
+            }
+        }
+    }
+
     fun submitUtr(amount: String, utr: String, onSuccess: () -> Unit) {
         viewModelScope.launch {
             isLoading = true

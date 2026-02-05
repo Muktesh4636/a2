@@ -147,7 +147,7 @@ fun PersonalInfoScreen(
                 .verticalScroll(rememberScrollState())
         ) {
             val items = listOf(
-                InfoRowData("Name", user?.username ?: "", editable = true),
+                InfoRowData("Name", user?.username ?: "", editable = false),
                 InfoRowData("Phone number", maskPhoneNumber(user?.phone_number ?: ""), showArrow = true, editable = true),
                 InfoRowData("Gender", user?.gender ?: "", showArrow = true, editable = true),
                 InfoRowData("Email", user?.email ?: "", showArrow = true, editable = true),

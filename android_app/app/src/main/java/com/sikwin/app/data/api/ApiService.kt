@@ -62,4 +62,7 @@ interface ApiService {
 
     @GET("game/betting-history/")
     suspend fun getBettingHistory(): Response<List<Bet>>
+
+    @DELETE("auth/bank-details/{id}/")
+    suspend fun deleteBankDetail(@Path("id") id: Int): Response<Unit>
 }

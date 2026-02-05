@@ -60,7 +60,7 @@ fun HomeScreen(
             SearchBar()
             
             // Banners
-            PromotionalBanners(onSpinClick = { onNavigate("lucky_wheel") })
+            PromotionalBanners(onSpinClick = { /* Disabled navigation */ })
             
             // Hot Games
             SectionHeader(title = "Hot games")
@@ -81,12 +81,24 @@ fun HomeTopBar(balance: String, onWalletClick: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
-        Text(
-            text = "Gundu Ata",
-            color = TextWhite,
-            fontSize = 24.sp,
-            fontWeight = FontWeight.Bold
-        )
+        Row(
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Image(
+                painter = painterResource(id = R.drawable.app_logo),
+                contentDescription = "App Logo",
+                modifier = Modifier
+                    .size(40.dp)
+                    .clip(RoundedCornerShape(8.dp))
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                text = "Gundu Ata",
+                color = TextWhite,
+                fontSize = 24.sp,
+                fontWeight = FontWeight.Bold
+            )
+        }
         
         Row(verticalAlignment = Alignment.CenterVertically) {
             // Balance Pill
@@ -268,7 +280,7 @@ fun HomeBottomNavigation(currentRoute: String, onNavigate: (String) -> Unit) {
     ) {
         val items = listOf(
             BottomNavItem("Home", "home", Icons.Default.Home),
-            BottomNavItem("Gundu Ata", "gundu_ata", Icons.Default.Sports),
+            BottomNavItem("Gundu Ata", "gundu_ata", Icons.Default.Casino),
             BottomNavItem("Me", "me", Icons.Default.AccountCircle)
         )
         

@@ -86,7 +86,7 @@ fun WithdrawalAccountScreen(
                         accountNumber = bank.account_number,
                         ifsc = bank.ifsc_code,
                         isDefault = bank.is_default,
-                        onDelete = { /* Logic to delete if needed */ }
+                        onDelete = { viewModel.deleteBankDetail(bank.id) }
                     )
                 }
 
