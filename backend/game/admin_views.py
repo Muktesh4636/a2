@@ -451,7 +451,7 @@ def set_individual_dice_view(request):
         dice_result_time = get_game_setting('DICE_RESULT_TIME', 51)
 
         # Check timer restriction
-            if timer >= dice_result_time:
+        if timer >= dice_result_time:
                 messages.error(request, f'Cannot set dice values after {dice_result_time} seconds. Use Manual Adjust mode to override.')
                 return redirect('dice_control')
         

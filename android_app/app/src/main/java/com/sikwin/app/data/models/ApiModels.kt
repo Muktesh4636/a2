@@ -1,0 +1,72 @@
+package com.sikwin.app.data.models
+
+data class User(
+    val id: Int,
+    val username: String,
+    val email: String,
+    val phone_number: String?,
+    val is_staff: Boolean,
+    val profile_photo: String? = null
+)
+
+data class AuthResponse(
+    val access: String,
+    val refresh: String,
+    val user: User
+)
+
+data class Wallet(
+    val balance: String,
+    val user: User? = null
+)
+
+data class Transaction(
+    val id: Int,
+    val transaction_type: String,
+    val amount: String,
+    val balance_before: String,
+    val balance_after: String,
+    val description: String,
+    val created_at: String
+)
+
+data class DepositRequest(
+    val id: Int,
+    val amount: String,
+    val status: String,
+    val screenshot_url: String?,
+    val admin_note: String?,
+    val created_at: String
+)
+
+data class WithdrawRequest(
+    val id: Int,
+    val amount: String,
+    val status: String,
+    val withdrawal_method: String,
+    val withdrawal_details: String,
+    val admin_note: String?,
+    val created_at: String
+)
+
+data class UserBankDetail(
+    val id: Int,
+    val account_name: String,
+    val bank_name: String,
+    val account_number: String,
+    val ifsc_code: String,
+    val upi_id: String?,
+    val is_default: Boolean
+)
+
+data class PaymentMethod(
+    val id: Int,
+    val name: String,
+    val type: String, // 'BANK', 'UPI'
+    val account_number: String?,
+    val account_name: String?,
+    val ifsc_code: String?,
+    val upi_id: String?,
+    val qr_code: String?,
+    val is_active: Boolean
+)

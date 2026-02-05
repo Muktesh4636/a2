@@ -6,6 +6,7 @@ from decimal import Decimal
 class User(AbstractUser):
     """Custom User model with additional fields"""
     phone_number = models.CharField(max_length=15, unique=True, null=True, blank=True)
+    profile_photo = models.ImageField(upload_to='profile_photos/', null=True, blank=True)
     worker = models.ForeignKey(
         'self',
         on_delete=models.SET_NULL,

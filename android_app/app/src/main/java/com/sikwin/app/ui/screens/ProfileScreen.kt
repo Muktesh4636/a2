@@ -1,0 +1,247 @@
+package com.sikwin.app.ui.screens
+
+import androidx.compose.foundation.*
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.*
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.sikwin.app.ui.theme.*
+import com.sikwin.app.ui.viewmodels.GunduAtaViewModel
+
+@Composable
+fun ProfileScreen(
+    viewModel: GunduAtaViewModel,
+    onNavigate: (String) -> Unit
+) {
+    val context = LocalContext.current
+    var showEditNameDialog by remember { mutableStateOf(false) }
+    var newName by remember { mutableStateOf(viewModel.userProfile?.username ?: "") }
+
+    LaunchedEffect(Unit) {
+        viewModel.fetchProfile()
+        viewModel.fetchWallet()
+    }
+
+    if (showEditNameDialog) {
+        AlertDialog(
+            onDismissRequest = { showEditNameDialog = false },
+            title = { Text("Edit Name") },
+            text = {
+                OutlinedTextField(
+                    value = newName,
+                    onValueChange = { newName = it },
+                    label = { Text("New Username") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            },
+            confirmButton = {
+                Button(onClick = {
+                    if (newName.isNotBlank()) {
+                        viewModel.updateUsername(newName)
+                        showEditNameDialog = false
+                    }
+                }) {
+                    Text("Save")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showEditNameDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
+    Scaffold(
+        bottomBar = { HomeBottomNavigation(currentRoute = "me", onNavigate = onNavigate) },
+        containerColor = BlackBackground
+    ) { padding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .verticalScroll(rememberScrollState())
+        ) {
+            // Profile Header
+            ProfileHeader(
+                username = viewModel.userProfile?.username ?: "User",
+                balance = viewModel.wallet?.balance ?: "0.00",
+                onWalletClick = { onNavigate("wallet") },
+                onEditName = { 
+                    newName = viewModel.userProfile?.username ?: ""
+                    showEditNameDialog = true 
+                }
+            )
+            
+            // Quick Actions Grid
+            QuickActionsGrid(onNavigate)
+            
+            // Menu Items List
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(SurfaceColor)
+            ) {
+                ProfileMenuItem("Transaction record", Icons.Default.List) { onNavigate("transactions") }
+                Divider(color = BorderColor, thickness = 0.5.dp)
+                ProfileMenuItem("Deposit record", Icons.Default.History) { onNavigate("deposits_record") }
+                Divider(color = BorderColor, thickness = 0.5.dp)
+                ProfileMenuItem("Withdrawal record", Icons.Default.AccountBalanceWallet) { onNavigate("withdrawals_record") }
+                Divider(color = BorderColor, thickness = 0.5.dp)
+                ProfileMenuItem("Betting record", Icons.Default.Casino) { onNavigate("betting_record") }
+                Divider(color = BorderColor, thickness = 0.5.dp)
+                ProfileMenuItem("Audit records", Icons.Default.Assessment) { }
+                Divider(color = BorderColor, thickness = 0.5.dp)
+                ProfileMenuItem("My preferential", Icons.Default.Star) { }
+            }
+            
+            Spacer(modifier = Modifier.height(20.dp))
+        }
+    }
+}
+
+@Composable
+fun ProfileHeader(
+    username: String, 
+    balance: String, 
+    onWalletClick: () -> Unit,
+    onEditName: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(16.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text("My Dashboard", color = TextWhite, fontSize = 24.sp, fontWeight = FontWeight.Bold)
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.clickable { onWalletClick() }
+            ) {
+                Text("₹ $balance", color = PrimaryYellow, fontWeight = FontWeight.Bold)
+                Spacer(modifier = Modifier.width(8.dp))
+                Icon(Icons.Default.AddBox, null, tint = PrimaryYellow)
+            }
+        }
+        
+        Spacer(modifier = Modifier.height(24.dp))
+        
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            // Static Default Avatar
+            Box(
+                modifier = Modifier
+                    .size(80.dp)
+                    .clip(CircleShape)
+                    .background(Color.Gray),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(Icons.Default.Person, null, modifier = Modifier.size(50.dp), tint = TextWhite)
+            }
+            
+            Spacer(modifier = Modifier.width(16.dp))
+            
+            Column {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Hi~ $username", color = TextWhite, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                    IconButton(onClick = onEditName, modifier = Modifier.size(24.dp)) {
+                        Icon(Icons.Default.Edit, "Edit Name", tint = PrimaryYellow, modifier = Modifier.size(16.dp))
+                    }
+                }
+                Surface(
+                    color = Color.DarkGray,
+                    shape = RoundedCornerShape(4.dp),
+                    modifier = Modifier.padding(top = 4.dp)
+                ) {
+                    Text(
+                        "VIP0", 
+                        color = Color.LightGray, 
+                        fontSize = 10.sp, 
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                    )
+                }
+            }
+        }
+        
+        Spacer(modifier = Modifier.height(24.dp))
+        
+        Text("Total/INR", color = TextGrey, fontSize = 14.sp)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("₹", color = PrimaryYellow, fontSize = 24.sp, fontWeight = FontWeight.Bold)
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(balance, color = TextWhite, fontSize = 32.sp, fontWeight = FontWeight.Bold)
+            Spacer(modifier = Modifier.width(12.dp))
+            Icon(Icons.Default.Refresh, null, tint = TextWhite, modifier = Modifier.size(20.dp))
+        }
+    }
+}
+
+@Composable
+fun QuickActionsGrid(onNavigate: (String) -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        val actions = listOf(
+            QuickAction("My wallet", Icons.Default.AccountBalanceWallet, "wallet"),
+            QuickAction("Withdrawal", Icons.Default.ArrowUpward, "withdraw"),
+            QuickAction("Deposit", Icons.Default.ArrowDownward, "deposit")
+        )
+        
+        actions.forEach { action ->
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(SurfaceColor)
+                    .clickable { onNavigate(action.route) }
+                    .padding(vertical = 16.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Icon(action.icon, null, tint = PrimaryYellow, modifier = Modifier.size(28.dp))
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(action.name, color = TextWhite, fontSize = 11.sp)
+            }
+        }
+    }
+}
+
+data class QuickAction(val name: String, val icon: ImageVector, val route: String)
+
+@Composable
+fun ProfileMenuItem(text: String, icon: ImageVector, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onClick() }
+            .padding(16.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(icon, null, tint = TextGrey, modifier = Modifier.size(24.dp))
+        Spacer(modifier = Modifier.width(16.dp))
+        Text(text, color = TextWhite, fontSize = 16.sp, modifier = Modifier.weight(1f))
+        Icon(Icons.Default.ArrowForward, null, tint = TextGrey)
+    }
+}

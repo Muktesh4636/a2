@@ -20,8 +20,12 @@ SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-change-this-in-production'
 DEBUG = os.getenv('DEBUG', 'False') == 'True'  # Default to False for production
 
 # Security: Only allow specific hosts
-ALLOWED_HOSTS_STR = os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1,gunduata.online,www.gunduata.online,72.61.254.71')
+ALLOWED_HOSTS_STR = os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1,gunduata.online,www.gunduata.online,72.61.254.71,192.168.29.147')
 ALLOWED_HOSTS = [host.strip() for host in ALLOWED_HOSTS_STR.split(',') if host.strip()]
+
+# For local development, allow all hosts if DEBUG is True
+if DEBUG:
+    ALLOWED_HOSTS = ['*']
 
 
 # Application definition

@@ -68,6 +68,7 @@ def login(request):
     """User login"""
     try:
         # Safely get request data
+        logger.info(f"Request data: {getattr(request, 'data', 'No data attribute')} | Content-Type: {request.content_type}")
         if hasattr(request, 'data'):
             username = request.data.get('username', '').strip()
             password = request.data.get('password', '').strip()
@@ -151,11 +152,38 @@ def login(request):
 
 
 @csrf_exempt
-@api_view(['GET'])
+@api_view(['GET', 'POST'])
 @permission_classes([IsAuthenticated])
 def profile(request):
-    """Get user profile"""
-    logger.info(f"Profile access for user: {request.user.username} (ID: {request.user.id})")
+    """Get or update user profile"""
+    if request.method == 'GET':
+        logger.info(f"Profile access for user: {request.user.username} (ID: {request.user.id})")
+        serializer = UserSerializer(request.user)
+        return Response(serializer.data)
+    
+    elif request.method == 'POST':
+        logger.info(f"Profile update for user: {request.user.username} (ID: {request.user.id})")
+        username = request.data.get('username')
+        if username:
+            request.user.username = username
+            request.user.save()
+            serializer = UserSerializer(request.user)
+            return Response(serializer.data)
+        return Response({'error': 'Username is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+
+@csrf_exempt
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+@parser_classes([MultiPartParser, FormParser])
+def update_profile_photo(request):
+    """Update user profile photo"""
+    photo = request.FILES.get('photo')
+    if not photo:
+        return Response({'error': 'Photo is required'}, status=status.HTTP_400_BAD_REQUEST)
+    
+    request.user.profile_photo = photo
+    request.user.save()
     serializer = UserSerializer(request.user)
     return Response(serializer.data)
 
@@ -428,6 +456,42 @@ def upload_deposit_proof(request):
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     notify_user(request.user, f"Your deposit request of ₹{amount} has been submitted and is pending admin approval.")
+    serializer = DepositRequestSerializer(deposit, context={'request': request})
+    return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+
+@csrf_exempt
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def submit_utr(request):
+    """Submit a UTR for a deposit request"""
+    amount_raw = request.data.get('amount')
+    utr = request.data.get('utr', '').strip()
+    
+    logger.info(f"UTR submission attempt for user {request.user.username}, amount: {amount_raw}, UTR: {utr}")
+    
+    if not utr:
+        return Response({'error': 'UTR is required'}, status=status.HTTP_400_BAD_REQUEST)
+        
+    try:
+        amount = _parse_amount(amount_raw)
+    except ValueError as exc:
+        return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+    # Create deposit request with PENDING status and UTR (no screenshot)
+    try:
+        deposit = DepositRequest.objects.create(
+            user=request.user,
+            amount=amount,
+            payment_reference=utr,
+            status='PENDING',
+        )
+        logger.info(f"Deposit request (UTR) created: ID {deposit.id} for user {request.user.username}, amount: {amount}, UTR: {utr}")
+    except Exception as e:
+        logger.exception(f"Unexpected error creating deposit request for user {request.user.username}: {e}")
+        return Response({'error': 'Failed to create deposit request'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    notify_user(request.user, f"Your deposit request of ₹{amount} with UTR {utr} has been submitted and is pending admin approval.")
     serializer = DepositRequestSerializer(deposit, context={'request': request})
     return Response(serializer.data, status=status.HTTP_201_CREATED)
 

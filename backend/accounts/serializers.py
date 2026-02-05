@@ -33,11 +33,20 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
 
 class UserSerializer(serializers.ModelSerializer):
     is_staff = serializers.BooleanField(read_only=True)
+    profile_photo_url = serializers.SerializerMethodField()
 
     class Meta:
         model = User
-        fields = ('id', 'username', 'email', 'phone_number', 'date_joined', 'is_staff')
+        fields = ('id', 'username', 'email', 'phone_number', 'date_joined', 'is_staff', 'profile_photo_url')
         read_only_fields = ('id', 'date_joined')
+
+    def get_profile_photo_url(self, obj):
+        request = self.context.get('request')
+        if obj.profile_photo and hasattr(obj.profile_photo, 'url'):
+            if request:
+                return request.build_absolute_uri(obj.profile_photo.url)
+            return obj.profile_photo.url
+        return None
 
 
 class WalletSerializer(serializers.ModelSerializer):
