@@ -329,6 +329,30 @@ class GunduAtaViewModel(private val sessionManager: SessionManager) : ViewModel(
         updateProfile(mapOf("username" to newUsername))
     }
 
+    fun updatePassword(currentPassword: String, newPassword: String, onSuccess: () -> Unit) {
+        viewModelScope.launch {
+            isLoading = true
+            errorMessage = null
+            try {
+                val data = mapOf(
+                    "current_password" to currentPassword,
+                    "new_password" to newPassword
+                )
+                val response = RetrofitClient.apiService.updateProfile(data)
+                if (response.isSuccessful) {
+                    onSuccess()
+                } else {
+                    val errorBody = response.errorBody()?.string()
+                    errorMessage = "Failed to update password: ${parseError(errorBody)}"
+                }
+            } catch (e: Exception) {
+                errorMessage = "Error: ${e.message}"
+            } finally {
+                isLoading = false
+            }
+        }
+    }
+
     fun updateProfile(data: Map<String, String>) {
         viewModelScope.launch {
             isLoading = true

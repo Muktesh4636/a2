@@ -3,6 +3,7 @@ package com.sikwin.app.ui.screens
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -11,8 +12,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
 import com.sikwin.app.ui.theme.*
 import com.sikwin.app.ui.viewmodels.GunduAtaViewModel
 
@@ -26,6 +31,12 @@ fun SecurityScreen(
     }
 
     val user = viewModel.userProfile
+    
+    var showEmailDialog by remember { mutableStateOf(false) }
+    var showPasswordDialog by remember { mutableStateOf(false) }
+    var showPhoneDialog by remember { mutableStateOf(false) }
+    var showRealNameDialog by remember { mutableStateOf(false) }
+    var showWithdrawalPasswordDialog by remember { mutableStateOf(false) }
 
     Column(
         modifier = Modifier
@@ -66,37 +77,412 @@ fun SecurityScreen(
         ) {
             SecurityItem(
                 label = "Email",
-                action = "Verify Now",
-                onClick = { /* TODO: Implement email verification */ }
+                value = user?.email ?: "",
+                onClick = { showEmailDialog = true }
             )
             HorizontalDivider(color = BorderColor, thickness = 0.5.dp)
 
             SecurityItem(
                 label = "Password",
                 action = "Change",
-                onClick = { /* TODO: Implement password change */ }
+                onClick = { showPasswordDialog = true }
             )
             HorizontalDivider(color = BorderColor, thickness = 0.5.dp)
 
             SecurityItem(
                 label = "Withdrawal Password:",
                 action = "Setting",
-                onClick = { /* TODO: Implement withdrawal password */ }
+                onClick = { showWithdrawalPasswordDialog = true }
             )
             HorizontalDivider(color = BorderColor, thickness = 0.5.dp)
 
             SecurityItem(
                 label = "Phone",
                 value = user?.phone_number?.let { maskPhoneNumber(it) } ?: "",
-                onClick = { /* TODO: Implement phone verification */ }
+                onClick = { showPhoneDialog = true }
             )
             HorizontalDivider(color = BorderColor, thickness = 0.5.dp)
 
             SecurityItem(
                 label = "Real name",
-                action = "Verify Now",
-                onClick = { /* TODO: Implement real name verification */ }
+                value = user?.username ?: "",
+                onClick = { showRealNameDialog = true }
             )
+        }
+    }
+
+    // Edit Dialogs
+    if (showEmailDialog) {
+        EditFieldDialog(
+            title = "Edit Email",
+            currentValue = user?.email ?: "",
+            label = "Email",
+            keyboardType = KeyboardType.Email,
+            onDismiss = { showEmailDialog = false },
+            onConfirm = { newEmail ->
+                viewModel.updateProfile(mapOf("email" to newEmail))
+                showEmailDialog = false
+            }
+        )
+    }
+
+    if (showPasswordDialog) {
+        ChangePasswordDialog(
+            onDismiss = { showPasswordDialog = false },
+            onConfirm = { currentPassword, newPassword ->
+                viewModel.updatePassword(currentPassword, newPassword) {
+                    showPasswordDialog = false
+                }
+            }
+        )
+    }
+
+    if (showPhoneDialog) {
+        EditFieldDialog(
+            title = "Edit Phone Number",
+            currentValue = user?.phone_number ?: "",
+            label = "Phone Number",
+            keyboardType = KeyboardType.Phone,
+            onDismiss = { showPhoneDialog = false },
+            onConfirm = { newPhone ->
+                viewModel.updateProfile(mapOf("phone_number" to newPhone))
+                showPhoneDialog = false
+            }
+        )
+    }
+
+    if (showRealNameDialog) {
+        EditFieldDialog(
+            title = "Edit Real Name",
+            currentValue = user?.username ?: "",
+            label = "Real Name",
+            keyboardType = KeyboardType.Text,
+            onDismiss = { showRealNameDialog = false },
+            onConfirm = { newName ->
+                viewModel.updateProfile(mapOf("username" to newName))
+                showRealNameDialog = false
+            }
+        )
+    }
+
+    if (showWithdrawalPasswordDialog) {
+        SetWithdrawalPasswordDialog(
+            onDismiss = { showWithdrawalPasswordDialog = false },
+            onConfirm = { password ->
+                viewModel.updateProfile(mapOf("withdrawal_password" to password))
+                showWithdrawalPasswordDialog = false
+            }
+        )
+    }
+}
+
+@Composable
+fun EditFieldDialog(
+    title: String,
+    currentValue: String,
+    label: String,
+    keyboardType: KeyboardType = KeyboardType.Text,
+    onDismiss: () -> Unit,
+    onConfirm: (String) -> Unit
+) {
+    var value by remember { mutableStateOf(currentValue) }
+
+    Dialog(onDismissRequest = onDismiss) {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(containerColor = CardBackground)
+        ) {
+            Column(
+                modifier = Modifier.padding(24.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                Text(
+                    text = title,
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = TextWhite
+                )
+
+                OutlinedTextField(
+                    value = value,
+                    onValueChange = { value = it },
+                    label = { Text(label, color = TextGrey) },
+                    modifier = Modifier.fillMaxWidth(),
+                    keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = TextWhite,
+                        unfocusedTextColor = TextWhite,
+                        focusedBorderColor = PrimaryYellow,
+                        unfocusedBorderColor = BorderColor
+                    ),
+                    singleLine = true
+                )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    TextButton(onClick = onDismiss) {
+                        Text("Cancel", color = TextGrey)
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Button(
+                        onClick = { onConfirm(value) },
+                        colors = ButtonDefaults.buttonColors(containerColor = PrimaryYellow),
+                        enabled = value.isNotBlank()
+                    ) {
+                        Text("Save", color = Color.Black)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun ChangePasswordDialog(
+    onDismiss: () -> Unit,
+    onConfirm: (String, String) -> Unit
+) {
+    var currentPassword by remember { mutableStateOf("") }
+    var newPassword by remember { mutableStateOf("") }
+    var confirmPassword by remember { mutableStateOf("") }
+    var showCurrentPassword by remember { mutableStateOf(false) }
+    var showNewPassword by remember { mutableStateOf(false) }
+    var showConfirmPassword by remember { mutableStateOf(false) }
+
+    Dialog(onDismissRequest = onDismiss) {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(containerColor = CardBackground)
+        ) {
+            Column(
+                modifier = Modifier.padding(24.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                Text(
+                    text = "Change Password",
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = TextWhite
+                )
+
+                OutlinedTextField(
+                    value = currentPassword,
+                    onValueChange = { currentPassword = it },
+                    label = { Text("Current Password", color = TextGrey) },
+                    modifier = Modifier.fillMaxWidth(),
+                    visualTransformation = if (showCurrentPassword) VisualTransformation.None else PasswordVisualTransformation(),
+                    trailingIcon = {
+                        IconButton(onClick = { showCurrentPassword = !showCurrentPassword }) {
+                            Icon(
+                                if (showCurrentPassword) Icons.Default.Visibility else Icons.Default.VisibilityOff,
+                                contentDescription = null,
+                                tint = TextGrey
+                            )
+                        }
+                    },
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = TextWhite,
+                        unfocusedTextColor = TextWhite,
+                        focusedBorderColor = PrimaryYellow,
+                        unfocusedBorderColor = BorderColor
+                    ),
+                    singleLine = true
+                )
+
+                OutlinedTextField(
+                    value = newPassword,
+                    onValueChange = { newPassword = it },
+                    label = { Text("New Password", color = TextGrey) },
+                    modifier = Modifier.fillMaxWidth(),
+                    visualTransformation = if (showNewPassword) VisualTransformation.None else PasswordVisualTransformation(),
+                    trailingIcon = {
+                        IconButton(onClick = { showNewPassword = !showNewPassword }) {
+                            Icon(
+                                if (showNewPassword) Icons.Default.Visibility else Icons.Default.VisibilityOff,
+                                contentDescription = null,
+                                tint = TextGrey
+                            )
+                        }
+                    },
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = TextWhite,
+                        unfocusedTextColor = TextWhite,
+                        focusedBorderColor = PrimaryYellow,
+                        unfocusedBorderColor = BorderColor
+                    ),
+                    singleLine = true
+                )
+
+                OutlinedTextField(
+                    value = confirmPassword,
+                    onValueChange = { confirmPassword = it },
+                    label = { Text("Confirm New Password", color = TextGrey) },
+                    modifier = Modifier.fillMaxWidth(),
+                    visualTransformation = if (showConfirmPassword) VisualTransformation.None else PasswordVisualTransformation(),
+                    trailingIcon = {
+                        IconButton(onClick = { showConfirmPassword = !showConfirmPassword }) {
+                            Icon(
+                                if (showConfirmPassword) Icons.Default.Visibility else Icons.Default.VisibilityOff,
+                                contentDescription = null,
+                                tint = TextGrey
+                            )
+                        }
+                    },
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = TextWhite,
+                        unfocusedTextColor = TextWhite,
+                        focusedBorderColor = PrimaryYellow,
+                        unfocusedBorderColor = BorderColor
+                    ),
+                    singleLine = true,
+                    isError = confirmPassword.isNotEmpty() && newPassword != confirmPassword
+                )
+
+                if (confirmPassword.isNotEmpty() && newPassword != confirmPassword) {
+                    Text(
+                        "Passwords do not match",
+                        color = Color.Red,
+                        fontSize = 12.sp
+                    )
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    TextButton(onClick = onDismiss) {
+                        Text("Cancel", color = TextGrey)
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Button(
+                        onClick = { onConfirm(currentPassword, newPassword) },
+                        colors = ButtonDefaults.buttonColors(containerColor = PrimaryYellow),
+                        enabled = currentPassword.isNotBlank() && 
+                                 newPassword.isNotBlank() && 
+                                 newPassword == confirmPassword
+                    ) {
+                        Text("Change", color = Color.Black)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun SetWithdrawalPasswordDialog(
+    onDismiss: () -> Unit,
+    onConfirm: (String) -> Unit
+) {
+    var password by remember { mutableStateOf("") }
+    var confirmPassword by remember { mutableStateOf("") }
+    var showPassword by remember { mutableStateOf(false) }
+    var showConfirmPassword by remember { mutableStateOf(false) }
+
+    Dialog(onDismissRequest = onDismiss) {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(containerColor = CardBackground)
+        ) {
+            Column(
+                modifier = Modifier.padding(24.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                Text(
+                    text = "Set Withdrawal Password",
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = TextWhite
+                )
+
+                OutlinedTextField(
+                    value = password,
+                    onValueChange = { password = it },
+                    label = { Text("Withdrawal Password", color = TextGrey) },
+                    modifier = Modifier.fillMaxWidth(),
+                    visualTransformation = if (showPassword) VisualTransformation.None else PasswordVisualTransformation(),
+                    trailingIcon = {
+                        IconButton(onClick = { showPassword = !showPassword }) {
+                            Icon(
+                                if (showPassword) Icons.Default.Visibility else Icons.Default.VisibilityOff,
+                                contentDescription = null,
+                                tint = TextGrey
+                            )
+                        }
+                    },
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = TextWhite,
+                        unfocusedTextColor = TextWhite,
+                        focusedBorderColor = PrimaryYellow,
+                        unfocusedBorderColor = BorderColor
+                    ),
+                    singleLine = true
+                )
+
+                OutlinedTextField(
+                    value = confirmPassword,
+                    onValueChange = { confirmPassword = it },
+                    label = { Text("Confirm Password", color = TextGrey) },
+                    modifier = Modifier.fillMaxWidth(),
+                    visualTransformation = if (showConfirmPassword) VisualTransformation.None else PasswordVisualTransformation(),
+                    trailingIcon = {
+                        IconButton(onClick = { showConfirmPassword = !showConfirmPassword }) {
+                            Icon(
+                                if (showConfirmPassword) Icons.Default.Visibility else Icons.Default.VisibilityOff,
+                                contentDescription = null,
+                                tint = TextGrey
+                            )
+                        }
+                    },
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = TextWhite,
+                        unfocusedTextColor = TextWhite,
+                        focusedBorderColor = PrimaryYellow,
+                        unfocusedBorderColor = BorderColor
+                    ),
+                    singleLine = true,
+                    isError = confirmPassword.isNotEmpty() && password != confirmPassword
+                )
+
+                if (confirmPassword.isNotEmpty() && password != confirmPassword) {
+                    Text(
+                        "Passwords do not match",
+                        color = Color.Red,
+                        fontSize = 12.sp
+                    )
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    TextButton(onClick = onDismiss) {
+                        Text("Cancel", color = TextGrey)
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Button(
+                        onClick = { onConfirm(password) },
+                        colors = ButtonDefaults.buttonColors(containerColor = PrimaryYellow),
+                        enabled = password.isNotBlank() && password == confirmPassword
+                    ) {
+                        Text("Set", color = Color.Black)
+                    }
+                }
+            }
         }
     }
 }
@@ -126,7 +512,7 @@ fun SecurityItem(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.End
         ) {
-            if (value != null) {
+            if (value != null && value.isNotEmpty()) {
                 Text(
                     text = value,
                     color = TextGrey,

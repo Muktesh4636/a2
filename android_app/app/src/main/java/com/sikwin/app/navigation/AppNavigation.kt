@@ -1,11 +1,13 @@
 package com.sikwin.app.navigation
 
+import android.app.Activity
 import android.content.Intent
 import java.io.File
 import java.io.FileOutputStream
 import android.widget.Toast
 import androidx.core.content.FileProvider
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.platform.LocalContext
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
@@ -13,7 +15,6 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.sikwin.app.data.auth.SessionManager
 import com.sikwin.app.ui.screens.*
-
 import com.sikwin.app.ui.viewmodels.GunduAtaViewModel
 
 @Composable
@@ -23,6 +24,18 @@ fun AppNavigation(
     sessionManager: SessionManager
 ) {
     val context = LocalContext.current
+    val activity = context as? Activity
+    
+    // Handle redirect requests (e.g. from Unity balance click)
+    LaunchedEffect(activity?.intent) {
+        activity?.intent?.getStringExtra("redirect")?.let { route ->
+            navController.navigate(route) {
+                launchSingleTop = true
+            }
+            activity.intent.removeExtra("redirect")
+        }
+    }
+
     val startDestination = if (viewModel.loginSuccess) "home" else "login"
     
     NavHost(navController = navController, startDestination = startDestination) {
@@ -30,14 +43,22 @@ fun AppNavigation(
             LoginScreen(
                 viewModel = viewModel,
                 onLoginSuccess = { navController.navigate("home") },
-                onNavigateToSignUp = { navController.navigate("signup") }
+                onNavigateToSignUp = { 
+                    navController.navigate("signup") {
+                        popUpTo("login") { inclusive = true }
+                    }
+                }
             )
         }
         composable("signup") {
             SignUpScreen(
                 viewModel = viewModel,
                 onSignUpSuccess = { navController.navigate("home") },
-                onNavigateToSignIn = { navController.navigate("login") }
+                onNavigateToSignIn = { 
+                    navController.navigate("login") {
+                        popUpTo("signup") { inclusive = true }
+                    }
+                }
             )
         }
         composable("home") {
