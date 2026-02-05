@@ -42,7 +42,6 @@ fun WithdrawScreen(
     val bankAccounts = viewModel.bankDetails
     
     var amount by remember { mutableStateOf("") }
-    var password by remember { mutableStateOf("") }
     var selectedBank by remember { mutableStateOf(bankAccounts.firstOrNull()) }
     var showBankDropdown by remember { mutableStateOf(false) }
 
@@ -252,23 +251,6 @@ fun WithdrawScreen(
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
                 )
 
-                // Password Input
-                OutlinedTextField(
-                    value = password,
-                    onValueChange = { password = it },
-                    modifier = Modifier.fillMaxWidth(),
-                    placeholder = { Text("Please enter withdrawal password", color = TextGrey) },
-                    visualTransformation = PasswordVisualTransformation(),
-                    colors = TextFieldDefaults.outlinedTextFieldColors(
-                        containerColor = BlackBackground,
-                        unfocusedBorderColor = BorderColor,
-                        focusedBorderColor = PrimaryYellow,
-                        focusedTextColor = TextWhite,
-                        unfocusedTextColor = TextWhite
-                    ),
-                    shape = RoundedCornerShape(4.dp),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password)
-                )
 
                 Spacer(modifier = Modifier.height(8.dp))
 
