@@ -215,6 +215,12 @@ def _parse_amount(value):
     try:
         # Convert to string first to handle various input types
         value_str = str(value).strip()
+        
+        # Remove surrounding quotes if they exist (common in multipart serialization)
+        if (value_str.startswith('"') and value_str.endswith('"')) or \
+           (value_str.startswith("'") and value_str.endswith("'")):
+            value_str = value_str[1:-1].strip()
+            
         if not value_str:
             raise ValueError('Amount cannot be empty')
         

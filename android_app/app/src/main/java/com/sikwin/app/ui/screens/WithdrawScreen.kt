@@ -272,25 +272,44 @@ fun WithdrawScreen(
 
                 Spacer(modifier = Modifier.height(8.dp))
 
+                // Error Message
+                viewModel.errorMessage?.let { error ->
+                    Text(
+                        text = error,
+                        color = Color.Red,
+                        fontSize = 14.sp,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)
+                    )
+                }
+
                 // Submit Button
                 Button(
                     onClick = { 
-                        if (amount.isNotBlank() && password.isNotBlank() && selectedBank != null) {
-                            // TODO: Implement withdrawal logic
+                        if (amount.isNotBlank() && selectedBank != null) {
+                            viewModel.initiateWithdraw(amount, selectedBank!!) {
+                                // On Success, maybe show a toast or navigate back
+                                onBack() 
+                            }
                         }
                     },
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(56.dp),
+                    enabled = !viewModel.isLoading,
                     colors = ButtonDefaults.buttonColors(containerColor = PrimaryYellow),
                     shape = RoundedCornerShape(8.dp)
                 ) {
-                    Text(
-                        "Submit",
-                        color = BlackBackground,
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Bold
-                    )
+                    if (viewModel.isLoading) {
+                        CircularProgressIndicator(color = BlackBackground, modifier = Modifier.size(24.dp))
+                    } else {
+                        Text(
+                            "Submit",
+                            color = BlackBackground,
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
                 }
             }
         }

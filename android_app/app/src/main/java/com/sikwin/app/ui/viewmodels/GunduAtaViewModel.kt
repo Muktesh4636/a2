@@ -306,6 +306,37 @@ class GunduAtaViewModel(private val sessionManager: SessionManager) : ViewModel(
             }
         }
     }
+
+    fun initiateWithdraw(amount: String, bankAccount: UserBankDetail, onSuccess: () -> Unit) {
+        viewModelScope.launch {
+            isLoading = true
+            errorMessage = null
+            try {
+                val details = "Bank: ${bankAccount.bank_name}, Acc: ${bankAccount.account_number}, IFSC: ${bankAccount.ifsc_code}"
+                val data = mapOf(
+                    "amount" to amount,
+                    "withdrawal_method" to "Bank Account",
+                    "withdrawal_details" to details
+                )
+                val response = RetrofitClient.apiService.initiateWithdraw(data)
+                if (response.isSuccessful) {
+                    onSuccess()
+                    fetchWallet() // Refresh balance
+                } else {
+                    val errorBody = response.errorBody()?.string()
+                    errorMessage = if (!errorBody.isNullOrEmpty()) {
+                        "Withdrawal failed: $errorBody"
+                    } else {
+                        "Withdrawal failed: ${response.message()}"
+                    }
+                }
+            } catch (e: Exception) {
+                errorMessage = "Error: ${e.message}"
+            } finally {
+                isLoading = false
+            }
+        }
+    }
     
     fun logout() {
         sessionManager.logout()

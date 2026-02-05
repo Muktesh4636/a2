@@ -80,12 +80,18 @@ CSRF_TRUSTED_ORIGINS = [
     'http://gunduata.online',
     'https://www.gunduata.online',
     'http://www.gunduata.online',
-    'https://72.61.254.71',
+    'http://72.61.254.71:8080',
     'http://72.61.254.71',
     'http://localhost:8080',
     'http://127.0.0.1:8080',
     'http://192.168.29.147:8080',
+    'http://192.168.29.147',
+    'http://0.0.0.0:8080',
+    'http://0.0.0.0',
 ]
+
+CSRF_USE_SESSIONS = True
+CSRF_COOKIE_HTTPONLY = False
 
 # CSRF Cookie Domain - None means use same domain as request
 CSRF_COOKIE_DOMAIN = None
@@ -96,14 +102,18 @@ CSRF_HEADER_NAME = 'HTTP_X_CSRFTOKEN'
 CSRF_COOKIE_AGE = 31449600  # 1 year (same as session)
 CSRF_COOKIE_PATH = '/'
 # Allow CSRF to work without strict referer checking when behind proxy
-CSRF_COOKIE_SAMESITE = 'Lax'  # Set here for all environments
+CSRF_COOKIE_SAMESITE = 'Lax'
+CSRF_COOKIE_SECURE = False
+SESSION_COOKIE_SECURE = False
+CSRF_COOKIE_HTTPONLY = False
+SESSION_COOKIE_HTTPONLY = False
 
 # SECURITY: Production security settings
 if not DEBUG:
     # HTTPS/SSL Settings
     SECURE_SSL_REDIRECT = os.getenv('SECURE_SSL_REDIRECT', 'False') == 'True'
-    SESSION_COOKIE_SECURE = True
-    CSRF_COOKIE_SECURE = True
+    SESSION_COOKIE_SECURE = SECURE_SSL_REDIRECT
+    CSRF_COOKIE_SECURE = SECURE_SSL_REDIRECT
     SECURE_BROWSER_XSS_FILTER = True
     SECURE_CONTENT_TYPE_NOSNIFF = True
     X_FRAME_OPTIONS = 'DENY'
@@ -120,8 +130,8 @@ if not DEBUG:
     # CSRF settings for proxy setup
     # When behind a proxy, Django needs to trust the X-Forwarded-Proto header
     # CSRF_COOKIE_SECURE will be set based on X-Forwarded-Proto header from proxy
-    CSRF_COOKIE_SECURE = True  # Set to True when using HTTPS (proxy handles SSL)
-    CSRF_USE_SESSIONS = False  # Use cookies for CSRF token
+    CSRF_COOKIE_SECURE = SECURE_SSL_REDIRECT
+    CSRF_USE_SESSIONS = True  # Use sessions for CSRF token (more robust for some setups)
     CSRF_COOKIE_HTTPONLY = False  # Allow JavaScript to read CSRF token (needed for AJAX)
     # CSRF_TRUSTED_ORIGINS is already set above
     # CSRF_COOKIE_DOMAIN is already set above
@@ -130,7 +140,7 @@ if not DEBUG:
     # Session security - Enhanced for anonymity
     SESSION_COOKIE_HTTPONLY = True
     SESSION_COOKIE_SAMESITE = 'Lax'
-    SESSION_COOKIE_SECURE = True  # HTTPS only
+    SESSION_COOKIE_SECURE = SECURE_SSL_REDIRECT
     SESSION_COOKIE_AGE = 3600  # 1 hour sessions
     SESSION_SAVE_EVERY_REQUEST = False  # Don't save on every request
     SESSION_EXPIRE_AT_BROWSER_CLOSE = True  # Clear on browser close
