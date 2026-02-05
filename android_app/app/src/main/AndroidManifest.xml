@@ -5,7 +5,7 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
     <queries>
-        <package android:name="com.gunduata" />
+        <package android:name="com.company.dicegame" />
         <intent>
             <action android:name="android.intent.action.MAIN" />
         </intent>

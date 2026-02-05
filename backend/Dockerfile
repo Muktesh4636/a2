@@ -34,8 +34,8 @@ RUN mkdir -p /app/media /app/staticfiles /app/logs
 # RUN python manage.py collectstatic --noinput
 
 # Expose port
-EXPOSE 8001
+EXPOSE 8080
 
 # Default command (can be overridden in docker-compose)
-CMD ["daphne", "-b", "0.0.0.0", "-p", "8001", "dice_game.asgi:application"]
+CMD ["daphne", "-b", "0.0.0.0", "-p", "8080", "dice_game.asgi:application"]
 

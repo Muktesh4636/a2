@@ -1,4 +1,3 @@
 rootProject.name = "SikwinApp"
 include ':app'
 include ':unityLibrary'
-project(':unityLibrary').projectDir = new File('Gundu Ata Project/unityLibrary')

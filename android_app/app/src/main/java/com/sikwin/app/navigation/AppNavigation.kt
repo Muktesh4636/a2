@@ -1,6 +1,10 @@
 package com.sikwin.app.navigation
 
 import android.content.Intent
+import java.io.File
+import java.io.FileOutputStream
+import android.widget.Toast
+import androidx.core.content.FileProvider
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.platform.LocalContext
 import androidx.navigation.NavHostController
@@ -41,30 +45,33 @@ fun AppNavigation(
                 viewModel = viewModel,
                 onGameClick = { gameId ->
                     if (gameId == "gundu_ata") {
-                        val packageName = "com.gunduata"
-                        val activityName = "com.unity3d.player.UnityPlayerGameActivity"
                         try {
-                            val intent = Intent()
-                            intent.setClassName(packageName, activityName)
-                            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                            val intent = Intent(context, Class.forName("com.unity3d.player.UnityPlayerGameActivity"))
+                            intent.putExtra("token", sessionManager.fetchAuthToken())
+                            intent.putExtra("refresh_token", sessionManager.fetchRefreshToken())
+                            intent.putExtra("username", sessionManager.fetchUsername())
+                            intent.putExtra("password", "123456789") // Assuming same password for now or fetch from session if stored
+                            intent.putExtra("user_id", sessionManager.fetchUserId())
+                            intent.putExtra("game_id", gameId)
                             context.startActivity(intent)
                         } catch (e: Exception) {
-                            android.widget.Toast.makeText(context, "Gundu Ata app not installed or conflicting!", android.widget.Toast.LENGTH_LONG).show()
                             e.printStackTrace()
+                            android.widget.Toast.makeText(context, "Error launching Unity game", android.widget.Toast.LENGTH_SHORT).show()
                         }
                     }
                 },
                 onNavigate = { route ->
                     if (route == "gundu_ata") {
-                        val packageName = "com.gunduata"
-                        val activityName = "com.unity3d.player.UnityPlayerGameActivity"
                         try {
-                            val intent = Intent()
-                            intent.setClassName(packageName, activityName)
-                            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                            val intent = Intent(context, Class.forName("com.unity3d.player.UnityPlayerGameActivity"))
+                            intent.putExtra("token", sessionManager.fetchAuthToken())
+                            intent.putExtra("refresh_token", sessionManager.fetchRefreshToken())
+                            intent.putExtra("username", sessionManager.fetchUsername())
+                            intent.putExtra("password", "123456789")
                             context.startActivity(intent)
                         } catch (e: Exception) {
-                            android.widget.Toast.makeText(context, "Gundu Ata app not installed or conflicting!", android.widget.Toast.LENGTH_LONG).show()
+                            e.printStackTrace()
+                            android.widget.Toast.makeText(context, "Unity game not found!", android.widget.Toast.LENGTH_SHORT).show()
                         }
                     } else if (route != "home") {
                         navController.navigate(route)
@@ -79,8 +86,10 @@ fun AppNavigation(
                     if (route == "gundu_ata") {
                         try {
                             val intent = Intent(context, Class.forName("com.unity3d.player.UnityPlayerGameActivity"))
-                            intent.putExtra("username", viewModel.userProfile?.username ?: "")
-                            intent.putExtra("token", sessionManager.fetchAuthToken() ?: "")
+                            intent.putExtra("token", sessionManager.fetchAuthToken())
+                            intent.putExtra("refresh_token", sessionManager.fetchRefreshToken())
+                            intent.putExtra("username", sessionManager.fetchUsername() ?: viewModel.userProfile?.username ?: "")
+                            intent.putExtra("password", "123456789")
                             intent.putExtra("balance", viewModel.wallet?.balance ?: "0.00")
                             context.startActivity(intent)
                         } catch (e: ClassNotFoundException) {
