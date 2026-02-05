@@ -66,34 +66,7 @@ fun HomeScreen(
             SectionHeader(title = "Hot games")
             HotGamesGrid(onGameClick)
             
-            Spacer(modifier = Modifier.height(32.dp))
-            
-            // Logout Button
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp)
-            ) {
-                Button(
-                    onClick = { viewModel.logout() },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(80.dp),
-                    shape = RoundedCornerShape(20.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = SurfaceColor,
-                        contentColor = Color.White
-                    )
-                ) {
-                    Text(
-                        text = "Log out",
-                        fontSize = 24.sp,
-                        fontWeight = FontWeight.Normal
-                    )
-                }
-            }
-            
-            Spacer(modifier = Modifier.height(40.dp))
+            Spacer(modifier = Modifier.height(20.dp))
         }
     }
 }
