@@ -32,6 +32,7 @@ fun WithdrawalAccountScreen(
 ) {
     LaunchedEffect(Unit) {
         viewModel.fetchBankDetails()
+        viewModel.clearError()
     }
 
     Scaffold(

@@ -72,6 +72,7 @@ fun PaymentScreen(
 
     LaunchedEffect(Unit) {
         viewModel.fetchPaymentMethods()
+        viewModel.clearError()
     }
 
     fun openUpiApp(packageName: String?) {

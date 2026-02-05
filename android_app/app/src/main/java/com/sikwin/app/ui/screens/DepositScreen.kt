@@ -35,6 +35,7 @@ fun DepositScreen(
 
     LaunchedEffect(Unit) {
         viewModel.fetchWallet()
+        viewModel.clearError()
     }
 
     Column(

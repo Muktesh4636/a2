@@ -33,7 +33,11 @@ class MainActivity : ComponentActivity() {
                     val viewModel: GunduAtaViewModel = viewModel(
                         factory = GunduAtaViewModelFactory(sessionManager)
                     )
-                    AppNavigation(navController = navController, viewModel = viewModel)
+                    AppNavigation(
+                        navController = navController, 
+                        viewModel = viewModel,
+                        sessionManager = sessionManager
+                    )
                 }
             }
         }

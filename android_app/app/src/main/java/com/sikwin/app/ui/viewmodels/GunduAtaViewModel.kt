@@ -12,11 +12,32 @@ import kotlinx.coroutines.launch
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.MultipartBody
 import okhttp3.RequestBody.Companion.toRequestBody
+import org.json.JSONObject
 
 class GunduAtaViewModel(private val sessionManager: SessionManager) : ViewModel() {
 
     var isLoading by mutableStateOf(false)
     var errorMessage by mutableStateOf<String?>(null)
+
+    fun clearError() {
+        errorMessage = null
+    }
+
+    private fun parseError(errorBody: String?): String {
+        if (errorBody.isNullOrEmpty()) return "Unknown error"
+        return try {
+            val json = JSONObject(errorBody)
+            if (json.has("error")) {
+                json.getString("error")
+            } else if (json.has("message")) {
+                json.getString("message")
+            } else {
+                errorBody
+            }
+        } catch (e: Exception) {
+            errorBody
+        }
+    }
     
     var userProfile by mutableStateOf<User?>(null)
     var wallet by mutableStateOf<Wallet?>(null)
@@ -263,7 +284,8 @@ class GunduAtaViewModel(private val sessionManager: SessionManager) : ViewModel(
                 if (response.isSuccessful) {
                     onSuccess()
                 } else {
-                    errorMessage = "Failed to submit UTR: ${response.message()}"
+                    val errorBody = response.errorBody()?.string()
+                    errorMessage = "Failed to submit UTR: ${parseError(errorBody)}"
                 }
             } catch (e: Exception) {
                 errorMessage = "Error: ${e.message}"
@@ -290,7 +312,8 @@ class GunduAtaViewModel(private val sessionManager: SessionManager) : ViewModel(
                 if (response.isSuccessful) {
                     onSuccess()
                 } else {
-                    errorMessage = "Upload failed: ${response.message()}"
+                    val errorBody = response.errorBody()?.string()
+                    errorMessage = "Upload failed: ${parseError(errorBody)}"
                 }
             } catch (e: Exception) {
                 errorMessage = "Error: ${e.message}"
@@ -360,11 +383,7 @@ class GunduAtaViewModel(private val sessionManager: SessionManager) : ViewModel(
                     fetchWallet() // Refresh balance
                 } else {
                     val errorBody = response.errorBody()?.string()
-                    errorMessage = if (!errorBody.isNullOrEmpty()) {
-                        "Withdrawal failed: $errorBody"
-                    } else {
-                        "Withdrawal failed: ${response.message()}"
-                    }
+                    errorMessage = "Withdrawal failed: ${parseError(errorBody)}"
                 }
             } catch (e: Exception) {
                 errorMessage = "Error: ${e.message}"

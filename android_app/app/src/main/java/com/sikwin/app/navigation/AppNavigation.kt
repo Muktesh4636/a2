@@ -6,12 +6,18 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import androidx.navigation.compose.rememberNavController
+import com.sikwin.app.data.auth.SessionManager
 import com.sikwin.app.ui.screens.*
 
 import com.sikwin.app.ui.viewmodels.GunduAtaViewModel
 
 @Composable
-fun AppNavigation(navController: NavHostController, viewModel: GunduAtaViewModel) {
+fun AppNavigation(
+    navController: NavHostController, 
+    viewModel: GunduAtaViewModel,
+    sessionManager: SessionManager
+) {
     val context = LocalContext.current
     val startDestination = if (viewModel.loginSuccess) "home" else "login"
     
@@ -35,32 +41,30 @@ fun AppNavigation(navController: NavHostController, viewModel: GunduAtaViewModel
                 viewModel = viewModel,
                 onGameClick = { gameId ->
                     if (gameId == "gundu_ata") {
+                        val packageName = "com.gunduata"
+                        val activityName = "com.unity3d.player.UnityPlayerGameActivity"
                         try {
-                            val intent = Intent(context, Class.forName("com.unity3d.player.UnityPlayerActivity"))
-                            // Pass essential data to Unity
-                            intent.putExtra("username", viewModel.userProfile?.username ?: "")
-                            // Using the direct way to get token since sessionManager might not be easily accessible here 
-                            // but we can assume the viewModel or a singleton has it.
-                            // Looking at the code, viewModel doesn't expose sessionManager directly, 
-                            // but RetrofitClient uses it. Let's just pass the username and balance for now, 
-                            // or assume the user will fix the token source once they have the library.
-                            intent.putExtra("balance", viewModel.wallet?.balance ?: "0.00")
+                            val intent = Intent()
+                            intent.setClassName(packageName, activityName)
+                            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                             context.startActivity(intent)
-                        } catch (e: ClassNotFoundException) {
-                            // Unity library not yet imported
-                            android.util.Log.e("UnityLaunch", "UnityPlayerActivity not found. Did you import unityLibrary?")
+                        } catch (e: Exception) {
+                            android.widget.Toast.makeText(context, "Gundu Ata app not installed or conflicting!", android.widget.Toast.LENGTH_LONG).show()
+                            e.printStackTrace()
                         }
                     }
                 },
                 onNavigate = { route ->
                     if (route == "gundu_ata") {
+                        val packageName = "com.gunduata"
+                        val activityName = "com.unity3d.player.UnityPlayerGameActivity"
                         try {
-                            val intent = Intent(context, Class.forName("com.unity3d.player.UnityPlayerActivity"))
-                            intent.putExtra("username", viewModel.userProfile?.username ?: "")
-                            intent.putExtra("balance", viewModel.wallet?.balance ?: "0.00")
+                            val intent = Intent()
+                            intent.setClassName(packageName, activityName)
+                            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                             context.startActivity(intent)
-                        } catch (e: ClassNotFoundException) {
-                            android.util.Log.e("UnityLaunch", "UnityPlayerActivity not found.")
+                        } catch (e: Exception) {
+                            android.widget.Toast.makeText(context, "Gundu Ata app not installed or conflicting!", android.widget.Toast.LENGTH_LONG).show()
                         }
                     } else if (route != "home") {
                         navController.navigate(route)
@@ -74,14 +78,15 @@ fun AppNavigation(navController: NavHostController, viewModel: GunduAtaViewModel
                 onNavigate = { route ->
                     if (route == "gundu_ata") {
                         try {
-                            val intent = Intent(context, Class.forName("com.unity3d.player.UnityPlayerActivity"))
+                            val intent = Intent(context, Class.forName("com.unity3d.player.UnityPlayerGameActivity"))
                             intent.putExtra("username", viewModel.userProfile?.username ?: "")
+                            intent.putExtra("token", sessionManager.fetchAuthToken() ?: "")
                             intent.putExtra("balance", viewModel.wallet?.balance ?: "0.00")
                             context.startActivity(intent)
                         } catch (e: ClassNotFoundException) {
-                            android.util.Log.e("UnityLaunch", "UnityPlayerActivity not found.")
+                            android.util.Log.e("UnityLaunch", "UnityPlayerGameActivity not found.")
                         }
-                    } else if (route != "me") {
+                    } else {
                         navController.navigate(route)
                     }
                 }
