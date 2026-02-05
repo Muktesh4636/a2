@@ -249,9 +249,8 @@ class GunduAtaViewModel(private val sessionManager: SessionManager) : ViewModel(
 
                 val requestFile = bytes.toRequestBody("image/*".toMediaTypeOrNull(), 0, bytes.size)
                 val body = MultipartBody.Part.createFormData("screenshot", "screenshot.jpg", requestFile)
-                val amountBody = amount.toRequestBody("text/plain".toMediaTypeOrNull())
 
-                val response = RetrofitClient.apiService.uploadDepositProof(amountBody, body)
+                val response = RetrofitClient.apiService.uploadDepositProof(amount, body)
                 if (response.isSuccessful) {
                     onSuccess()
                 } else {

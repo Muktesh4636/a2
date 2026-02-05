@@ -35,7 +35,7 @@ interface ApiService {
     @Multipart
     @POST("auth/deposits/upload-proof/")
     suspend fun uploadDepositProof(
-        @Part("amount") amount: RequestBody,
+        @Part("amount") amount: String,
         @Part screenshot: MultipartBody.Part
     ): Response<DepositRequest>
 
