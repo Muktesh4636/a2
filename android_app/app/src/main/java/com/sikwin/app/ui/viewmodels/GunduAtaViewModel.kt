@@ -280,6 +280,10 @@ class GunduAtaViewModel(private val sessionManager: SessionManager) : ViewModel(
         sessionManager.logout()
         userProfile = null
         wallet = null
+        transactions = emptyList()
+        depositRequests = emptyList()
+        withdrawRequests = emptyList()
+        errorMessage = null
         loginSuccess = false
     }
 }
