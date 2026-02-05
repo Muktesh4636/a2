@@ -269,7 +269,6 @@ fun HomeBottomNavigation(currentRoute: String, onNavigate: (String) -> Unit) {
         val items = listOf(
             BottomNavItem("Home", "home", Icons.Default.Home),
             BottomNavItem("Gundu Ata", "gundu_ata", Icons.Default.Sports),
-            BottomNavItem("Refer and Earn", "bonus", Icons.Default.Redeem),
             BottomNavItem("Me", "me", Icons.Default.AccountCircle)
         )
         
