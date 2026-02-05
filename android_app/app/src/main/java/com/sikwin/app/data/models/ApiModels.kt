@@ -75,3 +75,20 @@ data class PaymentMethod(
     val qr_code: String?,
     val is_active: Boolean
 )
+
+data class GameRound(
+    val round_id: String,
+    val status: String,
+    val dice_result: String?,
+    val created_at: String? = null
+)
+
+data class Bet(
+    val id: Int,
+    val round: GameRound,
+    val number: Int,
+    val chip_amount: String,
+    val payout_amount: String,
+    val is_winner: Boolean,
+    val created_at: String
+)

@@ -59,4 +59,7 @@ interface ApiService {
 
     @GET("game/round/")
     suspend fun getCurrentRound(): Response<Map<String, Any>>
+
+    @GET("game/betting-history/")
+    suspend fun getBettingHistory(): Response<List<Bet>>
 }

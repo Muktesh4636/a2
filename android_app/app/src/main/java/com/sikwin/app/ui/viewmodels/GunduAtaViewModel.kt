@@ -25,6 +25,7 @@ class GunduAtaViewModel(private val sessionManager: SessionManager) : ViewModel(
     var withdrawRequests by mutableStateOf<List<WithdrawRequest>>(emptyList())
     var paymentMethods by mutableStateOf<List<PaymentMethod>>(emptyList())
     var bankDetails by mutableStateOf<List<UserBankDetail>>(emptyList())
+    var bettingHistory by mutableStateOf<List<Bet>>(emptyList())
     
     var loginSuccess by mutableStateOf(false)
     
@@ -192,6 +193,22 @@ class GunduAtaViewModel(private val sessionManager: SessionManager) : ViewModel(
                 }
             } catch (e: Exception) {
                 android.util.Log.e("GunduAtaViewModel", "Fetch bank details failed: ${e.message}")
+            } finally {
+                isLoading = false
+            }
+        }
+    }
+
+    fun fetchBettingHistory() {
+        viewModelScope.launch {
+            isLoading = true
+            try {
+                val response = RetrofitClient.apiService.getBettingHistory()
+                if (response.isSuccessful) {
+                    bettingHistory = response.body() ?: emptyList()
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("GunduAtaViewModel", "Fetch betting history failed: ${e.message}")
             } finally {
                 isLoading = false
             }

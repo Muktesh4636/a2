@@ -72,7 +72,7 @@ fun TransactionHistoryScreen(
 
     LaunchedEffect(selectedCategory) {
         when (selectedCategory) {
-            "Betting" -> viewModel.fetchTransactions()
+            "Betting" -> viewModel.fetchBettingHistory()
             "Deposit" -> viewModel.fetchDeposits()
             "Withdraw" -> viewModel.fetchWithdrawals()
         }
@@ -210,7 +210,7 @@ fun TransactionHistoryScreen(
         }
 
         val itemsCount = when (selectedCategory) {
-            "Betting" -> viewModel.transactions.size
+            "Betting" -> viewModel.bettingHistory.size
             "Deposit" -> filteredDeposits.size
             "Withdraw" -> filteredWithdrawals.size
             else -> 0
@@ -237,9 +237,19 @@ fun TransactionHistoryScreen(
             ) {
                 when (selectedCategory) {
                     "Betting" -> {
-                        items(viewModel.transactions.size) { index ->
-                            val tx = viewModel.transactions[index]
-                            TransactionItem(tx.description, tx.amount, tx.created_at)
+                        items(viewModel.bettingHistory.size) { index ->
+                            val bet = viewModel.bettingHistory[index]
+                            val outcome = if (bet.is_winner) "WIN (₹${bet.payout_amount})" else "LOSE"
+                            val color = if (bet.is_winner) GreenSuccess else Color.Red
+                            
+                            BettingItem(
+                                roundId = bet.round.round_id,
+                                number = bet.number.toString(),
+                                amount = bet.chip_amount,
+                                status = outcome,
+                                statusColor = color,
+                                date = bet.created_at
+                            )
                         }
                     }
                     "Deposit" -> {
@@ -285,6 +295,33 @@ fun TransactionItem(title: String, amount: String, date: String) {
                 Text(date, color = TextGrey, fontSize = 12.sp)
             }
             Text("₹ $amount", color = PrimaryYellow, fontWeight = FontWeight.Bold)
+        }
+    }
+}
+
+@Composable
+fun BettingItem(roundId: String, number: String, amount: String, status: String, statusColor: Color, date: String) {
+    Surface(
+        color = SurfaceColor,
+        shape = RoundedCornerShape(8.dp),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column {
+                    Text("Round: $roundId", color = TextWhite, fontWeight = FontWeight.Bold)
+                    Text("Bet on Number: $number", color = PrimaryYellow, fontSize = 14.sp)
+                    Text(date, color = TextGrey, fontSize = 12.sp)
+                }
+                Column(horizontalAlignment = Alignment.End) {
+                    Text("₹ $amount", color = TextWhite, fontWeight = FontWeight.Bold)
+                    Text(status, color = statusColor, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                }
+            }
         }
     }
 }
