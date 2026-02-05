@@ -124,7 +124,7 @@ fun ProfileScreen(
                 Divider(color = BorderColor, thickness = 0.5.dp)
                 ProfileMenuItem("Personal data", Icons.Default.Person) { onNavigate("personal_info") }
                 Divider(color = BorderColor, thickness = 0.5.dp)
-                ProfileMenuItem("Security", Icons.Default.Security) { }
+                ProfileMenuItem("Security", Icons.Default.Security) { onNavigate("security") }
                 Divider(color = BorderColor, thickness = 0.5.dp)
                 ProfileMenuItem("Help center", Icons.Default.TipsAndUpdates) { }
                 Divider(color = BorderColor, thickness = 0.5.dp)

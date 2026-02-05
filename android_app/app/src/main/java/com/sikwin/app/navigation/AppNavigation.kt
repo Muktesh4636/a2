@@ -1,6 +1,8 @@
 package com.sikwin.app.navigation
 
+import android.content.Intent
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.platform.LocalContext
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -10,6 +12,7 @@ import com.sikwin.app.ui.viewmodels.GunduAtaViewModel
 
 @Composable
 fun AppNavigation(navController: NavHostController, viewModel: GunduAtaViewModel) {
+    val context = LocalContext.current
     val startDestination = if (viewModel.loginSuccess) "home" else "login"
     
     NavHost(navController = navController, startDestination = startDestination) {
@@ -32,13 +35,33 @@ fun AppNavigation(navController: NavHostController, viewModel: GunduAtaViewModel
                 viewModel = viewModel,
                 onGameClick = { gameId ->
                     if (gameId == "gundu_ata") {
-                        // TODO: Launch Unity Activity later
+                        try {
+                            val intent = Intent(context, Class.forName("com.unity3d.player.UnityPlayerActivity"))
+                            // Pass essential data to Unity
+                            intent.putExtra("username", viewModel.userProfile?.username ?: "")
+                            // Using the direct way to get token since sessionManager might not be easily accessible here 
+                            // but we can assume the viewModel or a singleton has it.
+                            // Looking at the code, viewModel doesn't expose sessionManager directly, 
+                            // but RetrofitClient uses it. Let's just pass the username and balance for now, 
+                            // or assume the user will fix the token source once they have the library.
+                            intent.putExtra("balance", viewModel.wallet?.balance ?: "0.00")
+                            context.startActivity(intent)
+                        } catch (e: ClassNotFoundException) {
+                            // Unity library not yet imported
+                            android.util.Log.e("UnityLaunch", "UnityPlayerActivity not found. Did you import unityLibrary?")
+                        }
                     }
                 },
                 onNavigate = { route ->
                     if (route == "gundu_ata") {
-                        // Handle Gundu Ata game launch
-                        // TODO: Launch Unity Activity later
+                        try {
+                            val intent = Intent(context, Class.forName("com.unity3d.player.UnityPlayerActivity"))
+                            intent.putExtra("username", viewModel.userProfile?.username ?: "")
+                            intent.putExtra("balance", viewModel.wallet?.balance ?: "0.00")
+                            context.startActivity(intent)
+                        } catch (e: ClassNotFoundException) {
+                            android.util.Log.e("UnityLaunch", "UnityPlayerActivity not found.")
+                        }
                     } else if (route != "home") {
                         navController.navigate(route)
                     }
@@ -50,8 +73,14 @@ fun AppNavigation(navController: NavHostController, viewModel: GunduAtaViewModel
                 viewModel = viewModel,
                 onNavigate = { route ->
                     if (route == "gundu_ata") {
-                        // Handle Gundu Ata game launch
-                        // TODO: Launch Unity Activity later
+                        try {
+                            val intent = Intent(context, Class.forName("com.unity3d.player.UnityPlayerActivity"))
+                            intent.putExtra("username", viewModel.userProfile?.username ?: "")
+                            intent.putExtra("balance", viewModel.wallet?.balance ?: "0.00")
+                            context.startActivity(intent)
+                        } catch (e: ClassNotFoundException) {
+                            android.util.Log.e("UnityLaunch", "UnityPlayerActivity not found.")
+                        }
                     } else if (route != "me") {
                         navController.navigate(route)
                     }
@@ -159,6 +188,12 @@ fun AppNavigation(navController: NavHostController, viewModel: GunduAtaViewModel
                 viewModel = viewModel,
                 onBack = { navController.popBackStack() },
                 onAddBankAccount = { navController.navigate("add_bank_account") }
+            )
+        }
+        composable("security") {
+            SecurityScreen(
+                viewModel = viewModel,
+                onBack = { navController.popBackStack() }
             )
         }
         composable("info") {
