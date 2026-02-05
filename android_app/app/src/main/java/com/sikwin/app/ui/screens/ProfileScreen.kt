@@ -120,7 +120,7 @@ fun ProfileScreen(
                     .clip(RoundedCornerShape(12.dp))
                     .background(SurfaceColor)
             ) {
-                ProfileMenuItem("My Withdrawal Account", Icons.Default.AccountBox) { onNavigate("wallet") }
+                ProfileMenuItem("My Withdrawal Account", Icons.Default.AccountBox) { onNavigate("withdrawal_account") }
                 Divider(color = BorderColor, thickness = 0.5.dp)
                 ProfileMenuItem("Personal data", Icons.Default.Person) { onNavigate("personal_info") }
                 Divider(color = BorderColor, thickness = 0.5.dp)

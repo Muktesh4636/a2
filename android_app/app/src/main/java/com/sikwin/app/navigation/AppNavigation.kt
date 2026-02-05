@@ -154,6 +154,13 @@ fun AppNavigation(navController: NavHostController, viewModel: GunduAtaViewModel
                 onBack = { navController.popBackStack() }
             )
         }
+        composable("withdrawal_account") {
+            WithdrawalAccountScreen(
+                viewModel = viewModel,
+                onBack = { navController.popBackStack() },
+                onAddBankAccount = { navController.navigate("add_bank_account") }
+            )
+        }
         composable("info") {
             InfoScreen(
                 onBack = { navController.popBackStack() }
