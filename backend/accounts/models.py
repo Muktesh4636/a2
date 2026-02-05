@@ -7,6 +7,19 @@ class User(AbstractUser):
     """Custom User model with additional fields"""
     phone_number = models.CharField(max_length=15, unique=True, null=True, blank=True)
     profile_photo = models.ImageField(upload_to='profile_photos/', null=True, blank=True)
+    
+    # New fields for personal data
+    GENDER_CHOICES = [
+        ('MALE', 'Male'),
+        ('FEMALE', 'Female'),
+        ('OTHER', 'Other'),
+    ]
+    gender = models.CharField(max_length=10, choices=GENDER_CHOICES, null=True, blank=True)
+    telegram = models.CharField(max_length=100, null=True, blank=True)
+    facebook = models.CharField(max_length=100, null=True, blank=True)
+    address = models.TextField(null=True, blank=True)
+    date_of_birth = models.DateField(null=True, blank=True)
+
     worker = models.ForeignKey(
         'self',
         on_delete=models.SET_NULL,

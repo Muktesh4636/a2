@@ -91,25 +91,44 @@ fun ProfileScreen(
             // Quick Actions Grid
             QuickActionsGrid(onNavigate)
             
-            // Menu Items List
+            Spacer(modifier = Modifier.height(16.dp))
+            
+            // Menu Section 1
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(16.dp)
+                    .padding(horizontal = 16.dp)
                     .clip(RoundedCornerShape(12.dp))
                     .background(SurfaceColor)
             ) {
-                ProfileMenuItem("Transaction record", Icons.Default.List) { onNavigate("transactions") }
+                ProfileMenuItem("Transaction record", Icons.AutoMirrored.Filled.List) { onNavigate("transactions") }
                 Divider(color = BorderColor, thickness = 0.5.dp)
-                ProfileMenuItem("Deposit record", Icons.Default.History) { onNavigate("deposits_record") }
+                ProfileMenuItem("Deposit record", Icons.Default.Description) { onNavigate("deposits_record") }
                 Divider(color = BorderColor, thickness = 0.5.dp)
-                ProfileMenuItem("Withdrawal record", Icons.Default.AccountBalanceWallet) { onNavigate("withdrawals_record") }
+                ProfileMenuItem("Withdrawal record", Icons.Default.Receipt) { onNavigate("withdrawals_record") }
                 Divider(color = BorderColor, thickness = 0.5.dp)
-                ProfileMenuItem("Betting record", Icons.Default.Casino) { onNavigate("betting_record") }
+                ProfileMenuItem("Betting record", Icons.Default.ConfirmationNumber) { onNavigate("betting_record") }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Menu Section 2
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(SurfaceColor)
+            ) {
+                ProfileMenuItem("My Withdrawal Account", Icons.Default.AccountBox) { onNavigate("wallet") }
                 Divider(color = BorderColor, thickness = 0.5.dp)
-                ProfileMenuItem("Audit records", Icons.Default.Assessment) { }
+                ProfileMenuItem("Personal data", Icons.Default.Person) { onNavigate("personal_info") }
                 Divider(color = BorderColor, thickness = 0.5.dp)
-                ProfileMenuItem("My preferential", Icons.Default.Star) { }
+                ProfileMenuItem("Security", Icons.Default.Security) { }
+                Divider(color = BorderColor, thickness = 0.5.dp)
+                ProfileMenuItem("Help center", Icons.Default.TipsAndUpdates) { }
+                Divider(color = BorderColor, thickness = 0.5.dp)
+                ProfileMenuItem("Refer a Friend", Icons.Default.PersonAdd) { }
             }
             
             Spacer(modifier = Modifier.height(20.dp))
@@ -245,3 +264,5 @@ fun ProfileMenuItem(text: String, icon: ImageVector, onClick: () -> Unit) {
         Icon(Icons.Default.ArrowForward, null, tint = TextGrey)
     }
 }
+
+

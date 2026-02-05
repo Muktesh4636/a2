@@ -23,20 +23,58 @@ import com.sikwin.app.ui.theme.*
 
 import com.sikwin.app.ui.viewmodels.GunduAtaViewModel
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TransactionHistoryScreen(
-    title: String = "Transaction History",
+    title: String = "Transaction Record",
+    initialCategory: String = "Betting",
+    showTabs: Boolean = true,
     viewModel: GunduAtaViewModel,
     onBack: () -> Unit
 ) {
-    var selectedTab by remember { mutableStateOf("All") }
-    val tabs = listOf("All", "Success", "Failed")
+    // Main Categories: Betting, Deposit, Withdraw
+    var selectedCategory by remember { mutableStateOf(initialCategory) }
+    val categories = listOf("Betting", "Deposit", "Withdraw")
 
-    LaunchedEffect(title) {
-        when (title) {
-            "Transaction History" -> viewModel.fetchTransactions()
-            "Deposit record" -> viewModel.fetchDeposits()
-            "Withdrawal record" -> viewModel.fetchWithdrawals()
+    // Sub-filters for Deposit/Withdraw: All, Success, Failed
+    var selectedFilter by remember { mutableStateOf("All") }
+    val filters = listOf("All", "Success", "Failed")
+
+    // Date Picker State
+    val dateRangePickerState = rememberDateRangePickerState()
+    var showDatePicker by remember { mutableStateOf(false) }
+
+    if (showDatePicker) {
+        DatePickerDialog(
+            onDismissRequest = { showDatePicker = false },
+            confirmButton = {
+                TextButton(onClick = { showDatePicker = false }) {
+                    Text("OK", color = PrimaryYellow)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDatePicker = false }) {
+                    Text("Cancel", color = TextGrey)
+                }
+            },
+            colors = DatePickerDefaults.colors(
+                containerColor = SurfaceColor,
+            )
+        ) {
+            DateRangePicker(
+                state = dateRangePickerState,
+                colors = DatePickerDefaults.colors(
+                    containerColor = SurfaceColor,
+                )
+            )
+        }
+    }
+
+    LaunchedEffect(selectedCategory) {
+        when (selectedCategory) {
+            "Betting" -> viewModel.fetchTransactions()
+            "Deposit" -> viewModel.fetchDeposits()
+            "Withdraw" -> viewModel.fetchWithdrawals()
         }
     }
 
@@ -53,7 +91,7 @@ fun TransactionHistoryScreen(
             verticalAlignment = Alignment.CenterVertically
         ) {
             IconButton(onClick = onBack) {
-                Icon(Icons.Default.ArrowBack, null, tint = PrimaryYellow, modifier = Modifier.size(32.dp))
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, null, tint = PrimaryYellow, modifier = Modifier.size(32.dp))
             }
             Text(
                 title,
@@ -63,34 +101,71 @@ fun TransactionHistoryScreen(
                 modifier = Modifier.weight(1f),
                 textAlign = androidx.compose.ui.text.style.TextAlign.Center
             )
-            Icon(Icons.Default.FilterList, null, tint = PrimaryYellow, modifier = Modifier.size(28.dp))
+            // Functionality for this icon can be added later or removed if not needed
+            Icon(Icons.Default.FilterList, null, tint = Color.Transparent, modifier = Modifier.size(28.dp))
         }
 
-        // Tabs
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp),
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            tabs.forEach { tab ->
-                HistoryTab(tab, selectedTab == tab) { selectedTab = tab }
+        // Main Category Tabs
+        if (showTabs) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                categories.forEach { category ->
+                    HistoryTab(category, selectedCategory == category) {
+                        selectedCategory = category
+                        selectedFilter = "All" // Reset filter when changing category
+                    }
+                }
             }
         }
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Date Filter
+        // Sub-filters (Only for Deposit and Withdraw)
+        if (selectedCategory != "Betting") {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                filters.forEach { filter ->
+                    FilterChip(
+                        selected = selectedFilter == filter,
+                        onClick = { selectedFilter = filter },
+                        label = { Text(filter) },
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = PrimaryYellow,
+                            selectedLabelColor = BlackBackground,
+                            containerColor = SurfaceColor,
+                            labelColor = TextGrey
+                        ),
+                        border = FilterChipDefaults.filterChipBorder(
+                            enabled = true,
+                            selected = selectedFilter == filter,
+                            borderColor = if (selectedFilter == filter) PrimaryYellow else TextGrey
+                        )
+                    )
+                }
+            }
+        }
+
+        // Date Filter (Keep existing visual, functionality can be hooked up later)
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp),
+                .padding(horizontal = 16.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Surface(
                 color = SurfaceColor,
                 shape = RoundedCornerShape(20.dp),
-                modifier = Modifier.weight(1f)
+                modifier = Modifier
+                    .weight(1f)
+                    .clickable { showDatePicker = true }
             ) {
                 Row(
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
@@ -98,12 +173,17 @@ fun TransactionHistoryScreen(
                 ) {
                     Icon(Icons.Default.History, null, tint = TextGrey, modifier = Modifier.size(20.dp))
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("2026/02/05-2026/02/05", color = TextWhite, fontSize = 14.sp)
+
+                    val startDateText = dateRangePickerState.selectedStartDateMillis?.let { convertMillisToDate(it) } ?: "Start Date"
+                    val endDateText = dateRangePickerState.selectedEndDateMillis?.let { convertMillisToDate(it) } ?: "End Date"
+                    val displayText = if (dateRangePickerState.selectedStartDateMillis != null) "$startDateText-$endDateText" else "Select Date Range"
+
+                    Text(displayText, color = TextWhite, fontSize = 14.sp)
                 }
             }
             Spacer(modifier = Modifier.width(12.dp))
             Button(
-                onClick = { /* Search */ },
+                onClick = { /* Search logic */ },
                 colors = ButtonDefaults.buttonColors(containerColor = SurfaceColor),
                 shape = RoundedCornerShape(20.dp),
                 border = BorderStroke(1.dp, BorderColor)
@@ -112,38 +192,39 @@ fun TransactionHistoryScreen(
             }
         }
 
-        val filteredDeposits = remember(viewModel.depositRequests, selectedTab) {
-            when (selectedTab) {
+        // Data Filtering Logic
+        val filteredDeposits = remember(viewModel.depositRequests, selectedFilter) {
+            when (selectedFilter) {
                 "Success" -> viewModel.depositRequests.filter { it.status == "APPROVED" }
                 "Failed" -> viewModel.depositRequests.filter { it.status == "REJECTED" }
                 else -> viewModel.depositRequests
             }
         }
 
-        val filteredWithdrawals = remember(viewModel.withdrawRequests, selectedTab) {
-            when (selectedTab) {
+        val filteredWithdrawals = remember(viewModel.withdrawRequests, selectedFilter) {
+            when (selectedFilter) {
                 "Success" -> viewModel.withdrawRequests.filter { it.status == "APPROVED" }
                 "Failed" -> viewModel.withdrawRequests.filter { it.status == "REJECTED" }
                 else -> viewModel.withdrawRequests
             }
         }
 
-        val itemsCount = when (title) {
-            "Transaction History" -> viewModel.transactions.size
-            "Deposit record" -> filteredDeposits.size
-            "Withdrawal record" -> filteredWithdrawals.size
+        val itemsCount = when (selectedCategory) {
+            "Betting" -> viewModel.transactions.size
+            "Deposit" -> filteredDeposits.size
+            "Withdraw" -> filteredWithdrawals.size
             else -> 0
         }
 
         Row(
-            modifier = Modifier.fillMaxWidth().padding(16.dp),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.End
         ) {
             Text("Summary : ", color = TextWhite, fontSize = 14.sp)
             Text("$itemsCount", color = GreenSuccess, fontSize = 14.sp, fontWeight = FontWeight.Bold)
         }
 
-        // Content / List
+        // List Content
         if (viewModel.isLoading) {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator(color = PrimaryYellow)
@@ -154,23 +235,23 @@ fun TransactionHistoryScreen(
                 contentPadding = PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                when (title) {
-                    "Transaction History" -> {
+                when (selectedCategory) {
+                    "Betting" -> {
                         items(viewModel.transactions.size) { index ->
                             val tx = viewModel.transactions[index]
                             TransactionItem(tx.description, tx.amount, tx.created_at)
                         }
                     }
-                    "Deposit record" -> {
+                    "Deposit" -> {
                         items(filteredDeposits.size) { index ->
                             val dep = filteredDeposits[index]
-                            TransactionItem("Deposit #${dep.id}", dep.amount, dep.created_at)
+                            TransactionItem("Deposit #${dep.id} (${dep.status})", dep.amount, dep.created_at)
                         }
                     }
-                    "Withdrawal record" -> {
+                    "Withdraw" -> {
                         items(filteredWithdrawals.size) { index ->
                             val wd = filteredWithdrawals[index]
-                            TransactionItem("Withdrawal #${wd.id}", wd.amount, wd.created_at)
+                            TransactionItem("Withdrawal #${wd.id} (${wd.status})", wd.amount, wd.created_at)
                         }
                     }
                 }
@@ -181,7 +262,7 @@ fun TransactionHistoryScreen(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center
             ) {
-                Text("No more", color = TextGrey, fontSize = 16.sp)
+                Text("No data available", color = TextGrey, fontSize = 16.sp)
             }
         }
     }
@@ -234,3 +315,4 @@ fun HistoryTab(text: String, isSelected: Boolean, onClick: () -> Unit) {
         }
     }
 }
+

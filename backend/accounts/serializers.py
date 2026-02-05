@@ -37,7 +37,7 @@ class UserSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ('id', 'username', 'email', 'phone_number', 'date_joined', 'is_staff', 'profile_photo_url')
+        fields = ('id', 'username', 'email', 'phone_number', 'gender', 'telegram', 'facebook', 'address', 'date_of_birth', 'date_joined', 'is_staff', 'profile_photo_url')
         read_only_fields = ('id', 'date_joined')
 
     def get_profile_photo_url(self, obj):

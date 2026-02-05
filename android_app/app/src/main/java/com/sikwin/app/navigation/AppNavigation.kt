@@ -109,28 +109,42 @@ fun AppNavigation(navController: NavHostController, viewModel: GunduAtaViewModel
         }
         composable("transactions") {
             TransactionHistoryScreen(
-                title = "Transaction History",
+                title = "Transaction Record",
+                initialCategory = "Betting",
+                showTabs = true,
                 viewModel = viewModel,
                 onBack = { navController.popBackStack() }
             )
         }
         composable("deposits_record") {
             TransactionHistoryScreen(
-                title = "Deposit record",
+                title = "Deposit Record",
+                initialCategory = "Deposit",
+                showTabs = false,
                 viewModel = viewModel,
                 onBack = { navController.popBackStack() }
             )
         }
         composable("withdrawals_record") {
             TransactionHistoryScreen(
-                title = "Withdrawal record",
+                title = "Withdrawal Record",
+                initialCategory = "Withdraw",
+                showTabs = false,
                 viewModel = viewModel,
                 onBack = { navController.popBackStack() }
             )
         }
         composable("betting_record") {
             TransactionHistoryScreen(
-                title = "Betting record",
+                title = "Betting Record",
+                initialCategory = "Betting",
+                showTabs = false,
+                viewModel = viewModel,
+                onBack = { navController.popBackStack() }
+            )
+        }
+        composable("personal_info") {
+            PersonalInfoScreen(
                 viewModel = viewModel,
                 onBack = { navController.popBackStack() }
             )

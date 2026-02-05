@@ -5,6 +5,11 @@ data class User(
     val username: String,
     val email: String,
     val phone_number: String?,
+    val gender: String? = null,
+    val telegram: String? = null,
+    val facebook: String? = null,
+    val address: String? = null,
+    val date_of_birth: String? = null,
     val is_staff: Boolean,
     val profile_photo: String? = null
 )

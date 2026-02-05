@@ -20,6 +20,8 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
+import com.sikwin.app.R
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -220,7 +222,13 @@ fun GameCard(game: GameItem, modifier: Modifier, onGameClick: (String) -> Unit) 
                 .background(game.color),
             contentAlignment = Alignment.BottomCenter
         ) {
-            // Placeholder for game image
+            Image(
+                painter = painterResource(id = R.drawable.gundu_ata_bg),
+                contentDescription = null,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop
+            )
+            
             Text(
                 game.name,
                 color = TextWhite,
@@ -261,7 +269,7 @@ fun HomeBottomNavigation(currentRoute: String, onNavigate: (String) -> Unit) {
         val items = listOf(
             BottomNavItem("Home", "home", Icons.Default.Home),
             BottomNavItem("Gundu Ata", "gundu_ata", Icons.Default.Sports),
-            BottomNavItem("Bonus", "bonus", Icons.Default.Redeem),
+            BottomNavItem("Refer and Earn", "bonus", Icons.Default.Redeem),
             BottomNavItem("Me", "me", Icons.Default.AccountCircle)
         )
         

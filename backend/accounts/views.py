@@ -158,18 +158,16 @@ def profile(request):
     """Get or update user profile"""
     if request.method == 'GET':
         logger.info(f"Profile access for user: {request.user.username} (ID: {request.user.id})")
-        serializer = UserSerializer(request.user)
+        serializer = UserSerializer(request.user, context={'request': request})
         return Response(serializer.data)
     
     elif request.method == 'POST':
         logger.info(f"Profile update for user: {request.user.username} (ID: {request.user.id})")
-        username = request.data.get('username')
-        if username:
-            request.user.username = username
-            request.user.save()
-            serializer = UserSerializer(request.user)
+        serializer = UserSerializer(request.user, data=request.data, partial=True, context={'request': request})
+        if serializer.is_valid():
+            serializer.save()
             return Response(serializer.data)
-        return Response({'error': 'Username is required'}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
 @csrf_exempt

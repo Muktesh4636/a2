@@ -234,16 +234,20 @@ class GunduAtaViewModel(private val sessionManager: SessionManager) : ViewModel(
     }
 
     fun updateUsername(newUsername: String) {
+        updateProfile(mapOf("username" to newUsername))
+    }
+
+    fun updateProfile(data: Map<String, String>) {
         viewModelScope.launch {
             isLoading = true
             errorMessage = null
             try {
-                val response = RetrofitClient.apiService.updateProfile(mapOf("username" to newUsername))
+                val response = RetrofitClient.apiService.updateProfile(data)
                 if (response.isSuccessful) {
                     userProfile = response.body()
-                    sessionManager.saveUsername(newUsername)
+                    data["username"]?.let { sessionManager.saveUsername(it) }
                 } else {
-                    errorMessage = "Failed to update username: ${response.message()}"
+                    errorMessage = "Failed to update profile: ${response.message()}"
                 }
             } catch (e: Exception) {
                 errorMessage = "Error: ${e.message}"
