@@ -2,8 +2,8 @@ package com.sikwin.app.ui.screens
 
 import kotlinx.coroutines.delay
 import kotlin.time.Duration.Companion.seconds
-import android.content.Intent
 import android.net.Uri
+import android.content.Intent
 import android.widget.Toast
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
@@ -12,7 +12,11 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.runtime.*
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import coil.compose.AsyncImage
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -36,8 +40,14 @@ fun PaymentScreen(
     onBack: () -> Unit,
     onSubmitSuccess: () -> Unit
 ) {
-    var utr by remember { mutableStateOf("") }
+    var selectedImageUri by remember { mutableStateOf<Uri?>(null) }
     var selectedMethod by remember { mutableStateOf("Paytm") }
+    
+    val launcher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        selectedImageUri = uri
+    }
     val context = LocalContext.current
     
     // Timer state: 10 minutes = 600 seconds
@@ -247,13 +257,13 @@ fun PaymentScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // UTR Section
+            // Screenshot Section
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    "Paid? Submit UTR/Ref No",
+                    "Paid? Upload Payment Screenshot",
                     color = Color.Black,
                     fontSize = 16.sp,
                     fontWeight = FontWeight.Bold
@@ -275,39 +285,66 @@ fun PaymentScreen(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            OutlinedTextField(
-                value = utr,
-                onValueChange = { utr = it },
-                modifier = Modifier.fillMaxWidth(),
-                placeholder = { Text("UTR/UPI Ref No/ UPI Transaction ID", fontSize = 14.sp) },
-                leadingIcon = { Icon(Icons.Default.Payment, null) },
-                prefix = { Text("* UTR  ", color = Color.Red, fontWeight = FontWeight.Bold) },
-                colors = TextFieldDefaults.outlinedTextFieldColors(
-                    containerColor = Color.White,
-                    unfocusedBorderColor = Color.LightGray,
-                    focusedBorderColor = Color(0xFF3F51B5)
-                ),
-                shape = RoundedCornerShape(8.dp),
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
-            )
+            // Image Picker Area
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(200.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .border(1.dp, Color.LightGray, RoundedCornerShape(8.dp))
+                    .clickable { launcher.launch("image/*") },
+                color = Color.White
+            ) {
+                if (selectedImageUri != null) {
+                    AsyncImage(
+                        model = selectedImageUri,
+                        contentDescription = "Payment Screenshot",
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Fit
+                    )
+                } else {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        Icon(
+                            Icons.Default.AddPhotoAlternate,
+                            contentDescription = null,
+                            modifier = Modifier.size(48.dp),
+                            tint = Color.Gray
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text("Click to select payment screenshot", color = Color.Gray)
+                    }
+                }
+            }
+
+            if (selectedImageUri != null) {
+                TextButton(
+                    onClick = { selectedImageUri = null },
+                    modifier = Modifier.align(Alignment.End)
+                ) {
+                    Text("Clear", color = Color.Red)
+                }
+            }
 
             Spacer(modifier = Modifier.height(24.dp))
 
             Button(
                 onClick = { 
-                    if (utr.isNotBlank()) {
-                        viewModel.submitUtr(amount, utr, onSubmitSuccess)
+                    selectedImageUri?.let { uri ->
+                        viewModel.uploadDepositProof(amount, uri, context, onSubmitSuccess)
                     }
                 },
                 modifier = Modifier.fillMaxWidth().height(56.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF3F51B5)),
                 shape = RoundedCornerShape(8.dp),
-                enabled = !viewModel.isLoading
+                enabled = !viewModel.isLoading && selectedImageUri != null
             ) {
                 if (viewModel.isLoading) {
                     CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
                 } else {
-                    Text("Submit UTR / Ref No", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                    Text("Submit Payment Proof", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp)
                 }
             }
             

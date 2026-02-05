@@ -82,6 +82,9 @@ CSRF_TRUSTED_ORIGINS = [
     'http://www.gunduata.online',
     'https://72.61.254.71',
     'http://72.61.254.71',
+    'http://localhost:8080',
+    'http://127.0.0.1:8080',
+    'http://192.168.29.147:8080',
 ]
 
 # CSRF Cookie Domain - None means use same domain as request

@@ -9,6 +9,9 @@ import com.sikwin.app.data.api.RetrofitClient
 import com.sikwin.app.data.auth.SessionManager
 import com.sikwin.app.data.models.*
 import kotlinx.coroutines.launch
+import okhttp3.MediaType.Companion.toMediaTypeOrNull
+import okhttp3.MultipartBody
+import okhttp3.RequestBody.Companion.toRequestBody
 
 class GunduAtaViewModel(private val sessionManager: SessionManager) : ViewModel() {
 
@@ -173,7 +176,8 @@ class GunduAtaViewModel(private val sessionManager: SessionManager) : ViewModel(
                     paymentMethods = response.body() ?: emptyList()
                 }
             } catch (e: Exception) {
-                errorMessage = e.message
+                // Log and ignore background fetch errors to prevent technical jargon in UI
+                android.util.Log.e("GunduAtaViewModel", "Fetch payment methods failed: ${e.message}")
             }
         }
     }
@@ -187,7 +191,7 @@ class GunduAtaViewModel(private val sessionManager: SessionManager) : ViewModel(
                     bankDetails = response.body() ?: emptyList()
                 }
             } catch (e: Exception) {
-                errorMessage = e.message
+                android.util.Log.e("GunduAtaViewModel", "Fetch bank details failed: ${e.message}")
             } finally {
                 isLoading = false
             }
@@ -224,6 +228,34 @@ class GunduAtaViewModel(private val sessionManager: SessionManager) : ViewModel(
                     onSuccess()
                 } else {
                     errorMessage = "Failed to submit UTR: ${response.message()}"
+                }
+            } catch (e: Exception) {
+                errorMessage = "Error: ${e.message}"
+            } finally {
+                isLoading = false
+            }
+        }
+    }
+
+    fun uploadDepositProof(amount: String, uri: android.net.Uri, context: android.content.Context, onSuccess: () -> Unit) {
+        viewModelScope.launch {
+            isLoading = true
+            errorMessage = null
+            try {
+                val contentResolver = context.contentResolver
+                val inputStream = contentResolver.openInputStream(uri)
+                val bytes = inputStream?.readBytes() ?: throw Exception("Failed to read image")
+                inputStream.close()
+
+                val requestFile = bytes.toRequestBody("image/*".toMediaTypeOrNull(), 0, bytes.size)
+                val body = MultipartBody.Part.createFormData("screenshot", "screenshot.jpg", requestFile)
+                val amountBody = amount.toRequestBody("text/plain".toMediaTypeOrNull())
+
+                val response = RetrofitClient.apiService.uploadDepositProof(amountBody, body)
+                if (response.isSuccessful) {
+                    onSuccess()
+                } else {
+                    errorMessage = "Upload failed: ${response.message()}"
                 }
             } catch (e: Exception) {
                 errorMessage = "Error: ${e.message}"
