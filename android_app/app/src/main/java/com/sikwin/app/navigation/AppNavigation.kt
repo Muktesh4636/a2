@@ -149,6 +149,11 @@ fun AppNavigation(navController: NavHostController, viewModel: GunduAtaViewModel
                 onBack = { navController.popBackStack() }
             )
         }
+        composable("lucky_wheel") {
+            LuckyWheelScreen(
+                onBack = { navController.popBackStack() }
+            )
+        }
         composable("info") {
             InfoScreen(
                 onBack = { navController.popBackStack() }

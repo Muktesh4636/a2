@@ -60,7 +60,7 @@ fun HomeScreen(
             SearchBar()
             
             // Banners
-            PromotionalBanners()
+            PromotionalBanners(onSpinClick = { onNavigate("lucky_wheel") })
             
             // Hot Games
             SectionHeader(title = "Hot games")
@@ -141,7 +141,7 @@ fun SearchBar() {
 }
 
 @Composable
-fun PromotionalBanners() {
+fun PromotionalBanners(onSpinClick: () -> Unit) {
     // Simplified banner
     Box(
         modifier = Modifier
@@ -159,7 +159,7 @@ fun PromotionalBanners() {
             Text("WITH BANK TRANSFER", color = TextWhite, fontWeight = FontWeight.Bold)
             Spacer(modifier = Modifier.height(12.dp))
             Button(
-                onClick = {},
+                onClick = onSpinClick,
                 colors = ButtonDefaults.buttonColors(containerColor = PrimaryYellow),
                 shape = RoundedCornerShape(20.dp)
             ) {
