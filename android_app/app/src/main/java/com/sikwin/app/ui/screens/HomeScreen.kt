@@ -78,7 +78,7 @@ fun HomeScreen(
             SearchBar()
             
             // Banners
-            PromotionalBanners(onSpinClick = { /* Disabled navigation */ })
+            PromotionalBanners(onSpinClick = { onNavigate("lucky_wheel") })
             
             // Hot Games
             SectionHeader(title = "Hot games")
@@ -235,7 +235,7 @@ fun PromotionalBanners(onSpinClick: () -> Unit) {
             val banner = when(page) {
                 0 -> BannerData("REFER & EARN", "Invite friends and earn up to ₹1000 bonus!", "INVITE", listOf(Color(0xFF455A64), Color(0xFF263238)), {})
                 1 -> BannerData("GET LUCKY DRAW", "WITH BANK TRANSFER", "SPIN", listOf(Color(0xFF4A148C), Color(0xFF880E4F)), onSpinClick)
-                else -> BannerData("DAILY REWARD", "CLAIM YOUR DAILY BONUS NOW!", "CLAIM", listOf(Color(0xFFF9A825), Color(0xFFF57F17)), {})
+                else -> BannerData("DAILY REWARD", "CLAIM YOUR DAILY BONUS NOW!", "CLAIM", listOf(Color(0xFFF9A825), Color(0xFFF57F17)), onSpinClick)
             }
 
             Box(

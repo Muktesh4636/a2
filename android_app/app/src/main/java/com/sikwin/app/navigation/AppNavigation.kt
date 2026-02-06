@@ -123,9 +123,9 @@ fun AppNavigation(
                         } else {
                             showAuthDialog = true
                         }
-                    } else if (route == "me") {
+                    } else if (route == "me" || route == "lucky_wheel") {
                         if (viewModel.loginSuccess) {
-                            navController.navigate("me")
+                            navController.navigate(route)
                         } else {
                             showAuthDialog = true
                         }
