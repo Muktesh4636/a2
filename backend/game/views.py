@@ -270,27 +270,23 @@ def place_bet(request):
         logger.warning(f"Bet failed for user {request.user.username}: Insufficient balance (Balance: {wallet.balance}, Requested: {chip_amount})")
         return Response({'error': 'Insufficient balance'}, status=status.HTTP_400_BAD_REQUEST)
 
-    # Create or update bet
+    # Create bet (allow multiple bets on same number)
     try:
         with transaction.atomic():
-            bet, created = Bet.objects.get_or_create(
+            # Always create a new bet - no accumulation
+            bet = Bet.objects.create(
                 user=request.user,
                 round=round_obj,
                 number=number,
-                defaults={'chip_amount': chip_amount}
+                chip_amount=chip_amount
             )
 
             balance_before = wallet.balance
-            if not created:
-                # Increment existing bet amount
-                bet.chip_amount += chip_amount
-                bet.save()
-
             # Deduct from wallet
             wallet.deduct(chip_amount)
             balance_after = wallet.balance
 
-            # Create transaction for the additional wager
+            # Create transaction for the wager
             Transaction.objects.create(
                 user=request.user,
                 transaction_type='BET',
@@ -319,7 +315,7 @@ def place_bet(request):
             'total_amount': str(round_obj.total_amount)
         }
     }
-    return Response(response_data, status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
+    return Response(response_data, status=status.HTTP_201_CREATED)
 
 
 @csrf_exempt
@@ -497,7 +493,8 @@ def betting_history(request):
     logger.info(f"User {request.user.username} fetching betting history (limit: {limit})")
     
     bets = Bet.objects.filter(user=request.user).select_related('round').order_by('-created_at')[:limit]
-    serializer = BetSerializer(bets, many=True)
+    from .serializers import BettingHistorySerializer
+    serializer = BettingHistorySerializer(bets, many=True)
     return Response(serializer.data)
 
 
