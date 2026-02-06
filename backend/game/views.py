@@ -748,43 +748,20 @@ def calculate_payouts(round_obj, dice_result=None, dice_values=None):
         dice_values = [d for d in dice_values if d is not None]
     
     if not dice_values or len(dice_values) != 6:
-        # Fallback to old logic if dice values not available
-        if dice_result:
-            # dice_result might be a string like "2, 5" now
-            if isinstance(dice_result, str):
-                winning_numbers = [int(n.strip()) for n in dice_result.split(',') if n.strip().isdigit()]
-            else:
-                winning_numbers = [int(dice_result)]
-                
-            game_settings = get_all_game_settings()
-            for win_num in winning_numbers:
-                winning_bets = Bet.objects.filter(round=round_obj, number=win_num)
-                payout_ratio = game_settings.get('PAYOUT_RATIOS', {}).get(win_num, 6.0)
-                for bet in winning_bets:
-                    # Calculate total payout
-                    total_payout_amount = bet.chip_amount * Decimal(str(payout_ratio))
-                    
-                    # Store the total payout amount in bet.payout_amount for reference
-                    bet.payout_amount = total_payout_amount
-                    bet.is_winner = True
-                    bet.save()
-                    
-                    # Add 100% to winner's wallet
-                    wallet = bet.user.wallet
-                    balance_before = wallet.balance
-                    wallet.add(total_payout_amount)
-                    balance_after = wallet.balance
-                    
-                    Transaction.objects.create(
-                        user=bet.user,
-                        transaction_type='WIN',
-                        amount=total_payout_amount,
-                        balance_before=balance_before,
-                        balance_after=balance_after,
-                        description=f"Win on number {win_num} in round {round_obj.round_id}. Payout: {total_payout_amount}"
-                    )
-        return
+        # Check if we can parse dice_values from dice_result string
+        if dice_result and isinstance(dice_result, str):
+            try:
+                # Parse "1, 2, 3, 4, 5, 6" into [1, 2, 3, 4, 5, 6]
+                parsed_values = [int(n.strip()) for n in dice_result.split(',') if n.strip().isdigit()]
+                if parsed_values:
+                    dice_values = parsed_values
+            except ValueError:
+                pass
     
+    if not dice_values:
+        # Cannot determine winners without dice values
+        return
+
     # Count frequency of each number
     counts = Counter(dice_values)
     
