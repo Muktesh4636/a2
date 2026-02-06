@@ -41,6 +41,25 @@ class GameSettingsSerializer(serializers.ModelSerializer):
         read_only_fields = ['updated_at']
 
 
+class BettingHistorySerializer(serializers.ModelSerializer):
+    """Simplified serializer for betting history - excludes user, simplifies round data"""
+    round = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = Bet
+        fields = ['id', 'round', 'number', 'chip_amount', 'payout_amount', 'is_winner', 'created_at']
+        read_only_fields = ['id', 'payout_amount', 'is_winner', 'created_at']
+    
+    def get_round(self, obj):
+        """Return simplified round data"""
+        return {
+            'round_id': obj.round.round_id,
+            'status': obj.round.status,
+            'dice_result': obj.round.dice_result,
+            'created_at': obj.round.start_time.isoformat() if obj.round.start_time else None
+        }
+
+
 
 
 

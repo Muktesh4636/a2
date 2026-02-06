@@ -17,6 +17,12 @@ import com.sikwin.app.data.auth.SessionManager
 import com.sikwin.app.ui.screens.*
 import com.sikwin.app.ui.viewmodels.GunduAtaViewModel
 import com.unity3d.player.UnityPlayerGameActivity
+import androidx.compose.runtime.*
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.ui.text.font.FontWeight
+import com.sikwin.app.ui.theme.PrimaryYellow
 
 @Composable
 fun AppNavigation(
@@ -26,6 +32,31 @@ fun AppNavigation(
 ) {
     val context = LocalContext.current
     val activity = context as? Activity
+    var showAuthDialog by remember { mutableStateOf(false) }
+
+    if (showAuthDialog) {
+        AlertDialog(
+            onDismissRequest = { showAuthDialog = false },
+            title = { Text("Sign In Required", fontWeight = FontWeight.Bold) },
+            text = { Text("Please sign in or sign up to play Gundu Ata and start winning!") },
+            confirmButton = {
+                TextButton(onClick = {
+                    showAuthDialog = false
+                    navController.navigate("login")
+                }) {
+                    Text("Sign In", color = PrimaryYellow, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    showAuthDialog = false
+                    navController.navigate("signup")
+                }) {
+                    Text("Sign Up", fontWeight = FontWeight.Bold)
+                }
+            }
+        )
+    }
 
     fun launchGame() {
         val intent = Intent(context, UnityPlayerGameActivity::class.java).apply {
@@ -78,12 +109,26 @@ fun AppNavigation(
                 viewModel = viewModel,
                 onGameClick = { gameId ->
                     if (gameId == "gundu_ata") {
-                        launchGame()
+                        if (viewModel.loginSuccess) {
+                            launchGame()
+                        } else {
+                            showAuthDialog = true
+                        }
                     }
                 },
                 onNavigate = { route ->
                     if (route == "gundu_ata") {
-                        launchGame()
+                        if (viewModel.loginSuccess) {
+                            launchGame()
+                        } else {
+                            showAuthDialog = true
+                        }
+                    } else if (route == "me") {
+                        if (viewModel.loginSuccess) {
+                            navController.navigate("me")
+                        } else {
+                            showAuthDialog = true
+                        }
                     } else if (route != "home") {
                         navController.navigate(route)
                     }
@@ -95,7 +140,11 @@ fun AppNavigation(
                 viewModel = viewModel,
                 onNavigate = { route ->
                     if (route == "gundu_ata") {
-                        launchGame()
+                        if (viewModel.loginSuccess) {
+                            launchGame()
+                        } else {
+                            showAuthDialog = true
+                        }
                     } else {
                         navController.navigate(route)
                     }

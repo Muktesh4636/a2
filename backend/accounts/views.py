@@ -11,6 +11,7 @@ from django.db import transaction as db_transaction
 from django.utils import timezone
 from django.conf import settings
 from decimal import Decimal, InvalidOperation
+from django.db.models import Q
 import uuid
 import re
 import logging
@@ -88,7 +89,13 @@ def login(request):
 
         # Authenticate user
         try:
-            user = authenticate(request=request, username=username, password=password)
+            # Support login with either username or phone number
+            user_obj = User.objects.filter(Q(username=username) | Q(phone_number=username)).first()
+            if user_obj:
+                # Authenticate with the actual username found
+                user = authenticate(request=request, username=user_obj.username, password=password)
+            else:
+                user = None
         except Exception as auth_error:
             logger.exception(f"Authentication error for username {username}: {auth_error}")
             return Response(

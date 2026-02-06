@@ -140,7 +140,10 @@ fun ProfileScreen(
                     .padding(horizontal = 16.dp)
             ) {
                 Button(
-                    onClick = { viewModel.logout() },
+                    onClick = { 
+                        viewModel.logout()
+                        onNavigate("home")
+                    },
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(80.dp),

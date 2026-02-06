@@ -31,7 +31,6 @@ fun SignUpScreen(
     var username by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var phoneNumber by remember { mutableStateOf("") }
-    var otpCode by remember { mutableStateOf("") }
     var passwordVisible by remember { mutableStateOf(false) }
 
     LaunchedEffect(viewModel.loginSuccess) {
@@ -86,7 +85,7 @@ fun SignUpScreen(
             value = username,
             onValueChange = { username = it },
             modifier = Modifier.fillMaxWidth(),
-            placeholder = { Text("Please enter your username", color = TextGrey) },
+            placeholder = { Text("Username or Phone Number", color = TextGrey) },
             leadingIcon = { Icon(Icons.Default.Person, null, tint = TextGrey) },
             colors = TextFieldDefaults.outlinedTextFieldColors(
                 containerColor = SurfaceColor,
@@ -151,28 +150,6 @@ fun SignUpScreen(
         )
 
         Spacer(modifier = Modifier.height(20.dp))
-
-        // OTP Code
-        InputFieldLabel("OTP code")
-        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            OutlinedTextField(
-                value = otpCode,
-                onValueChange = { otpCode = it },
-                modifier = Modifier.weight(1f),
-                placeholder = { Text("OTP code", color = TextGrey) },
-                leadingIcon = { Icon(Icons.Default.VerifiedUser, null, tint = TextGrey) },
-                colors = TextFieldDefaults.outlinedTextFieldColors(
-                    containerColor = SurfaceColor,
-                    unfocusedBorderColor = BorderColor,
-                    focusedBorderColor = PrimaryYellow
-                ),
-                shape = RoundedCornerShape(8.dp),
-                singleLine = true
-            )
-            TextButton(onClick = { /* Get OTP */ }) {
-                Text("Get OTP Code", color = TextGrey)
-            }
-        }
 
         Spacer(modifier = Modifier.height(40.dp))
 

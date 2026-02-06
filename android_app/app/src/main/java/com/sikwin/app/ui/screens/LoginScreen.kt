@@ -76,7 +76,7 @@ fun LoginScreen(
 
         // Username
         Text(
-            text = "Username",
+            text = "Username or Phone Number",
             color = TextWhite,
             fontSize = 14.sp,
             modifier = Modifier.align(Alignment.Start).padding(bottom = 8.dp)
@@ -85,7 +85,7 @@ fun LoginScreen(
             value = username,
             onValueChange = { username = it },
             modifier = Modifier.fillMaxWidth(),
-            placeholder = { Text("Please enter your username", color = TextGrey) },
+            placeholder = { Text("Username or Phone Number", color = TextGrey) },
             leadingIcon = { Icon(Icons.Default.Person, contentDescription = null, tint = TextGrey) },
             colors = TextFieldDefaults.outlinedTextFieldColors(
                 focusedBorderColor = PrimaryYellow,

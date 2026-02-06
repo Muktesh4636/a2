@@ -42,7 +42,7 @@ class MainActivity : ComponentActivity() {
                     LaunchedEffect(intent) {
                         if (intent?.getStringExtra("action") == "logout") {
                             viewModel.logout()
-                            navController.navigate("login") {
+                            navController.navigate("home") {
                                 popUpTo(0) { inclusive = true }
                             }
                         }

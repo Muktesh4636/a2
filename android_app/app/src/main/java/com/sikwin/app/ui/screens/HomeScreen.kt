@@ -38,6 +38,9 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.ui.PlayerView
 import android.net.Uri
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import com.sikwin.app.ui.viewmodels.GunduAtaViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -292,15 +295,9 @@ fun SectionHeader(title: String) {
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 16.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween
+        verticalAlignment = Alignment.CenterVertically
     ) {
         Text(title, color = TextWhite, fontSize = 20.sp, fontWeight = FontWeight.Bold)
-        Row {
-            Icon(Icons.Default.ArrowBack, null, tint = TextGrey, modifier = Modifier.size(16.dp))
-            Spacer(modifier = Modifier.width(8.dp))
-            Icon(Icons.Default.ArrowForward, null, tint = TextWhite, modifier = Modifier.size(16.dp))
-        }
     }
 }
 
@@ -369,6 +366,8 @@ fun GameCard(game: GameItem, modifier: Modifier, onGameClick: (String) -> Unit) 
 @Composable
 fun VideoPlayer(videoResId: Int, modifier: Modifier = Modifier) {
     val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
+
     val exoPlayer = remember {
         ExoPlayer.Builder(context).build().apply {
             val uri = Uri.parse("android.resource://${context.packageName}/$videoResId")
@@ -379,17 +378,34 @@ fun VideoPlayer(videoResId: Int, modifier: Modifier = Modifier) {
         }
     }
 
-    DisposableEffect(Unit) {
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_RESUME -> {
+                    exoPlayer.playWhenReady = true
+                }
+                Lifecycle.Event.ON_PAUSE -> {
+                    exoPlayer.playWhenReady = false
+                }
+                Lifecycle.Event.ON_DESTROY -> {
+                    exoPlayer.release()
+                }
+                else -> {}
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+
         onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
             exoPlayer.release()
         }
     }
 
     AndroidView(
-        factory = {
-            PlayerView(context).apply {
+        factory = { ctx ->
+            PlayerView(ctx).apply {
                 player = exoPlayer
-                useController = false // Hide controls for a cleaner look
+                useController = false
                 resizeMode = androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_ZOOM
             }
         },
