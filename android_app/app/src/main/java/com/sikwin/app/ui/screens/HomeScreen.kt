@@ -2,6 +2,9 @@ package com.sikwin.app.ui.screens
 
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -23,10 +26,18 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import com.sikwin.app.R
 import androidx.compose.ui.text.font.FontWeight
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.yield
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.platform.LocalContext
 import com.sikwin.app.ui.theme.*
-
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.common.MediaItem
+import androidx.media3.common.Player
+import androidx.media3.ui.PlayerView
+import android.net.Uri
 import com.sikwin.app.ui.viewmodels.GunduAtaViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -37,14 +48,18 @@ fun HomeScreen(
     onNavigate: (String) -> Unit
 ) {
     LaunchedEffect(Unit) {
-        viewModel.fetchWallet()
+        if (viewModel.loginSuccess) {
+            viewModel.fetchWallet()
+        }
     }
 
     Scaffold(
         topBar = { 
             HomeTopBar(
                 balance = viewModel.wallet?.balance ?: "0.00",
-                onWalletClick = { onNavigate("wallet") }
+                isLoggedIn = viewModel.loginSuccess,
+                onWalletClick = { onNavigate("wallet") },
+                onNavigate = onNavigate
             ) 
         },
         bottomBar = { HomeBottomNavigation(currentRoute = "home", onNavigate = onNavigate) },
@@ -72,7 +87,12 @@ fun HomeScreen(
 }
 
 @Composable
-fun HomeTopBar(balance: String, onWalletClick: () -> Unit) {
+fun HomeTopBar(
+    balance: String, 
+    isLoggedIn: Boolean,
+    onWalletClick: () -> Unit,
+    onNavigate: (String) -> Unit
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -100,28 +120,57 @@ fun HomeTopBar(balance: String, onWalletClick: () -> Unit) {
             )
         }
         
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            // Balance Pill
-            Surface(
-                color = SurfaceColor,
-                shape = RoundedCornerShape(20.dp),
-                modifier = Modifier
-                    .padding(end = 12.dp)
-                    .clickable { onWalletClick() }
-            ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically
+        if (isLoggedIn) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                // Balance Pill
+                Surface(
+                    color = SurfaceColor,
+                    shape = RoundedCornerShape(20.dp),
+                    modifier = Modifier
+                        .padding(end = 12.dp)
+                        .clickable { onWalletClick() }
                 ) {
-                    Text("₹", color = PrimaryYellow, fontWeight = FontWeight.Bold)
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(balance, color = TextWhite, fontWeight = FontWeight.Bold)
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Icon(
-                        Icons.Default.AddBox,
-                        contentDescription = null,
-                        tint = PrimaryYellow,
-                        modifier = Modifier.size(20.dp)
+                    Row(
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("₹", color = PrimaryYellow, fontWeight = FontWeight.Bold)
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(balance, color = TextWhite, fontWeight = FontWeight.Bold)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Icon(
+                            Icons.Default.AddBox,
+                            contentDescription = null,
+                            tint = PrimaryYellow,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                }
+            }
+        } else {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                TextButton(
+                    onClick = { onNavigate("login") }
+                ) {
+                    Text(
+                        text = "Login",
+                        color = TextWhite,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 16.sp
+                    )
+                }
+                Spacer(modifier = Modifier.width(8.dp))
+                Button(
+                    onClick = { onNavigate("signup") },
+                    colors = ButtonDefaults.buttonColors(containerColor = PrimaryYellow),
+                    shape = RoundedCornerShape(20.dp),
+                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
+                ) {
+                    Text(
+                        text = "Register",
+                        color = BlackBackground,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 14.sp
                     )
                 }
             }
@@ -152,34 +201,90 @@ fun SearchBar() {
     )
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun PromotionalBanners(onSpinClick: () -> Unit) {
-    // Simplified banner
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(180.dp)
-            .padding(horizontal = 16.dp)
-            .clip(RoundedCornerShape(16.dp))
-            .background(
-                Brush.horizontalGradient(listOf(Color(0xFF4A148C), Color(0xFF880E4F)))
-            ),
-        contentAlignment = Alignment.Center
-    ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text("GET LUCKY DRAW", color = PrimaryYellow, fontWeight = FontWeight.ExtraBold, fontSize = 24.sp)
-            Text("WITH BANK TRANSFER", color = TextWhite, fontWeight = FontWeight.Bold)
-            Spacer(modifier = Modifier.height(12.dp))
-            Button(
-                onClick = onSpinClick,
-                colors = ButtonDefaults.buttonColors(containerColor = PrimaryYellow),
-                shape = RoundedCornerShape(20.dp)
+    val pageCount = 3
+    val virtualCount = 1000 * pageCount
+    val pagerState = rememberPagerState(
+        initialPage = virtualCount / 2,
+        pageCount = { virtualCount }
+    )
+    
+    LaunchedEffect(Unit) {
+        while (true) {
+            yield()
+            delay(4000)
+            pagerState.animateScrollToPage(pagerState.currentPage + 1)
+        }
+    }
+
+    Column {
+        HorizontalPager(
+            state = pagerState,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(180.dp)
+                .padding(horizontal = 16.dp),
+            pageSpacing = 16.dp
+        ) { virtualPage ->
+            val page = virtualPage % pageCount
+            val banner = when(page) {
+                0 -> BannerData("REFER & EARN", "Invite friends and earn up to ₹1000 bonus!", "INVITE", listOf(Color(0xFF455A64), Color(0xFF263238)), {})
+                1 -> BannerData("GET LUCKY DRAW", "WITH BANK TRANSFER", "SPIN", listOf(Color(0xFF4A148C), Color(0xFF880E4F)), onSpinClick)
+                else -> BannerData("DAILY REWARD", "CLAIM YOUR DAILY BONUS NOW!", "CLAIM", listOf(Color(0xFFF9A825), Color(0xFFF57F17)), {})
+            }
+
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(Brush.horizontalGradient(banner.gradient)),
+                contentAlignment = Alignment.Center
             ) {
-                Text("SPIN", color = BlackBackground, fontWeight = FontWeight.Bold)
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(banner.title, color = PrimaryYellow, fontWeight = FontWeight.ExtraBold, fontSize = 24.sp)
+                    Text(banner.subtitle, color = TextWhite, fontWeight = FontWeight.Bold)
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Button(
+                        onClick = banner.onClick,
+                        colors = ButtonDefaults.buttonColors(containerColor = PrimaryYellow),
+                        shape = RoundedCornerShape(20.dp)
+                    ) {
+                        Text(banner.buttonText, color = BlackBackground, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        }
+        
+        // Indicators
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 8.dp),
+            horizontalArrangement = Arrangement.Center
+        ) {
+            repeat(pageCount) { iteration ->
+                val color = if (pagerState.currentPage % pageCount == iteration) PrimaryYellow else TextGrey
+                Box(
+                    modifier = Modifier
+                        .padding(2.dp)
+                        .clip(CircleShape)
+                        .background(color)
+                        .size(8.dp)
+                )
             }
         }
     }
 }
+
+data class BannerData(
+    val title: String,
+    val subtitle: String,
+    val buttonText: String,
+    val gradient: List<Color>,
+    val onClick: () -> Unit
+)
 
 @Composable
 fun SectionHeader(title: String) {
@@ -234,25 +339,64 @@ fun GameCard(game: GameItem, modifier: Modifier, onGameClick: (String) -> Unit) 
                 .background(game.color),
             contentAlignment = Alignment.BottomCenter
         ) {
-            Image(
-                painter = painterResource(id = R.drawable.gundu_ata_bg),
-                contentDescription = null,
-                modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Crop
-            )
-            
-            Text(
-                game.name,
-                color = TextWhite,
-                fontWeight = FontWeight.Bold,
-                fontSize = 18.sp,
-                modifier = Modifier.padding(bottom = 20.dp)
-            )
+            if (game.id == "gundu_ata") {
+                VideoPlayer(
+                    videoResId = R.raw.gundu_ata_video,
+                    modifier = Modifier.fillMaxSize()
+                )
+            } else {
+                Image(
+                    painter = painterResource(id = R.drawable.gundu_ata_bg),
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop
+                )
+                
+                Text(
+                    game.name,
+                    color = TextWhite,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 18.sp,
+                    modifier = Modifier.padding(bottom = 20.dp)
+                )
+            }
         }
         Spacer(modifier = Modifier.height(8.dp))
         Text(game.name.lowercase(), color = TextGrey, fontSize = 14.sp)
     }
 }
+
+@Composable
+fun VideoPlayer(videoResId: Int, modifier: Modifier = Modifier) {
+    val context = LocalContext.current
+    val exoPlayer = remember {
+        ExoPlayer.Builder(context).build().apply {
+            val uri = Uri.parse("android.resource://${context.packageName}/$videoResId")
+            setMediaItem(MediaItem.fromUri(uri))
+            repeatMode = Player.REPEAT_MODE_ALL
+            playWhenReady = true
+            prepare()
+        }
+    }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            exoPlayer.release()
+        }
+    }
+
+    AndroidView(
+        factory = {
+            PlayerView(context).apply {
+                player = exoPlayer
+                useController = false // Hide controls for a cleaner look
+                resizeMode = androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+            }
+        },
+        modifier = modifier
+    )
+}
+
 
 @Composable
 fun RelatedGamesList() {

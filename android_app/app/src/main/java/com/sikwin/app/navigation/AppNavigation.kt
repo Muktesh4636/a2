@@ -16,6 +16,7 @@ import androidx.navigation.compose.rememberNavController
 import com.sikwin.app.data.auth.SessionManager
 import com.sikwin.app.ui.screens.*
 import com.sikwin.app.ui.viewmodels.GunduAtaViewModel
+import com.unity3d.player.UnityPlayerGameActivity
 
 @Composable
 fun AppNavigation(
@@ -25,6 +26,15 @@ fun AppNavigation(
 ) {
     val context = LocalContext.current
     val activity = context as? Activity
+
+    fun launchGame() {
+        val intent = Intent(context, UnityPlayerGameActivity::class.java).apply {
+            putExtra("token", sessionManager.fetchAuthToken())
+            putExtra("username", sessionManager.fetchUsername())
+            putExtra("user_id", sessionManager.fetchUserId())
+        }
+        context.startActivity(intent)
+    }
     
     // Handle redirect requests (e.g. from Unity balance click)
     LaunchedEffect(activity?.intent) {
@@ -36,7 +46,7 @@ fun AppNavigation(
         }
     }
 
-    val startDestination = if (viewModel.loginSuccess) "home" else "login"
+    val startDestination = "home"
     
     NavHost(navController = navController, startDestination = startDestination) {
         composable("login") {
@@ -66,34 +76,12 @@ fun AppNavigation(
                 viewModel = viewModel,
                 onGameClick = { gameId ->
                     if (gameId == "gundu_ata") {
-                        try {
-                            val intent = Intent(context, Class.forName("com.unity3d.player.UnityPlayerGameActivity"))
-                            intent.putExtra("token", sessionManager.fetchAuthToken())
-                            intent.putExtra("refresh_token", sessionManager.fetchRefreshToken())
-                            intent.putExtra("username", sessionManager.fetchUsername())
-                            intent.putExtra("password", "123456789") // Assuming same password for now or fetch from session if stored
-                            intent.putExtra("user_id", sessionManager.fetchUserId())
-                            intent.putExtra("game_id", gameId)
-                            context.startActivity(intent)
-                        } catch (e: Exception) {
-                            e.printStackTrace()
-                            android.widget.Toast.makeText(context, "Error launching Unity game", android.widget.Toast.LENGTH_SHORT).show()
-                        }
+                        launchGame()
                     }
                 },
                 onNavigate = { route ->
                     if (route == "gundu_ata") {
-                        try {
-                            val intent = Intent(context, Class.forName("com.unity3d.player.UnityPlayerGameActivity"))
-                            intent.putExtra("token", sessionManager.fetchAuthToken())
-                            intent.putExtra("refresh_token", sessionManager.fetchRefreshToken())
-                            intent.putExtra("username", sessionManager.fetchUsername())
-                            intent.putExtra("password", "123456789")
-                            context.startActivity(intent)
-                        } catch (e: Exception) {
-                            e.printStackTrace()
-                            android.widget.Toast.makeText(context, "Unity game not found!", android.widget.Toast.LENGTH_SHORT).show()
-                        }
+                        launchGame()
                     } else if (route != "home") {
                         navController.navigate(route)
                     }
@@ -105,17 +93,7 @@ fun AppNavigation(
                 viewModel = viewModel,
                 onNavigate = { route ->
                     if (route == "gundu_ata") {
-                        try {
-                            val intent = Intent(context, Class.forName("com.unity3d.player.UnityPlayerGameActivity"))
-                            intent.putExtra("token", sessionManager.fetchAuthToken())
-                            intent.putExtra("refresh_token", sessionManager.fetchRefreshToken())
-                            intent.putExtra("username", sessionManager.fetchUsername() ?: viewModel.userProfile?.username ?: "")
-                            intent.putExtra("password", "123456789")
-                            intent.putExtra("balance", viewModel.wallet?.balance ?: "0.00")
-                            context.startActivity(intent)
-                        } catch (e: ClassNotFoundException) {
-                            android.util.Log.e("UnityLaunch", "UnityPlayerGameActivity not found.")
-                        }
+                        launchGame()
                     } else {
                         navController.navigate(route)
                     }

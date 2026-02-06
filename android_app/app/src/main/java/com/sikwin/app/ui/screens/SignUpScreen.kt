@@ -28,9 +28,9 @@ fun SignUpScreen(
     onSignUpSuccess: () -> Unit,
     onNavigateToSignIn: () -> Unit
 ) {
-    var username by remember { mutableStateOf("9182351381") }
-    var password by remember { mutableStateOf("123456789") }
-    var phoneNumber by remember { mutableStateOf("9182351381") }
+    var username by remember { mutableStateOf("") }
+    var password by remember { mutableStateOf("") }
+    var phoneNumber by remember { mutableStateOf("") }
     var otpCode by remember { mutableStateOf("") }
     var passwordVisible by remember { mutableStateOf(false) }
 

@@ -159,3 +159,33 @@ dmypy.json
 !backend/staticfiles/.gitkeep
 !backend/logs/.gitkeep
 
+
+# Android
+*.apk
+*.ap_
+*.dex
+*.class
+bin/
+gen/
+out/
+.gradle/
+local.properties
+proguard/
+*.idsig
+
+# Unity
+[Tt]emp/
+[Oo]bj/
+[Bb]uild/
+[Bb]uilds/
+[Ll]ibrary/
+unityLibrary/src/main/Il2CppOutputProject/
+unityLibrary/src/main/jniLibs/
+unityLibrary/.cxx/
+unityLibrary/build/
+unityLibrary/symbols/
+
+# Large Files
+*.zip
+*.tar.gz
+*.rar

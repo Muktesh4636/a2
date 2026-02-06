@@ -30,8 +30,8 @@ fun LoginScreen(
     onLoginSuccess: () -> Unit,
     onNavigateToSignUp: () -> Unit
 ) {
-    var username by remember { mutableStateOf("9182351381") }
-    var password by remember { mutableStateOf("123456789") }
+    var username by remember { mutableStateOf("") }
+    var password by remember { mutableStateOf("") }
     var passwordVisible by remember { mutableStateOf(false) }
 
     LaunchedEffect(viewModel.loginSuccess) {
