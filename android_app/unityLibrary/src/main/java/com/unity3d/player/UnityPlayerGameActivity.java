@@ -208,6 +208,7 @@ public class UnityPlayerGameActivity extends GameActivity
                 try {
                     JSONObject json = new JSONObject();
                     json.put("access", token);
+                    json.put("token", token); // Redundant key for compatibility
                     json.put("refresh", refreshToken);
                     json.put("username", username);
                     json.put("user_id", userId);
@@ -232,11 +233,17 @@ public class UnityPlayerGameActivity extends GameActivity
                                 // 1. Inject tokens into GameManager
                                 UnityPlayer.UnitySendMessage("GameManager", "SetAccessAndRefreshTokens", jsonString);
 
-                                // 2. Force UIManager to show Gameplay panel (index 3)
+                                // 2. Also try sending raw token to a common setter if JSON isn't preferred
+                                UnityPlayer.UnitySendMessage("GameManager", "ReceiveToken", token);
+
+                                // 3. Force UIManager to show Gameplay panel (index 3)
                                 UnityPlayer.UnitySendMessage("UIManager", "ShowPanel", "3");
 
-                                // 3. Try AutoLoginIfPossible in case it was missed
+                                // 4. Try AutoLoginIfPossible in case it was missed
                                 UnityPlayer.UnitySendMessage("UIManager", "AutoLoginIfPossible", "");
+
+                                // 5. Directly pass token to UIManager as well
+                                UnityPlayer.UnitySendMessage("UIManager", "SetAuthToken", token);
                             }
                         }, delay);
                     }
