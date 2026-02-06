@@ -6,6 +6,7 @@ import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.compose.rememberNavController
@@ -23,6 +24,9 @@ class MainActivity : ComponentActivity() {
         val sessionManager = SessionManager(this)
         RetrofitClient.init(sessionManager)
         
+        // Handle incoming logout request from Unity or other sources
+        handleIntent(intent, sessionManager)
+        
         setContent {
             GunduAtaTheme {
                 Surface(
@@ -33,6 +37,17 @@ class MainActivity : ComponentActivity() {
                     val viewModel: GunduAtaViewModel = viewModel(
                         factory = GunduAtaViewModelFactory(sessionManager)
                     )
+                    
+                    // Listen for logout intent and trigger viewModel logout
+                    LaunchedEffect(intent) {
+                        if (intent?.getStringExtra("action") == "logout") {
+                            viewModel.logout()
+                            navController.navigate("login") {
+                                popUpTo(0) { inclusive = true }
+                            }
+                        }
+                    }
+
                     AppNavigation(
                         navController = navController, 
                         viewModel = viewModel,
@@ -46,5 +61,13 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: android.content.Intent?) {
         super.onNewIntent(intent)
         setIntent(intent)
+        // Session manager is recreated here but it's fine for clearing prefs
+        handleIntent(intent, SessionManager(this))
+    }
+
+    private fun handleIntent(intent: android.content.Intent?, sessionManager: SessionManager) {
+        if (intent?.getStringExtra("action") == "logout") {
+            sessionManager.logout()
+        }
     }
 }

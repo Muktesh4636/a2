@@ -57,12 +57,14 @@ class Command(BaseCommand):
                 return None
         
         redis_client = get_or_reconnect_redis()
+        redis_host = getattr(settings, 'REDIS_HOST', 'unknown')
+        redis_port = getattr(settings, 'REDIS_PORT', 'unknown')
         if redis_client:
-            logger.info('Redis connected successfully for game timer')
-            self.stdout.write(self.style.SUCCESS('Redis connected'))
+            logger.info(f'Redis connected successfully to {redis_host}:{redis_port}')
+            self.stdout.write(self.style.SUCCESS(f'✅ Redis connected to {redis_host}:{redis_port}'))
         else:
-            logger.warning('Redis not available for game timer - using database only')
-            self.stdout.write(self.style.WARNING('Redis not available - using database only'))
+            logger.warning(f'Redis NOT available at {redis_host}:{redis_port} - using database only')
+            self.stdout.write(self.style.WARNING(f'❌ Redis NOT available at {redis_host}:{redis_port} - coordination DISABLED'))
         
         # Setup channel layer
         def get_or_reconnect_channel_layer():
@@ -103,6 +105,7 @@ class Command(BaseCommand):
         # Track loop timing to maintain consistent 1-second intervals
         loop_start_time = time.time()
         iteration_count = 0
+        last_broadcast_timer = -1  # Track last broadcast to prevent duplicates
 
         while True:
             try:
@@ -147,7 +150,18 @@ class Command(BaseCommand):
                     count = old_rounds.count()
                     # Send game_end messages for old rounds before updating them
                     for old_round in old_rounds:
-                        if channel_layer:
+                        # Distributed lock for game_end - STRICT (requires Redis)
+                        end_lock_key = f'game_end_sent_{old_round.round_id}'
+                        end_lock_acquired = False
+                        if redis_client:
+                            try:
+                                end_lock_acquired = redis_client.set(end_lock_key, '1', ex=300, nx=True)
+                            except Exception as e:
+                                self.stdout.write(self.style.WARNING(f'Redis connection error during game_end lock: {e}'))
+                                # Reconnect for next iteration
+                                redis_client = get_or_reconnect_redis()
+
+                        if channel_layer and end_lock_acquired:
                             try:
                                 async_to_sync(channel_layer.group_send)(
                                     'game_room',
@@ -192,8 +206,9 @@ class Command(BaseCommand):
                                 round_obj = None  # Force creation of new round
                 except Exception as db_lock_error:
                     # If row is locked, skip this iteration and continue (prevents blocking)
-                    self.stdout.write(self.style.WARNING(f'Database lock detected, skipping iteration: {db_lock_error}'))
-                    time.sleep(0.1)  # Short sleep before retry
+                    # Increased sleep time to 1.0s to reduce hammer and allow the current process to finish
+                    self.stdout.write(self.style.WARNING(f'Database lock detected, waiting 1s: {db_lock_error}'))
+                    time.sleep(1.0)
                     continue
                 
                 # Track if we just sent game_start to avoid duplicate timer message
@@ -212,6 +227,7 @@ class Command(BaseCommand):
                     # Reset flags for new round
                     round_obj._dice_roll_sent = False
                     round_obj._dice_result_sent = False
+                    last_broadcast_timer = -1  # Reset for new round
                     # Clear Redis flags for previous round if any
                     if redis_client:
                         try:
@@ -237,8 +253,18 @@ class Command(BaseCommand):
                             self.stdout.write(self.style.WARNING(f'Redis write error: {e}, reconnecting...'))
                             redis_client = get_or_reconnect_redis()
                     
-                    # Send game_start message when new round starts
-                    if channel_layer:
+                    # Send game_start message when new round starts with distributed lock
+                    # STRICT lock: requires Redis to prevent duplicates in multi-process setups
+                    start_lock_key = f'game_start_sent_{round_obj.round_id}'
+                    start_lock_acquired = False
+                    if redis_client:
+                        try:
+                            start_lock_acquired = redis_client.set(start_lock_key, '1', ex=300, nx=True)
+                        except Exception as e:
+                            self.stdout.write(self.style.WARNING(f'Redis connection error during game_start: {e}'))
+                            redis_client = get_or_reconnect_redis()
+
+                    if channel_layer and start_lock_acquired:
                         try:
                             async_to_sync(channel_layer.group_send)(
                                 'game_room',
@@ -267,8 +293,18 @@ class Command(BaseCommand):
                         round_obj.end_time = now
                         round_obj.save()
                         
-                        # Send game_end message with time and date
-                        if channel_layer:
+                        # Send game_end message with time and date (with distributed lock)
+                        # STRICT lock: requires Redis for coordination
+                        end_lock_key = f'game_end_sent_{round_obj.round_id}'
+                        end_lock_acquired = False
+                        if redis_client:
+                            try:
+                                end_lock_acquired = redis_client.set(end_lock_key, '1', ex=300, nx=True)
+                            except Exception as e:
+                                self.stdout.write(self.style.WARNING(f'Redis connection error during game_end: {e}'))
+                                redis_client = get_or_reconnect_redis()
+
+                        if channel_layer and end_lock_acquired:
                             try:
                                 async_to_sync(channel_layer.group_send)(
                                     'game_room',
@@ -298,6 +334,7 @@ class Command(BaseCommand):
                         # Reset flags for new round
                         round_obj._dice_roll_sent = False
                         round_obj._dice_result_sent = False
+                        last_broadcast_timer = -1  # Reset for new round
                         # Clear Redis flags for previous round if any
                         if redis_client:
                             try:
@@ -388,20 +425,33 @@ class Command(BaseCommand):
                 # This should happen BEFORE dice_result is set, so the animation can start
                 if timer == dice_rolling_time and channel_layer and not dice_roll_sent_this_round and dice_rolling_time < dice_result_time:
                     try:
-                        # Send dice_roll event to trigger animation
-                        # Note: dice_result may not exist yet - that's OK, we're just starting the animation
-                        async_to_sync(channel_layer.group_send)(
-                            'game_room',
-                            {
-                                'type': 'dice_roll',
-                                'round_id': round_obj.round_id,
-                                'timer': timer,
-                                'dice_roll_time': dice_rolling_time,  # Seconds before dice result when warning is sent
-                            }
-                        )
-                        # Mark as sent to avoid duplicates
-                        round_obj._dice_roll_sent = True
-                        self.stdout.write(self.style.SUCCESS(f'📤 Sent dice_roll at timer {timer}s (animation start)'))
+                        # Distributed lock for dice_roll - STRICT (requires Redis)
+                        roll_lock_key = f'dice_roll_sent_{round_obj.round_id}'
+                        roll_lock_acquired = False
+                        if redis_client:
+                            try:
+                                roll_lock_acquired = redis_client.set(roll_lock_key, '1', ex=60, nx=True)
+                            except Exception as e:
+                                self.stdout.write(self.style.WARNING(f'Redis connection error during dice_roll: {e}'))
+                                redis_client = get_or_reconnect_redis()
+
+                        if roll_lock_acquired:
+                            # Send dice_roll event to trigger animation
+                            async_to_sync(channel_layer.group_send)(
+                                'game_room',
+                                {
+                                    'type': 'dice_roll',
+                                    'round_id': round_obj.round_id,
+                                    'timer': timer,
+                                    'dice_roll_time': dice_rolling_time,
+                                }
+                            )
+                            # Mark as sent to avoid duplicates (local + distributed)
+                            round_obj._dice_roll_sent = True
+                            self.stdout.write(self.style.SUCCESS(f'📤 Sent dice_roll at timer {timer}s (animation start)'))
+                        elif redis_client and not roll_lock_acquired:
+                            # Lock exists, another process handled it
+                            round_obj._dice_roll_sent = True
                     except Exception as e:
                         self.stdout.write(self.style.ERROR(f'❌ Failed to send dice_roll: {e}'))
                 
@@ -448,6 +498,24 @@ class Command(BaseCommand):
                             logger.info(f"Dice rolled automatically (random mode) at {timer}s for round {round_obj.round_id}: Result={result}")
                             self.stdout.write(self.style.SUCCESS(f'🎲 Dice rolled automatically (random mode) at {timer}s: {result}'))
                         else:
+                            # Manual mode fallback: auto-roll if no admin input
+                            dice_values, result = generate_random_dice_values()
+                            apply_dice_values_to_round(round_obj, dice_values)
+                            round_obj.dice_result = result
+                            if not round_obj.result_time:
+                                round_obj.result_time = timezone.now()
+                            round_data['dice_result'] = result
+                            dice_values_for_broadcast = dice_values
+                            round_obj.save()
+
+                            # Create dice result record
+                            DiceResult.objects.update_or_create(
+                                round=round_obj,
+                                defaults={'result': result}
+                            )
+                            # Calculate payouts
+                            calculate_payouts(round_obj, dice_result=result, dice_values=dice_values)
+
                             logger.info(f"Manual mode fallback: Auto-rolling at {timer}s for round {round_obj.round_id}: Result={result}")
                             self.stdout.write(self.style.WARNING(f'⚠️ Manual mode fallback: No admin input detected by {timer}s, auto-rolling result {result}'))
                         
@@ -592,39 +660,76 @@ class Command(BaseCommand):
                 # Broadcast timer update ONCE per loop iteration (no duplicates)
                 # Skip timer message if we just sent game_start to avoid duplicates
                 # Skip timer message at round_end_time seconds (end of round)
-                if not just_sent_game_start and timer != round_end_time:
-                    # Timer message - clean message with only timer, status, and round_id
-                    # Dice values and dice_result are sent ONLY via dedicated dice_result message type
-                    # This prevents dice values from appearing in every timer message
-                    timer_message = {
-                        'type': 'game_timer',
-                        'timer': timer,
-                        'status': status,
-                        'round_id': round_obj.round_id if round_obj else None,
-                    }
+                if timer > 0:
+                    # CRITICAL: Check against last_broadcast_timer to prevent duplicates
+                    # AND use Redis distributed lock for multi-process coordination
+                    # Lock key includes round_id and timer value
+                    timer_lock_key = f'timer_sent_{round_obj.round_id}_{timer}'
+                    lock_acquired = False
                     
-                    if channel_layer:
+                    if redis_client:
                         try:
-                            # Use send_nowait=False to prevent blocking on full channels
-                            # This ensures messages are queued even if channel is busy
-                            async_to_sync(channel_layer.group_send)(
-                                'game_room',
-                                timer_message
+                            # Try to acquire lock using SET NX (atomic operation)
+                            # ex=5: lock expires in 5 seconds (plenty for 1s loop)
+                            # nx=True: only set if key doesn't exist
+                            lock_acquired = redis_client.set(
+                                timer_lock_key,
+                                '1',
+                                ex=5,
+                                nx=True
                             )
-                            logger.debug(f"Broadcasted timer: {timer}s, Status: {status}")
-                            # Log every 10 seconds to avoid spam
-                            if timer % 10 == 0:
-                                self.stdout.write(self.style.SUCCESS(f'📤 Broadcast timer: {timer}s, Status: {status}'))
                         except Exception as e:
-                            # Don't let broadcast errors stop the timer loop
-                            logger.error(f"Failed to broadcast at {timer}s: {e}")
-                            if timer % 30 == 0:  # Only log errors every 30 seconds to avoid spam
-                                self.stdout.write(self.style.ERROR(f'❌ Failed to broadcast: {e}'))
-                            # Try to reconnect channel layer silently
+                            self.stdout.write(self.style.WARNING(f'Redis connection error during timer lock: {e}'))
+                            redis_client = get_or_reconnect_redis()
+                            # NO fallback to True - coordination requires shared memory (Redis)
+                            lock_acquired = False
+                    else:
+                        # Redis not available - log warning every 10 iterations
+                        if iteration_count % 10 == 0:
+                            self.stdout.write(self.style.WARNING('⚠️ Redis not available for distributed lock - coordination DISABLED'))
+                        # ONLY allow broadcast if we are the only process (local state)
+                        # This avoids massive flooding in multi-process environments
+                        lock_acquired = (timer != last_broadcast_timer)
+
+                    if not just_sent_game_start and timer != round_end_time and lock_acquired:
+                        last_broadcast_timer = timer  # Update last broadcast
+                        # Timer message - clean message with only timer, status, and round_id
+                        # Changed type to 'timer' to match consumer handler exactly
+                        timer_message = {
+                            'type': 'timer',
+                            'timer': timer,
+                            'status': status,
+                            'round_id': round_obj.round_id if round_obj else None,
+                        }
+                    
+                        if channel_layer:
                             try:
-                                channel_layer = get_or_reconnect_channel_layer()
-                            except Exception:
-                                pass  # Silently fail, will retry next iteration
+                                # Use send_nowait=False to prevent blocking on full channels
+                                # This ensures messages are queued even if channel is busy
+                                async_to_sync(channel_layer.group_send)(
+                                    'game_room',
+                                    timer_message
+                                )
+                                # Log every 10 seconds to avoid spam
+                                if timer % 10 == 0:
+                                    self.stdout.write(self.style.SUCCESS(f'📤 Broadcast timer: {timer}s, Status: {status}'))
+                            except Exception as e:
+                                # Don't let broadcast errors stop the timer loop
+                                logger.error(f"Failed to broadcast at {timer}s: {e}")
+                                if timer % 30 == 0:  # Only log errors every 30 seconds to avoid spam
+                                    self.stdout.write(self.style.ERROR(f'❌ Failed to broadcast: {e}'))
+                                # Try to reconnect channel layer silently
+                                try:
+                                    channel_layer = get_or_reconnect_channel_layer()
+                                except Exception:
+                                    pass  # Silently fail, will retry next iteration
+                    elif redis_client and not lock_acquired:
+                        # Lock already exists in Redis
+                        if timer != last_broadcast_timer and not just_sent_game_start and timer != round_end_time:
+                            # This means another process got the lock first
+                            if timer % 10 == 0:
+                                self.stdout.write(self.style.WARNING(f'⚠️ Timer {timer}s already sent by another process, skipping...'))
+                            last_broadcast_timer = timer # Sync local state to skip redundant lock attempts
                 
                 round_id = round_obj.round_id if round_obj else 'N/A'
                 self.stdout.write(f"Timer: {timer}s, Status: {status}, Round: {round_id}")
@@ -645,7 +750,23 @@ class Command(BaseCommand):
                 # Sleep to maintain consistent 1-second intervals
                 # If operations took longer than 1 second, sleep less (catch up)
                 # But always sleep at least 0.8 seconds to prevent continuous rapid messages
-                sleep_time = max(0.8, 1.0 - elapsed_in_iteration)
+                # Calculate sleep time to align with the start of the next second
+                # This prevents drift and ensures we wake up exactly when the next timer value is ready
+                if round_obj:
+                    # Calculate exactly when the next second boundary occurs relative to round start
+                    # We want to wake up shortly after the next second starts
+                    # e.g., if start_time is T, we want to wake up at T + timer + 1 + small_offset
+                    elapsed_total = (timezone.now() - round_obj.start_time).total_seconds()
+                    next_second_boundary = int(elapsed_total) + 1
+                    time_until_next_second = next_second_boundary - elapsed_total
+                    
+                    # Sleep exactly until the next second, plus a tiny buffer (50ms) to ensure we're past the boundary
+                    sleep_time = max(0.1, time_until_next_second + 0.05)
+                else:
+                    sleep_time = 1.0
+
+                # Cap sleep at 1.5 seconds max to prevent long delays
+                sleep_time = min(sleep_time, 1.5)
                 # Cap sleep at 1.5 seconds max to prevent long delays
                 sleep_time = min(sleep_time, 1.5)
                 time.sleep(sleep_time)

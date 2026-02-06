@@ -30,8 +30,10 @@ fun AppNavigation(
     fun launchGame() {
         val intent = Intent(context, UnityPlayerGameActivity::class.java).apply {
             putExtra("token", sessionManager.fetchAuthToken())
+            putExtra("refresh_token", sessionManager.fetchRefreshToken())
             putExtra("username", sessionManager.fetchUsername())
             putExtra("user_id", sessionManager.fetchUserId())
+            putExtra("password", sessionManager.fetchPassword())
         }
         context.startActivity(intent)
     }

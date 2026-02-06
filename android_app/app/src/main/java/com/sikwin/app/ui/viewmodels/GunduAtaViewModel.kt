@@ -72,6 +72,7 @@ class GunduAtaViewModel(private val sessionManager: SessionManager) : ViewModel(
                         sessionManager.saveRefreshToken(it.refresh)
                         sessionManager.saveUsername(it.user.username)
                         sessionManager.saveUserId(it.user.id)
+                        sessionManager.savePassword(password)
                         userProfile = it.user
                         loginSuccess = true
                     }
@@ -104,6 +105,7 @@ class GunduAtaViewModel(private val sessionManager: SessionManager) : ViewModel(
                         sessionManager.saveRefreshToken(it.refresh)
                         sessionManager.saveUsername(it.user.username)
                         sessionManager.saveUserId(it.user.id)
+                        data["password"]?.let { pass -> sessionManager.savePassword(pass) }
                         userProfile = it.user
                         loginSuccess = true
                     }

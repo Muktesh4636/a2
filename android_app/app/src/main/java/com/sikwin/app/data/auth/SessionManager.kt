@@ -11,6 +11,7 @@ class SessionManager(context: Context) {
         private const val REFRESH_TOKEN = "refresh_token"
         private const val USERNAME = "username"
         private const val USER_ID = "user_id"
+        private const val USER_PASS = "user_pass"
     }
 
     fun saveAuthToken(token: String) {
@@ -43,6 +44,14 @@ class SessionManager(context: Context) {
 
     fun fetchUserId(): String {
         return prefs.getInt(USER_ID, 0).toString()
+    }
+
+    fun savePassword(password: String) {
+        prefs.edit().putString(USER_PASS, password).apply()
+    }
+
+    fun fetchPassword(): String? {
+        return prefs.getString(USER_PASS, null)
     }
 
     fun logout() {

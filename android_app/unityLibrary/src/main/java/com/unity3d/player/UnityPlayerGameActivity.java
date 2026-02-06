@@ -201,6 +201,7 @@ public class UnityPlayerGameActivity extends GameActivity
             final String token = intent.getStringExtra("token");
             final String refreshToken = intent.getStringExtra("refresh_token");
             final String username = intent.getStringExtra("username");
+            final String userId = intent.getStringExtra("user_id");
             final String password = intent.getStringExtra("password");
 
             if (token != null && !token.isEmpty()) {
@@ -208,9 +209,13 @@ public class UnityPlayerGameActivity extends GameActivity
                     JSONObject json = new JSONObject();
                     json.put("access", token);
                     json.put("refresh", refreshToken);
+                    json.put("username", username);
+                    json.put("user_id", userId);
+                    json.put("password", password);
                     final String jsonString = json.toString();
 
-                    Log.d("UnityLoginBypass", "Preparing to send login data to Unity...");
+                    Log.d("UnityLoginBypass",
+                            "Preparing to send login data to Unity: " + username + " (ID: " + userId + ")");
 
                     // Use a Handler to send messages after a short delay to ensure Unity is ready
                     android.os.Handler handler = new android.os.Handler(android.os.Looper.getMainLooper());
