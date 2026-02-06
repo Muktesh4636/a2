@@ -36,8 +36,8 @@ A real-time multiplayer dice betting game platform where users can place bets on
 - **Transaction History**: Complete audit trail of all financial operations
 
 ### Production URL
-- **Backend API**: `http://159.198.46.36:8001/`
-- **Admin Panel**: `http://159.198.46.36:8001/game-admin/`
+- **Backend API**: `http://72.61.254.71:8001/`
+- **Admin Panel**: `http://72.61.254.71:8001/game-admin//`
 - **Frontend**: Configured separately
 
 ---
