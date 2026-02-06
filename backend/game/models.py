@@ -61,7 +61,7 @@ class Bet(models.Model):
 
     class Meta:
         ordering = ['-created_at']
-        unique_together = ['user', 'round', 'number']  # One bet per number per round per user
+        # Removed unique_together constraint to allow multiple independent bets on same number
 
     def __str__(self):
         return f"{self.user.username} - Round {self.round.round_id} - Number {self.number} - {self.chip_amount}"
