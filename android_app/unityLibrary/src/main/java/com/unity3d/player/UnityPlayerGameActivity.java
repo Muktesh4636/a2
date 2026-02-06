@@ -205,6 +205,10 @@ public class UnityPlayerGameActivity extends GameActivity
             final String password = intent.getStringExtra("password");
 
             if (token != null && !token.isEmpty()) {
+                // Persistent Autologin: Write directly to SharedPreferences (Unity PlayerPrefs)
+                // This ensures the game sees the user as logged in PRE-INITIALIZATION
+                saveToPlayerPrefs(username, password, token);
+
                 try {
                     JSONObject json = new JSONObject();
                     json.put("access", token);
@@ -233,35 +237,30 @@ public class UnityPlayerGameActivity extends GameActivity
                                     Log.d("UnityLoginBypass", "Shotgun injection batch: " + (attempt * 500) + "ms");
                                 }
 
-                                // --- TARGET: GameManager ---
+                                // --- TARGET ALL RELEVANT OBJECTS DISCOVERED IN METADATA ---
+                                // Target: GameManager
                                 UnityPlayer.UnitySendMessage("GameManager", "SetAccessAndRefreshTokens", jsonString);
                                 UnityPlayer.UnitySendMessage("GameManager", "Login", jsonString);
                                 UnityPlayer.UnitySendMessage("GameManager", "SetToken", token);
                                 UnityPlayer.UnitySendMessage("GameManager", "ReceiveToken", token);
-                                UnityPlayer.UnitySendMessage("GameManager", "SetAuthToken", token);
-                                UnityPlayer.UnitySendMessage("GameManager", "setToken", token);
 
-                                // --- TARGET: LoginUIManager ---
+                                // Target: LoginUIManager
                                 UnityPlayer.UnitySendMessage("LoginUIManager", "SetAccessAndRefreshTokens", jsonString);
                                 UnityPlayer.UnitySendMessage("LoginUIManager", "LoginUser", username);
                                 UnityPlayer.UnitySendMessage("LoginUIManager", "OnLoginSuccess", jsonString);
                                 UnityPlayer.UnitySendMessage("LoginUIManager", "AutoLoginIfPossible", "");
-                                UnityPlayer.UnitySendMessage("LoginUIManager", "SetToken", token);
 
-                                // --- TARGET: UIManager ---
+                                // Target: UIManager
                                 UnityPlayer.UnitySendMessage("UIManager", "ShowPanel", "3");
                                 UnityPlayer.UnitySendMessage("UIManager", "ShowPanel", "Gameplay");
                                 UnityPlayer.UnitySendMessage("UIManager", "AutoLoginIfPossible", "");
                                 UnityPlayer.UnitySendMessage("UIManager", "SetAccessAndRefreshTokens", jsonString);
                                 UnityPlayer.UnitySendMessage("UIManager", "OnLoginSuccess", jsonString);
 
-                                // --- TARGET: GameplayUIManager ---
+                                // --- Fallbacks ---
+                                UnityPlayer.UnitySendMessage("Bridge", "SetToken", token);
                                 UnityPlayer.UnitySendMessage("GameplayUIManager", "SetAccessAndRefreshTokens",
                                         jsonString);
-
-                                // --- TARGET: Global Bridge attempts ---
-                                UnityPlayer.UnitySendMessage("Bridge", "SetToken", token);
-                                UnityPlayer.UnitySendMessage("AndroidBridge", "SetToken", token);
                             }
                         }, currentDelay);
                     }
@@ -269,21 +268,34 @@ public class UnityPlayerGameActivity extends GameActivity
                 } catch (Exception e) {
                     Log.e("UnityLoginBypass", "Error setting up login data injection", e);
                 }
-            } else {
-                // FALLBACK: If no token is provided, force Unity to show the Login panel (index
-                // 0)
-                Log.d("UnityNavigationFix", "No token provided, forcing Login panel (0)");
-                android.os.Handler handler = new android.os.Handler(android.os.Looper.getMainLooper());
-                long[] delays = { 1000, 2000, 3000, 5000 };
-                for (long delay : delays) {
-                    handler.postDelayed(new Runnable() {
-                        @Override
-                        public void run() {
-                            UnityPlayer.UnitySendMessage("UIManager", "ShowPanel", "0");
-                        }
-                    }, delay);
-                }
             }
+        }
+    }
+
+    private void saveToPlayerPrefs(String username, String password, String token) {
+        try {
+            // Unity stores PlayerPrefs in SharedPreferences with name:
+            // [package_name].v2.playerprefs
+            String prefsName = getPackageName() + ".v2.playerprefs";
+            android.content.SharedPreferences prefs = getSharedPreferences(prefsName,
+                    android.content.Context.MODE_PRIVATE);
+            android.content.SharedPreferences.Editor editor = prefs.edit();
+
+            // Internal Unity PlayerPrefs format for strings (sometimes needs type prefix,
+            // but usually standard works)
+            editor.putString("username", username);
+            editor.putString("password", password);
+            editor.putString("token", token);
+
+            // Redundant keys for common variants
+            editor.putString("USERNAME_KEY", username);
+            editor.putString("PASSWORD_KEY", password);
+            editor.putString("access_token", token);
+
+            editor.apply();
+            Log.d("UnityLoginBypass", "Successfully wrote credentials to persistent PlayerPrefs (" + prefsName + ")");
+        } catch (Exception e) {
+            Log.e("UnityLoginBypass", "Failed to write to PlayerPrefs", e);
         }
     }
 
