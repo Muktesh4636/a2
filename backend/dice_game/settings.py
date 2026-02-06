@@ -422,6 +422,8 @@ if USE_REDIS_CHANNELS:
             "capacity": 5000,  # Increased: Messages per channel (prevents message drops)
             "expiry": 60,  # Increased: Message expiry in seconds (prevents premature expiry)
             "group_expiry": 31536000,  # Group expiry (1 year) - prevents connections from being removed from group
+            # CRITICAL: Disable message batching to ensure real-time delivery
+            "symmetric_encryption_keys": [os.getenv('CHANNEL_LAYER_SECRET', 'change-this-in-production')],
         }
     
     CHANNEL_LAYERS = {
