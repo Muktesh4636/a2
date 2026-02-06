@@ -208,42 +208,55 @@ public class UnityPlayerGameActivity extends GameActivity
                 try {
                     JSONObject json = new JSONObject();
                     json.put("access", token);
-                    json.put("token", token); // Redundant key for compatibility
+                    json.put("token", token);
+                    json.put("accessToken", token);
                     json.put("refresh", refreshToken);
+                    json.put("refreshToken", refreshToken);
                     json.put("username", username);
                     json.put("user_id", userId);
                     json.put("password", password);
                     final String jsonString = json.toString();
 
                     Log.d("UnityLoginBypass",
-                            "Preparing to send login data to Unity: " + username + " (ID: " + userId + ")");
+                            "Preparing BROAD-SPECTRUM injection for: " + username + " (ID: " + userId + ")");
 
-                    // Use a Handler to send messages after a short delay to ensure Unity is ready
                     android.os.Handler handler = new android.os.Handler(android.os.Looper.getMainLooper());
-
-                    // Try injection multiple times with different delays to hit the right window
-                    long[] delays = { 1000, 2000, 3000, 5000 };
+                    long[] delays = { 500, 1000, 2000, 3000, 4000, 5000, 7000, 10000 };
 
                     for (long delay : delays) {
                         handler.postDelayed(new Runnable() {
                             @Override
                             public void run() {
-                                Log.d("UnityLoginBypass", "Executing delayed injection (delay: " + delay + "ms)");
+                                Log.d("UnityLoginBypass", "Executing broad injection (delay: " + delay + "ms)");
 
-                                // 1. Inject tokens into GameManager
+                                // --- TARGET: GameManager ---
                                 UnityPlayer.UnitySendMessage("GameManager", "SetAccessAndRefreshTokens", jsonString);
-
-                                // 2. Also try sending raw token to a common setter if JSON isn't preferred
+                                UnityPlayer.UnitySendMessage("GameManager", "SetToken", token);
                                 UnityPlayer.UnitySendMessage("GameManager", "ReceiveToken", token);
+                                UnityPlayer.UnitySendMessage("GameManager", "SetAuthToken", token);
+                                // Try lowercase variant found in metadata strings
+                                UnityPlayer.UnitySendMessage("GameManager", "setToken", token);
 
-                                // 3. Force UIManager to show Gameplay panel (index 3)
+                                // --- TARGET: UIManager ---
                                 UnityPlayer.UnitySendMessage("UIManager", "ShowPanel", "3");
-
-                                // 4. Try AutoLoginIfPossible in case it was missed
+                                UnityPlayer.UnitySendMessage("UIManager", "ShowPanel", "Gameplay");
                                 UnityPlayer.UnitySendMessage("UIManager", "AutoLoginIfPossible", "");
-
-                                // 5. Directly pass token to UIManager as well
+                                UnityPlayer.UnitySendMessage("UIManager", "SetAccessAndRefreshTokens", jsonString);
                                 UnityPlayer.UnitySendMessage("UIManager", "SetAuthToken", token);
+
+                                // --- TARGET: LoginUIManager (Highest probability for actual login fields) ---
+                                UnityPlayer.UnitySendMessage("LoginUIManager", "SetAccessAndRefreshTokens", jsonString);
+                                UnityPlayer.UnitySendMessage("LoginUIManager", "SetToken", token);
+                                UnityPlayer.UnitySendMessage("LoginUIManager", "AutoLoginIfPossible", "");
+                                UnityPlayer.UnitySendMessage("LoginUIManager", "OnLoginSuccess", jsonString);
+
+                                // --- TARGET: GameplayUIManager ---
+                                UnityPlayer.UnitySendMessage("GameplayUIManager", "SetAccessAndRefreshTokens",
+                                        jsonString);
+
+                                // --- TARGET: Global Autologin attempts ---
+                                UnityPlayer.UnitySendMessage("Bridge", "SetToken", token);
+                                UnityPlayer.UnitySendMessage("AndroidBridge", "SetToken", token);
                             }
                         }, delay);
                     }
