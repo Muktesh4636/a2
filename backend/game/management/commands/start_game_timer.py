@@ -246,8 +246,8 @@ class Command(BaseCommand):
                     if redis_client:
                         try:
                             pipe = redis_client.pipeline()
-                            pipe.set('current_round', json.dumps(round_data))
-                            pipe.set('round_timer', '1')
+                            pipe.set('current_round', json.dumps(round_data), ex=5)
+                            pipe.set('round_timer', '1', ex=5)
                             pipe.execute()  # Execute both writes in one round trip
                         except Exception as e:
                             self.stdout.write(self.style.WARNING(f'Redis write error: {e}, reconnecting...'))
@@ -368,8 +368,8 @@ class Command(BaseCommand):
                         # Update Redis with new round (use pipeline for efficient batch writes)
                         if redis_client:
                             pipe = redis_client.pipeline()
-                            pipe.set('current_round', json.dumps(round_data))
-                            pipe.set('round_timer', '1')
+                            pipe.set('current_round', json.dumps(round_data), ex=5)
+                            pipe.set('round_timer', '1', ex=5)
                             pipe.execute()  # Execute both writes in one round trip
                         logger.info(f"New round created: {round_obj.round_id}")
                         self.stdout.write(self.style.SUCCESS(f'New round started: {round_obj.round_id}'))
@@ -411,8 +411,8 @@ class Command(BaseCommand):
                         if redis_client:
                             try:
                                 pipe = redis_client.pipeline()
-                                pipe.set('round_timer', str(timer))
-                                pipe.set('current_round', json.dumps(round_data))
+                                pipe.set('round_timer', str(timer), ex=5)
+                                pipe.set('current_round', json.dumps(round_data), ex=5)
                                 pipe.execute()  # Execute both writes in one round trip
                             except Exception as e:
                                 self.stdout.write(self.style.WARNING(f'Redis write error: {e}, reconnecting...'))
@@ -645,7 +645,7 @@ class Command(BaseCommand):
                                 round_data[f'dice_{index}'] = dice_value
                         # Save updated round_data to Redis
                         pipe = redis_client.pipeline()
-                        pipe.set('current_round', json.dumps(round_data))
+                        pipe.set('current_round', json.dumps(round_data), ex=5)
                         pipe.execute()
                     except Exception as e:
                         self.stdout.write(self.style.WARNING(f'Redis dice values update error: {e}, reconnecting...'))

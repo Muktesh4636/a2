@@ -148,20 +148,11 @@ class GameConsumer(AsyncWebsocketConsumer):
                     # Convert 0-(round_end_time-1) to 1-round_end_time format
                     timer = round_end_time if timer_raw == 0 else timer_raw
                     
-                    # If Redis has no data, sync from database
                     if not round_data:
+                        # Redis key expired or missing - force sync from DB
                         await self.sync_db_to_redis()
-                        # Read again after sync
-                        pipe = redis_client.pipeline()
-                        pipe.get('current_round')
-                        pipe.get('round_timer')
-                        results = pipe.execute()
-                        round_data = results[0]
-                        if round_data:
-                            timer_raw = int(results[1] or '1')
-                            from .utils import get_game_setting
-                            round_end_time = await database_sync_to_async(get_game_setting)('ROUND_END_TIME', 80)
-                            timer = round_end_time if timer_raw == 0 else timer_raw
+                        # Allow fallback to DB logic below by keeping round_data=None
+                        pass
                 except Exception as e:
                     logger.warning(f"Redis read error (using fallback): {e}")
                     round_data = None
@@ -543,6 +534,6 @@ def start_new_round():
         'start_time': round_obj.start_time.isoformat(),
         'timer': 0,
     }
-    redis_client.set('current_round', json.dumps(round_data))
-    redis_client.set('round_timer', '0')
+    redis_client.set('current_round', json.dumps(round_data), ex=5)
+    redis_client.set('round_timer', '0', ex=5)
 
