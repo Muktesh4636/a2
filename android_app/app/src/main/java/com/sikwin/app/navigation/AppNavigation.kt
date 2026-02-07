@@ -123,9 +123,9 @@ fun AppNavigation(
                         } else {
                             showAuthDialog = true
                         }
-                    } else if (route == "me" || route == "lucky_wheel") {
+                    } else if (route == "me") {
                         if (viewModel.loginSuccess) {
-                            navController.navigate(route)
+                            navController.navigate("me")
                         } else {
                             showAuthDialog = true
                         }
@@ -244,6 +244,7 @@ fun AppNavigation(
         }
         composable("lucky_wheel") {
             LuckyWheelScreen(
+                viewModel = viewModel,
                 onBack = { navController.popBackStack() }
             )
         }
