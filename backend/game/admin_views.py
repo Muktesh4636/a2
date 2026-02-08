@@ -459,123 +459,130 @@ def set_individual_dice_view(request):
             messages.error(request, 'No active round')
             return redirect('dice_control')
         
-        # Collect dice values (all dice required)
-        dice_values_list = []  # For calculating result
+        try:
+            # Collect dice values (all dice required)
+            dice_values_list = []  # For calculating result
 
-        for i in range(1, 7):
-            dice_value = request.POST.get(f'dice_{i}', '').strip()
-            if dice_value:
-                try:
-                    value = int(dice_value)
-                    if 1 <= value <= 6:
-                        dice_values_list.append(value)
-                    else:
-                        messages.error(request, f'Dice {i} value must be between 1-6')
+            for i in range(1, 7):
+                dice_value = request.POST.get(f'dice_{i}', '').strip()
+                if dice_value:
+                    try:
+                        value = int(dice_value)
+                        if 1 <= value <= 6:
+                            dice_values_list.append(value)
+                        else:
+                            messages.error(request, f'Dice {i} value must be between 1-6')
+                            return redirect('dice_control')
+                    except ValueError:
+                        messages.error(request, f'Invalid value for dice {i}')
                         return redirect('dice_control')
-                except ValueError:
-                    messages.error(request, f'Invalid value for dice {i}')
+                else:
+                    messages.error(request, f'Dice {i} value is required')
                     return redirect('dice_control')
             else:
-                messages.error(request, f'Dice {i} value is required')
-                return redirect('dice_control')
-        else:
-            # Normal mode - must have all 6 values
-            if len(dice_values_list) != 6:
-                messages.error(request, 'All 6 dice values are required')
-                return redirect('dice_control')
-        
-        # Apply updates to round object
-        for i, value in enumerate(dice_values_list):
-            setattr(round_obj, f'dice_{i+1}', value)
-        
-        # If we have at least some dice values, calculate result
-        if dice_values_list:
-            # Filter out None values for calculation
-            valid_dice = [d for d in dice_values_list if d is not None]
-            if valid_dice:
-                from .utils import determine_winning_number
-                most_common = determine_winning_number(valid_dice)
-                
-                round_obj.dice_result = most_common
-                
-                # Only finalize the round (status, payouts, broadcast) if we are at or past result time
-                should_finalize = timer >= dice_result_time
-                
-                if should_finalize:
-                    round_obj.status = 'RESULT'
-                    if not round_obj.result_time:
-                        round_obj.result_time = timezone.now()
-                
-                round_obj.save()
-                
-                # Create or update dice result record
-                DiceResult.objects.update_or_create(
-                    round=round_obj,
-                    defaults={
-                        'result': most_common,
-                        'set_by': request.user
-                    }
-                )
-                
-                # Update Redis with all current dice values
-                if redis_client:
-                    try:
-                        round_data = redis_client.get('current_round')
-                        if round_data:
-                            round_data = json.loads(round_data)
-                            round_data['dice_result'] = most_common
-                            # Update all dice values (use current from DB)
-                            for i in range(1, 7):
-                                dice_val = getattr(round_obj, f'dice_{i}', None)
-                                if dice_val is not None:
-                                    round_data[f'dice_{i}'] = dice_val
-                            
-                            if should_finalize:
-                                round_data['status'] = 'RESULT'
-                            
-                            redis_client.set('current_round', json.dumps(round_data))
-                    except Exception:
-                        pass
-                
-                # ONLY calculate payouts and broadcast if finalizing
-                if should_finalize:
-                    # Calculate payouts based on dice values (frequency-based)
-                    from .views import calculate_payouts
-                    # Get complete dice values from round object
-                    complete_dice = [
-                        round_obj.dice_1, round_obj.dice_2, round_obj.dice_3,
-                        round_obj.dice_4, round_obj.dice_5, round_obj.dice_6
-                    ]
-                    # Only calculate if we have all 6 dice values
-                    if all(d is not None for d in complete_dice):
-                        calculate_payouts(round_obj, dice_result=most_common, dice_values=complete_dice)
+                # Normal mode - must have all 6 values
+                if len(dice_values_list) != 6:
+                    messages.error(request, 'All 6 dice values are required')
+                    return redirect('dice_control')
+            
+            # Apply updates to round object
+            for i, value in enumerate(dice_values_list):
+                setattr(round_obj, f'dice_{i+1}', value)
+            
+            # If we have at least some dice values, calculate result
+            if dice_values_list:
+                # Filter out None values for calculation
+                valid_dice = [d for d in dice_values_list if d is not None]
+                if valid_dice:
+                    from .utils import determine_winning_number
+                    most_common = determine_winning_number(valid_dice)
                     
-                    # Broadcast to WebSocket
-                    from channels.layers import get_channel_layer
-                    from asgiref.sync import async_to_sync
-                    channel_layer = get_channel_layer()
-                    if channel_layer:
+                    round_obj.dice_result = most_common
+                    
+                    # Only finalize the round (status, payouts, broadcast) if we are at or past result time
+                    should_finalize = timer >= dice_result_time
+                    
+                    if should_finalize:
+                        round_obj.status = 'RESULT'
+                        if not round_obj.result_time:
+                            round_obj.result_time = timezone.now()
+                    
+                    round_obj.save()
+                    
+                    # Create or update dice result record
+                    DiceResult.objects.update_or_create(
+                        round=round_obj,
+                        defaults={
+                            'result': most_common,
+                            'set_by': request.user
+                        }
+                    )
+                    
+                    # Update Redis with all current dice values
+                    if redis_client:
                         try:
-                            async_to_sync(channel_layer.group_send)(
-                                'game_room',
-                                {
-                                    'type': 'dice_result',
-                                    'result': most_common,
-                                    'dice_values': complete_dice if all(d is not None for d in complete_dice) else valid_dice,
-                                    'round_id': round_obj.round_id,
-                                }
-                            )
+                            round_data = redis_client.get('current_round')
+                            if round_data:
+                                round_data = json.loads(round_data)
+                                round_data['dice_result'] = most_common
+                                # Update all dice values (use current from DB)
+                                for i in range(1, 7):
+                                    dice_val = getattr(round_obj, f'dice_{i}', None)
+                                    if dice_val is not None:
+                                        round_data[f'dice_{i}'] = dice_val
+                                
+                                if should_finalize:
+                                    round_data['status'] = 'RESULT'
+                                
+                                redis_client.set('current_round', json.dumps(round_data))
                         except Exception:
                             pass
-                
-                mode_text = " (Pre-set)" if not should_finalize else ""
-                
-                updated_text = ", ".join([f"D{i+1}:{v}" for i, v in enumerate(dice_values_list)])
-                messages.success(request, f'Dice values updated{mode_text}: {updated_text} | Result: {most_common}')
+                    
+                    # ONLY calculate payouts and broadcast if finalizing
+                    if should_finalize:
+                        # Calculate payouts based on dice values (frequency-based)
+                        from .views import calculate_payouts
+                        # Get complete dice values from round object
+                        complete_dice = [
+                            round_obj.dice_1, round_obj.dice_2, round_obj.dice_3,
+                            round_obj.dice_4, round_obj.dice_5, round_obj.dice_6
+                        ]
+                        # Only calculate if we have all 6 dice values
+                        if all(d is not None for d in complete_dice):
+                            calculate_payouts(round_obj, dice_result=most_common, dice_values=complete_dice)
+                        
+                        # Broadcast to WebSocket
+                        from channels.layers import get_channel_layer
+                        from asgiref.sync import async_to_sync
+                        channel_layer = get_channel_layer()
+                        if channel_layer:
+                            try:
+                                async_to_sync(channel_layer.group_send)(
+                                    'game_room',
+                                    {
+                                        'type': 'dice_result',
+                                        'result': most_common,
+                                        'dice_values': complete_dice if all(d is not None for d in complete_dice) else valid_dice,
+                                        'round_id': round_obj.round_id,
+                                    }
+                                )
+                            except Exception:
+                                pass
+                    
+                    mode_text = " (Pre-set)" if not should_finalize else ""
+                    
+                    updated_text = ", ".join([f"D{i+1}:{v}" for i, v in enumerate(dice_values_list)])
+                    messages.success(request, f'Dice values updated{mode_text}: {updated_text} | Result: {most_common}')
+                else:
+                    messages.error(request, 'At least one valid dice value is required')
             else:
-                messages.error(request, 'At least one valid dice value is required')
-        else:
-            messages.error(request, 'No dice values provided')
+                messages.error(request, 'No dice values provided')
+
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            messages.error(request, f'Error setting dice values: {str(e)}')
+            return redirect('dice_control')
     
     return redirect('dice_control')
 
