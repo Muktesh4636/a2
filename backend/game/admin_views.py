@@ -443,23 +443,24 @@ def set_individual_dice_view(request):
     All dice values must be provided and time restrictions are enforced
     """
     if request.method == 'POST':
-        # Get current round state using helper
-        from .utils import get_current_round_state, get_game_setting
-        round_obj, timer, status, _ = get_current_round_state(redis_client)
-
-        # Get dice result time (needed for restriction check and finalization logic)
-        dice_result_time = get_game_setting('DICE_RESULT_TIME', 51)
-
-        # Check timer restriction
-        if timer >= dice_result_time:
-                messages.error(request, f'Cannot set dice values after {dice_result_time} seconds. Use Manual Adjust mode to override.')
-                return redirect('dice_control')
-        
-        if not round_obj:
-            messages.error(request, 'No active round')
-            return redirect('dice_control')
-        
         try:
+            # Get current round state using helper
+            from .utils import get_current_round_state, get_game_setting
+            # Use the module-level redis_client that is defined at the top of the file
+            round_obj, timer, status, _ = get_current_round_state(redis_client)
+
+            # Get dice result time (needed for restriction check and finalization logic)
+            dice_result_time = get_game_setting('DICE_RESULT_TIME', 51)
+
+            # Check timer restriction
+            if timer >= dice_result_time:
+                    messages.error(request, f'Cannot set dice values after {dice_result_time} seconds. Use Manual Adjust mode to override.')
+                    return redirect('dice_control')
+            
+            if not round_obj:
+                messages.error(request, 'No active round')
+                return redirect('dice_control')
+            
             # Collect dice values (all dice required)
             dice_values_list = []  # For calculating result
 
