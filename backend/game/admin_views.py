@@ -282,83 +282,49 @@ def set_dice_result_view(request):
                         round_obj = GameRound.objects.order_by('-start_time').first()
                         if round_obj and round_obj.start_time:
                             elapsed = (timezone.now() - round_obj.start_time).total_seconds()
-                            timer = int(elapsed) % round_obj.round_end_seconds
+    """Admin view to set dice result (1-6)"""
+    if request.method == 'POST':
+        try:
+            # Get current round state using helper
+            from .utils import get_current_round_state, get_game_setting
+            round_obj, timer, status, _ = get_current_round_state(redis_client)
 
-                    # Check if timer is within allowed window (use round-specific timing)
-                    dice_result_time = round_obj.dice_result_seconds if round_obj else get_game_setting('DICE_RESULT_TIME', 40)
-                    if timer >= dice_result_time:
-                        messages.error(request, f'Cannot set dice result after {dice_result_time} seconds.')
-                        referer = request.META.get('HTTP_REFERER', '')
-                        if 'dice-control' in referer:
-                            return redirect('dice_control')
-                        return redirect('admin_dashboard')
-                    
-                    if round_obj:
-                        # Set all 6 dice to the same value (legacy method)
-                        round_obj.dice_1 = result
-                        round_obj.dice_2 = result
-                        round_obj.dice_3 = result
-                        round_obj.dice_4 = result
-                        round_obj.dice_5 = result
-                        round_obj.dice_6 = result
-                        # Store as string for compatibility with multiple winners
-                        round_obj.dice_result = str(result)
-                        round_obj.status = 'RESULT'
+            # Get dice result time (needed for restriction check and finalization logic)
+            dice_result_time = get_game_setting('DICE_RESULT_TIME', 51)
+            
+            # Check timer: Cannot set result after dice_result_time (51s)
+            if timer >= dice_result_time:
+                messages.error(request, f'Cannot set dice result after {dice_result_time} seconds. Use Manual Adjust mode to override.')
+                return redirect('dice_control')
+
+            if not round_obj:
+                messages.error(request, 'No active round')
+                return redirect('dice_control')
+            
+            dice_result = request.POST.get('result')
+            if dice_result:
+                try:
+                    result_value = int(dice_result)
+                    if not (1 <= result_value <= 6):
+                        messages.error(request, 'Dice result must be between 1 and 6')
+                        return redirect('dice_control')
+                except ValueError:
+                    messages.error(request, 'Invalid dice result value')
+                    return redirect('dice_control')
+
+                # Set result on round object
+                round_obj.dice_result = str(result_value)
+                # For compatibility, set all dice to this value (simplified legacy behavior)
+                for i in range(1, 7):
+                    setattr(round_obj, f'dice_{i}', result_value)
+                
+                # Only finalize the round (status, payouts, broadcast) if we are at or past result time
+                should_finalize = timer >= dice_result_time
+                
+                if should_finalize:
+                    round_obj.status = 'RESULT'
+                    if not round_obj.result_time:
                         round_obj.result_time = timezone.now()
-                        round_obj.save()
-                        
-                        # Create dice result record
-                        DiceResult.objects.update_or_create(
-                            round=round_obj,
-                            defaults={
-                                'result': str(result),
-                                'set_by': request.user
-                            }
-                        )
-                        
-                        # Update Redis
-                        if redis_client:
-                            try:
-                                round_data = redis_client.get('current_round')
-                                if round_data:
-                                    round_data = json.loads(round_data)
-                                    round_data['dice_result'] = str(result)
-                                    round_data['status'] = 'RESULT'
-                                    redis_client.set('current_round', json.dumps(round_data))
-                            except Exception:
-                                pass
-                        
-                        # Calculate payouts - all dice are same value
-                        dice_values = [result, result, result, result, result, result]
-                        from .views import calculate_payouts
-                        calculate_payouts(round_obj, dice_result=result, dice_values=dice_values)
-                        
-                        # Broadcast to WebSocket
-                        from channels.layers import get_channel_layer
-                        from asgiref.sync import async_to_sync
-                        channel_layer = get_channel_layer()
-                        if channel_layer:
-                            try:
-                                async_to_sync(channel_layer.group_send)(
-                                    'game_room',
-                                    {
-                                        'type': 'dice_result',
-                                        'result': result,
-                                        'round_id': round_obj.round_id,
-                                    }
-                                )
-                            except Exception:
-                                pass
-                        
-                        messages.success(request, f'Dice result set to {result}')
-                    else:
-                        messages.error(request, 'No active round')
-                else:
-                    messages.error(request, 'Invalid dice result (1-6)')
-            except ValueError:
-                messages.error(request, 'Invalid dice result')
-            except Exception as e:
-                messages.error(request, f'Error: {str(e)}')
     
     referer = request.META.get('HTTP_REFERER', '')
     if 'dice-control' in referer:
@@ -447,8 +413,15 @@ def set_individual_dice_view(request):
         try:
             # Get current round state using helper
             from .utils import get_current_round_state, get_game_setting
-            # Use the module-level redis_client that is defined at the top of the file
-            round_obj, timer, status, _ = get_current_round_state(redis_client)
+            
+            # Enforce local fallback for redis_client if global is missing/None
+            local_redis = None
+            try:
+                 local_redis = redis_client
+            except NameError:
+                 pass
+            
+            round_obj, timer, status, _ = get_current_round_state(local_redis)
 
             # Get dice result time (needed for restriction check and finalization logic)
             dice_result_time = get_game_setting('DICE_RESULT_TIME', 51)
@@ -640,7 +613,7 @@ def dice_control(request):
         'dice_result_time': dice_result_time,
         'round_end_time': round_end_time,
         'page': 'dice-control',
-        'debug_version': 'v2', # Debug flag to verify deployment
+        'debug_version': 'v3', # Debug flag to verify deployment v3
     })
     
     return render(request, 'admin/dice_control.html', context)
