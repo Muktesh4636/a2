@@ -203,8 +203,16 @@ public class UnityPlayerGameActivity extends GameActivity
         String _token = appPrefs.getString("auth_token", null);
         String _refreshToken = appPrefs.getString("refresh_token", null);
         String _username = appPrefs.getString("username", null);
-        String _userId = appPrefs.getString("user_id", null);
         String _password = appPrefs.getString("user_pass", null);
+        String _userId = null;
+
+        // Safely get user_id which might be stored as Int by SessionManager
+        if (appPrefs.contains("user_id")) {
+            Object userIdObj = appPrefs.getAll().get("user_id");
+            if (userIdObj != null) {
+                _userId = String.valueOf(userIdObj);
+            }
+        }
 
         // Fallback to Intent if Prefs are empty
         Intent intent = getIntent();

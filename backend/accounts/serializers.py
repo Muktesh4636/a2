@@ -6,6 +6,7 @@ from .models import User, Wallet, Transaction, DepositRequest, WithdrawRequest, 
 
 
 class UserRegistrationSerializer(serializers.ModelSerializer):
+    email = serializers.EmailField(required=False, allow_blank=True)
     password = serializers.CharField(
         write_only=True, 
         required=True, 

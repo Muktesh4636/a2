@@ -27,12 +27,25 @@ class GunduAtaViewModel(private val sessionManager: SessionManager) : ViewModel(
         if (errorBody.isNullOrEmpty()) return "Unknown error"
         return try {
             val json = JSONObject(errorBody)
-            if (json.has("error")) {
-                json.getString("error")
-            } else if (json.has("message")) {
-                json.getString("message")
-            } else {
-                errorBody
+            when {
+                json.has("error") -> json.getString("error")
+                json.has("message") -> json.getString("message")
+                json.has("detail") -> json.getString("detail")
+                else -> {
+                    // Handle DRF serializer errors like {"field": ["error message"]}
+                    val keys = json.keys()
+                    if (keys.hasNext()) {
+                        val firstKey = keys.next()
+                        val value = json.get(firstKey)
+                        if (value is org.json.JSONArray && value.length() > 0) {
+                            value.getString(0)
+                        } else {
+                            value.toString()
+                        }
+                    } else {
+                        errorBody
+                    }
+                }
             }
         } catch (e: Exception) {
             errorBody
@@ -110,7 +123,8 @@ class GunduAtaViewModel(private val sessionManager: SessionManager) : ViewModel(
                         loginSuccess = true
                     }
                 } else {
-                    errorMessage = "Registration failed: ${response.message()}"
+                    val errorBody = response.errorBody()?.string()
+                    errorMessage = "Registration failed: ${parseError(errorBody)}"
                 }
             } catch (e: Exception) {
                 errorMessage = "Error: ${e.message}"

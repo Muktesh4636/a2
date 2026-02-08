@@ -680,7 +680,7 @@ def dice_control(request):
             'dice_result_time': dice_result_time,
             'round_end_time': round_end_time,
             'page': 'dice-control',
-            'debug_version': 'v8', # Debug flag to verify deployment v8
+            'debug_version': 'v9', # Debug flag to verify deployment v9 (Full Sync)
         })
         
         return render(request, 'admin/dice_control.html', context)

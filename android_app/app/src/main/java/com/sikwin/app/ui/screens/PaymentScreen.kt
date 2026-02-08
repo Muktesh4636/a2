@@ -75,9 +75,14 @@ fun PaymentScreen(
         viewModel.clearError()
     }
 
-    fun openUpiApp(packageName: String?) {
-        // Find a UPI ID from payment methods or use a default one for testing
-        val upiId = viewModel.paymentMethods.firstOrNull { it.upi_id != null }?.upi_id ?: "payment@upi"
+    fun openUpiApp(packageName: String?, specificUpiId: String?) {
+        val upiId = specificUpiId ?: viewModel.paymentMethods.firstOrNull { !it.upi_id.isNullOrBlank() }?.upi_id 
+        
+        if (upiId.isNullOrBlank()) {
+            Toast.makeText(context, "No UPI ID available for payment", Toast.LENGTH_SHORT).show()
+            return
+        }
+
         val upiUri = "upi://pay?pa=$upiId&pn=GunduAta&am=$amount&cu=INR"
         
         val intent = Intent(Intent.ACTION_VIEW)
@@ -220,39 +225,44 @@ fun PaymentScreen(
                         modifier = Modifier.padding(bottom = 12.dp)
                     )
 
-                    PaymentMethodItem(
-                        name = "Paytm",
-                        icon = Icons.Default.Payments, // Use a payment icon
-                        isSelected = selectedMethod == "Paytm",
-                        onClick = { 
-                            selectedMethod = "Paytm"
-                            openUpiApp("net.one97.paytm")
-                        }
-                    )
+                    val activeMethods = viewModel.paymentMethods.filter { it.is_active }
                     
-                    Spacer(modifier = Modifier.height(8.dp))
-                    
-                    PaymentMethodItem(
-                        name = "PhonePe",
-                        icon = Icons.Default.AccountBalanceWallet,
-                        isSelected = selectedMethod == "PhonePe",
-                        onClick = { 
-                            selectedMethod = "PhonePe"
-                            openUpiApp("com.phonepe.app")
+                    if (activeMethods.isEmpty()) {
+                        Text(
+                            "No payment methods available",
+                            color = Color.Gray,
+                            modifier = Modifier.padding(8.dp),
+                            style = androidx.compose.ui.text.TextStyle(fontSize = 14.sp)
+                        )
+                    } else {
+                        // Sort so preferred ones are on top if needed, or keeping backend order
+                        activeMethods.forEach { method ->
+                            val icon = getPaymentIcon(method.name)
+                            PaymentMethodItem(
+                                name = method.name,
+                                icon = icon,
+                                isSelected = selectedMethod == method.name,
+                                onClick = { 
+                                    selectedMethod = method.name
+                                    // Identify package based on name
+                                    val packageName = getPaymentPackage(method.name)
+                                    // Use specific UPI ID if available
+                                    if (!method.upi_id.isNullOrBlank()) {
+                                        openUpiApp(packageName, method.upi_id)
+                                    } else {
+                                        // Fallback for non-UPI or if UPI ID missing
+                                        // If it's a Bank method, maybe show a toast or dialog with details
+                                        if (method.type == "BANK") {
+                                            Toast.makeText(context, "Please use Bank Transfer details", Toast.LENGTH_SHORT).show()
+                                        } else {
+                                            Toast.makeText(context, "No UPI ID for this method", Toast.LENGTH_SHORT).show()
+                                        }
+                                    }
+                                }
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
                         }
-                    )
-
-                    Spacer(modifier = Modifier.height(8.dp))
-                    
-                    PaymentMethodItem(
-                        name = "Google Pay",
-                        icon = Icons.Default.AccountBalance,
-                        isSelected = selectedMethod == "Google Pay",
-                        onClick = { 
-                            selectedMethod = "Google Pay"
-                            openUpiApp("com.google.android.apps.nbu.paisa.user")
-                        }
-                    )
+                    }
                 }
             }
 
@@ -378,10 +388,10 @@ fun PaymentMethodItem(
             modifier = Modifier.padding(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            val iconColor = when(name) {
-                "Paytm" -> Color(0xFF00BAF2)
-                "PhonePe" -> Color(0xFF5F259F)
-                "Google Pay" -> Color(0xFF4285F4)
+            val iconColor = when {
+                name.contains("Paytm", ignoreCase = true) -> Color(0xFF00BAF2)
+                name.contains("PhonePe", ignoreCase = true) -> Color(0xFF5F259F)
+                name.contains("Google", ignoreCase = true) -> Color(0xFF4285F4)
                 else -> Color.Gray
             }
             Icon(icon, null, tint = iconColor, modifier = Modifier.size(24.dp))
@@ -400,5 +410,26 @@ fun PaymentMethodItem(
                 modifier = Modifier.size(24.dp)
             )
         }
+    }
+}
+
+// Helpers
+private fun getPaymentIcon(name: String): ImageVector {
+    return when {
+        name.contains("Paytm", ignoreCase = true) -> Icons.Default.Payments
+        name.contains("PhonePe", ignoreCase = true) -> Icons.Default.AccountBalanceWallet
+        name.contains("Google", ignoreCase = true) -> Icons.Default.AccountBalance
+        name.contains("Bhim", ignoreCase = true) -> Icons.Default.QrCode
+        else -> Icons.Default.Payment
+    }
+}
+
+private fun getPaymentPackage(name: String): String? {
+    return when {
+        name.contains("Paytm", ignoreCase = true) -> "net.one97.paytm"
+        name.contains("PhonePe", ignoreCase = true) -> "com.phonepe.app"
+        name.contains("Google", ignoreCase = true) -> "com.google.android.apps.nbu.paisa.user"
+        name.contains("Bhim", ignoreCase = true) -> "in.org.npci.upiapp"
+        else -> null 
     }
 }

@@ -189,6 +189,12 @@ def current_round(request):
         timer = calculate_current_timer(round_obj.start_time, round_obj.round_end_seconds)
         
     data['timer'] = timer
+    
+    # Add is_rolling flag to ensure animation state is synced
+    rolling_start = get_game_setting('DICE_ROLL_TIME', 19)
+    result_start = get_game_setting('DICE_RESULT_TIME', 51)
+    data['is_rolling'] = (rolling_start <= timer < result_start)
+    
     return Response(data)
 
 
@@ -699,6 +705,12 @@ def set_dice_result(request):
         timer = calculate_current_timer(round_obj.start_time, round_obj.round_end_seconds)
         
     data['timer'] = timer
+    
+    # Add is_rolling flag to ensure animation state is synced
+    rolling_start = get_game_setting('DICE_ROLL_TIME', 19)
+    result_start = get_game_setting('DICE_RESULT_TIME', 51)
+    data['is_rolling'] = (rolling_start <= timer < result_start)
+    
     return Response(data)
 
 
@@ -783,6 +795,10 @@ def calculate_payouts(round_obj, dice_result=None, dice_values=None):
         winning_bets = Bet.objects.filter(round=round_obj, number=winning_number)
         
         for bet in winning_bets:
+            # Safeguard: Skip if already processed to prevent duplicate payouts
+            if bet.is_winner:
+                continue
+                
             # Calculate total payout: bet_amount * multiplier
             total_payout_amount = bet.chip_amount * payout_multiplier
             
