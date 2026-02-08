@@ -442,6 +442,7 @@ def set_individual_dice_view(request):
     """Admin view to set individual dice values (1-6 for each of 6 dice)
     All dice values must be provided and time restrictions are enforced
     """
+    print("DEBUG: Entering set_individual_dice_view") # Debug log
     if request.method == 'POST':
         try:
             # Get current round state using helper
@@ -639,6 +640,7 @@ def dice_control(request):
         'dice_result_time': dice_result_time,
         'round_end_time': round_end_time,
         'page': 'dice-control',
+        'debug_version': 'v2', # Debug flag to verify deployment
     })
     
     return render(request, 'admin/dice_control.html', context)
