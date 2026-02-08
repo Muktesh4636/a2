@@ -485,8 +485,8 @@ def set_individual_dice_view(request):
                 return redirect('dice_control')
         
         # Apply updates to round object
-        for dice_key, value in dice_updates.items():
-            setattr(round_obj, dice_key, value)
+        for i, value in enumerate(dice_values_list):
+            setattr(round_obj, f'dice_{i+1}', value)
         
         # If we have at least some dice values, calculate result
         if dice_values_list:
@@ -570,7 +570,7 @@ def set_individual_dice_view(request):
                 
                 mode_text = " (Pre-set)" if not should_finalize else ""
                 
-                updated_text = ", ".join([f"D{i+1}:{v}" for i, v in enumerate(dice_updates.values())])
+                updated_text = ", ".join([f"D{i+1}:{v}" for i, v in enumerate(dice_values_list)])
                 messages.success(request, f'Dice values updated{mode_text}: {updated_text} | Result: {most_common}')
             else:
                 messages.error(request, 'At least one valid dice value is required')
