@@ -612,59 +612,75 @@ def set_individual_dice_view(request):
 @admin_required
 def dice_control(request):
     """Dice control page"""
-    if not has_menu_permission(request.user, 'dice_control'):
-        messages.error(request, 'You do not have permission to access dice control.')
-        return redirect('admin_dashboard')
+    try:
+        if not has_menu_permission(request.user, 'dice_control'):
+            messages.error(request, 'You do not have permission to access dice control.')
+            return redirect('admin_dashboard')
+            
+        # Get current round state using helper
+        from .utils import get_current_round_state
         
-    # Get current round state using helper
-    from .utils import get_current_round_state
-    current_round, timer, status, _ = get_current_round_state(redis_client)
-    
-    # Get stats for current round
-    current_round_total_amount = 0
-    current_round_total_bets = 0
-    bets_by_number_list = []
-    
-    if current_round:
-        current_round_bets = Bet.objects.filter(round=current_round)
-        current_round_total_bets = current_round_bets.count()
-        current_round_total_amount = current_round_bets.aggregate(Sum('chip_amount'))['chip_amount__sum'] or 0
+        # Enforce local fallback for redis_client if global is missing/None
+        local_redis = None
+        try:
+                local_redis = redis_client
+        except NameError:
+                pass
+                
+        current_round, timer, status, _ = get_current_round_state(local_redis)
         
-        # Calculate bets by number
-        for number in range(1, 7):
-            number_bets = current_round_bets.filter(number=number)
-            amount = number_bets.aggregate(Sum('chip_amount'))['chip_amount__sum'] or 0
-            count = number_bets.count()
-            bets_by_number_list.append({
-                'number': number,
-                'amount': amount,
-                'count': count
-            })
-    
-    # Get dice mode
-    dice_mode = get_dice_mode()
-    
-    # Get timing settings for current round
-    betting_close_time = current_round.betting_close_seconds if current_round else get_game_setting('BETTING_CLOSE_TIME', 30)
-    dice_result_time = current_round.dice_result_seconds if current_round else get_game_setting('DICE_RESULT_TIME', 51)
-    round_end_time = current_round.round_end_seconds if current_round else get_game_setting('ROUND_END_TIME', 80)
+        # Get stats for current round
+        current_round_total_amount = 0
+        current_round_total_bets = 0
+        bets_by_number_list = []
+        
+        if current_round:
+            current_round_bets = Bet.objects.filter(round=current_round)
+            current_round_total_bets = current_round_bets.count()
+            current_round_total_amount = current_round_bets.aggregate(Sum('chip_amount'))['chip_amount__sum'] or 0
+            
+            # Calculate bets by number
+            for number in range(1, 7):
+                number_bets = current_round_bets.filter(number=number)
+                amount = number_bets.aggregate(Sum('chip_amount'))['chip_amount__sum'] or 0
+                count = number_bets.count()
+                bets_by_number_list.append({
+                    'number': number,
+                    'amount': amount,
+                    'count': count
+                })
+        
+        # Get dice mode
+        dice_mode = get_dice_mode()
+        
+        # Get timing settings for current round
+        betting_close_time = current_round.betting_close_seconds if current_round else get_game_setting('BETTING_CLOSE_TIME', 30)
+        dice_result_time = current_round.dice_result_seconds if current_round else get_game_setting('DICE_RESULT_TIME', 51)
+        round_end_time = current_round.round_end_seconds if current_round else get_game_setting('ROUND_END_TIME', 80)
 
-    context = get_admin_context(request, {
-        'current_round': current_round,
-        'timer': timer,
-        'status': status,
-        'dice_mode': dice_mode,
-        'current_round_total_bets': current_round_total_bets,
-        'current_round_total_amount': current_round_total_amount,
-        'bets_by_number_list': bets_by_number_list,
-        'betting_close_time': betting_close_time,
-        'dice_result_time': dice_result_time,
-        'round_end_time': round_end_time,
-        'page': 'dice-control',
-        'debug_version': 'v4', # Debug flag to verify deployment v4
-    })
-    
-    return render(request, 'admin/dice_control.html', context)
+        context = get_admin_context(request, {
+            'current_round': current_round,
+            'timer': timer,
+            'status': status,
+            'dice_mode': dice_mode,
+            'current_round_total_bets': current_round_total_bets,
+            'current_round_total_amount': current_round_total_amount,
+            'bets_by_number_list': bets_by_number_list,
+            'betting_close_time': betting_close_time,
+            'dice_result_time': dice_result_time,
+            'round_end_time': round_end_time,
+            'page': 'dice-control',
+            'debug_version': 'v5', # Debug flag to verify deployment v5
+        })
+        
+        return render(request, 'admin/dice_control.html', context)
+
+    except Exception as e:
+        import traceback
+        error_trace = traceback.format_exc()
+        print(f"ERROR in dice_control view: {error_trace}")
+        from django.http import HttpResponse
+        return HttpResponse(f"<html><body><h1>Error loading Dice Control Page</h1><pre>{error_trace}</pre><br><a href='/game-admin/dashboard/'>Back to Dashboard</a></body></html>")
 
 @admin_required
 def recent_rounds(request):
