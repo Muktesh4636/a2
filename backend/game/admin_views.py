@@ -368,9 +368,10 @@ def set_dice_result_view(request):
 
         except Exception as e:
             import traceback
-            traceback.print_exc()
-            messages.error(request, f'Error setting dice result: {str(e)}')
-            return redirect('dice_control')
+            error_trace = traceback.format_exc()
+            print(f"ERROR in set_dice_result_view: {error_trace}")
+            from django.http import HttpResponse
+            return HttpResponse(f"<html><body><h1>Error setting dice result</h1><pre>{error_trace}</pre><br><a href='/game-admin/dice-control/'>Back to Dice Control</a></body></html>")
             
     referer = request.META.get('HTTP_REFERER', '')
     if 'dice-control' in referer:
@@ -601,9 +602,10 @@ def set_individual_dice_view(request):
 
         except Exception as e:
             import traceback
-            traceback.print_exc()
-            messages.error(request, f'Error setting dice values: {str(e)}')
-            return redirect('dice_control')
+            error_trace = traceback.format_exc()
+            print(f"ERROR in set_individual_dice_view: {error_trace}")
+            from django.http import HttpResponse
+            return HttpResponse(f"<html><body><h1>Error setting dice values</h1><pre>{error_trace}</pre><br><a href='/game-admin/dice-control/'>Back to Dice Control</a></body></html>")
     
     return redirect('dice_control')
 
@@ -659,7 +661,7 @@ def dice_control(request):
         'dice_result_time': dice_result_time,
         'round_end_time': round_end_time,
         'page': 'dice-control',
-        'debug_version': 'v3', # Debug flag to verify deployment v3
+        'debug_version': 'v4', # Debug flag to verify deployment v4
     })
     
     return render(request, 'admin/dice_control.html', context)
