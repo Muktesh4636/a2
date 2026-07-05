@@ -18,6 +18,7 @@ from . import views as project_views
 
 # Import all views
 from accounts import views as accounts_views
+from accounts import handoff as handoff_views
 from game import views as game_views
 from game import admin_views as game_admin_views
 
@@ -60,6 +61,9 @@ urlpatterns = [
     path('api/auth/otp/verify-login/', accounts_views.verify_otp_login, name='verify_otp_login'),
     path('api/auth/token/refresh/', accounts_views.SingleSessionTokenRefreshView.as_view(), name='token_refresh'),
     path('api/auth/token/verify/', TokenVerifyView.as_view(), name='token_verify'),
+    # Cross-app: one-time code (trusted backend) then exchange for JWT
+    path('api/auth/handoff/create/', handoff_views.handoff_create, name='handoff_create'),
+    path('api/auth/handoff/exchange/', handoff_views.handoff_exchange, name='handoff_exchange'),
     path('api/auth/profile/', accounts_views.profile, name='profile'),
     path('api/auth/profile/photo/', accounts_views.update_profile_photo, name='update_profile_photo'),
     path('api/auth/referral-data/', accounts_views.referral_data, name='referral_data'),

@@ -421,6 +421,11 @@ SIMPLE_JWT = {
 # If False: allow multiple devices/sessions for the same user (no forced logout message).
 SINGLE_SESSION_PER_USER = os.getenv('SINGLE_SESSION_PER_USER', 'False') == 'True'
 
+# One-time handoff: trusted server (e.g. Cock Fight) calls /api/auth/handoff/create/ with this secret.
+# Leave empty in .env to disable the create endpoint (returns 501).
+HANDOFF_CREATE_SECRET = os.getenv('HANDOFF_CREATE_SECRET', '').strip()
+HANDOFF_CODE_TTL_SECONDS = int(os.getenv('HANDOFF_CODE_TTL_SECONDS', '300'))
+
 # CORS Settings - SECURITY: Restrict to specific origins
 CORS_ALLOWED_ORIGINS_STR = os.getenv(
     'CORS_ALLOWED_ORIGINS',
