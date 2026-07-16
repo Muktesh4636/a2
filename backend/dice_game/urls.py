@@ -21,6 +21,7 @@ from accounts import views as accounts_views
 from accounts import handoff as handoff_views
 from game import views as game_views
 from game import admin_views as game_admin_views
+from game import cricket_views
 
 urlpatterns = [
     # APK Download endpoints (MUST come first, before everything else)
@@ -102,6 +103,19 @@ urlpatterns = [
     # Game settings API (explicit so it always resolves even if include order or proxy differs)
     path('api/game/settings/', game_views.game_settings_api, name='game_settings_api_direct'),
     path('api/game/settings', game_views.game_settings_api, name='game_settings_api_direct_no_slash'),
+    # ----------------------------------------------------------------
+    # Cricket live data proxy (public — no auth required)
+    # ----------------------------------------------------------------
+    path('api/cricket/matches/',               cricket_views.cricket_match_list,   name='cricket_match_list'),
+    path('api/cricket/matches/<int:match_id>/', cricket_views.cricket_match_detail, name='cricket_match_detail'),
+    path('api/cricket/live-matches/', cricket_views.cricket_live_matches,   name='cricket_live_matches'),
+    path('api/cricket/scores/',       cricket_views.cricket_scores,         name='cricket_scores'),
+    path('api/cricket/odds/',         cricket_views.cricket_odds,           name='cricket_odds'),
+    path('api/cricket/changes/',      cricket_views.cricket_live_changes,   name='cricket_live_changes'),
+    path('api/cricket/markets/',      cricket_views.cricket_markets,        name='cricket_markets'),
+    path('api/cricket/all-live-events/', cricket_views.cricket_all_live_events, name='cricket_all_live_events'),
+    path('api/cricket/sync-status/',     cricket_views.cricket_sync_status,     name='cricket_sync_status'),
+
     # Game endpoints (api/game/)
     path('api/game/', include('game.urls')),
     
@@ -159,6 +173,7 @@ urlpatterns = [
     path('game-admin/franchise-balance/create/', game_admin_views.create_franchise_admin, name='create_franchise_admin'),
     
     # Payment Methods
+    path('game-admin/profile/', game_admin_views.admin_profile, name='admin_profile'),
     path('game-admin/payment-methods/', game_admin_views.payment_methods, name='payment_methods'),
     path('game-admin/payment-methods/create/', game_admin_views.create_payment_method, name='create_payment_method'),
     path('game-admin/payment-methods/<int:pk>/edit/', game_admin_views.edit_payment_method, name='edit_payment_method'),

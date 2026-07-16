@@ -3962,3 +3962,40 @@ def toggle_payment_method(request, pk):
     status = "activated" if method.is_active else "deactivated"
     messages.success(request, f'Payment method "{method.name}" {status} successfully!')
     return redirect('payment_methods')
+
+
+@admin_required
+def admin_profile(request):
+    """Show and update the logged-in admin's profile."""
+    user = request.user
+    if is_super_admin(user):
+        role_label = 'Super Admin'
+    elif is_admin(user):
+        role_label = 'Admin'
+    else:
+        role_label = 'Worker'
+
+    if request.method == 'POST' and request.POST.get('action') == 'change_password':
+        if user.is_superuser:
+            messages.error(request, 'Super Admin password cannot be changed from this page.')
+        else:
+            new_password = request.POST.get('new_password', '').strip()
+            confirm = request.POST.get('new_password_confirm', '').strip()
+            if not new_password:
+                messages.error(request, 'Password cannot be empty.')
+            elif new_password != confirm:
+                messages.error(request, 'Passwords do not match.')
+            elif len(new_password) < 4:
+                messages.error(request, 'Password must be at least 4 characters.')
+            else:
+                user.set_password(new_password)
+                user.save()
+                messages.success(request, 'Password updated successfully. Please log in again.')
+                return redirect('admin_login')
+
+    return render(request, 'admin/profile.html', {
+        'page': 'profile',
+        'profile_user': user,
+        'role_label': role_label,
+        'admin_profile': get_admin_profile(user),
+    })
