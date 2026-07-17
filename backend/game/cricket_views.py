@@ -120,30 +120,40 @@ def _cache_set(key: str, value, ttl: int = REDIS_TTL):
 # Upstream fetch helpers
 # ---------------------------------------------------------------------------
 
-def _fetch(url: str, params: dict | None = None, timeout: int = 12):
-    """GET with error handling. Returns (json_data, None) or (None, Response)."""
-    try:
-        resp = requests.get(url, headers=_HEADERS, params=params, timeout=timeout)
-        resp.raise_for_status()
-        return resp.json(), None
-    except requests.exceptions.Timeout:
-        logger.warning("Cricket upstream timeout: %s", url)
-        return None, Response(
-            {"error": "upstream_timeout", "detail": "Data source timed out."},
-            status=status.HTTP_504_GATEWAY_TIMEOUT,
-        )
-    except requests.exceptions.HTTPError as exc:
-        logger.warning("Cricket upstream HTTP %s: %s", exc.response.status_code, url)
-        return None, Response(
-            {"error": "upstream_error", "detail": str(exc)},
-            status=status.HTTP_502_BAD_GATEWAY,
-        )
-    except Exception as exc:
-        logger.exception("Cricket upstream error: %s", exc)
-        return None, Response(
-            {"error": "proxy_error", "detail": str(exc)},
-            status=status.HTTP_502_BAD_GATEWAY,
-        )
+def _fetch(url: str, params: dict | None = None, timeout: int = 12, retries: int = 2):
+    """
+    GET with error handling and automatic retry on transient errors.
+    Returns (json_data, None) on success or (None, error_response) on failure.
+    Retries up to `retries` times on 5xx / network errors (not on 4xx).
+    """
+    import time as _time
+    last_err = None
+    for attempt in range(retries + 1):
+        try:
+            resp = requests.get(url, headers=_HEADERS, params=params, timeout=timeout)
+            resp.raise_for_status()
+            return resp.json(), None
+        except requests.exceptions.Timeout:
+            logger.warning("Cricket upstream timeout (attempt %d): %s", attempt + 1, url)
+            last_err = Response(
+                {"error": "upstream_timeout", "detail": "Data source timed out."},
+                status=status.HTTP_504_GATEWAY_TIMEOUT,
+            )
+        except requests.exceptions.HTTPError as exc:
+            code = exc.response.status_code if exc.response is not None else 0
+            logger.warning("Cricket upstream HTTP %s (attempt %d): %s", code, attempt + 1, url)
+            last_err = exc.response  # store for caller
+            if code < 500:
+                # 4xx errors won't improve with retry — fail fast
+                return None, last_err
+        except Exception as exc:
+            logger.exception("Cricket upstream error (attempt %d): %s", attempt + 1, exc)
+            last_err = exc
+
+        if attempt < retries:
+            _time.sleep(0.5 * (attempt + 1))   # 0.5s, then 1.0s backoff
+
+    return None, last_err
 
 
 # ---------------------------------------------------------------------------
@@ -691,56 +701,47 @@ def cricket_live_changes(request):
     """
     GET /api/cricket/changes/?bn=<batch_number>
 
-    Real-time price/score delta polling — proxied directly (not cached).
-    Use this to get only what changed since your last poll.
+    Returns the latest cached cricket data + current batch number.
+    The background worker handles Dafabet polling internally — this endpoint
+    never hits Dafabet directly, so it never returns 502 due to upstream errors.
 
-    How to use:
-      1. First call: omit bn (defaults to -1) → get full state + next_bn
-      2. Store next_bn from response
-      3. Poll every 2-5 s: GET /api/cricket/changes/?bn=<next_bn>
-      4. Apply price changes to your local state
-
-    change fields:
-      outcome_id, event_id, market_id — which outcome changed
-      price_decimal, price_formatted  — new price
-      hidden                          — whether market is now hidden
+    Clients should:
+      1. Call GET /api/cricket/matches/ for the full initial state
+      2. Poll this endpoint every 2-5 s for price changes
+      3. Use next_bn from the response in the next poll
+      4. Apply price changes to local state; full refresh comes from /matches/
     """
-    bn = request.GET.get("bn", "-1")
+    last_sync = _cache_get(REDIS_KEY_SYNC_TS)
+    next_bn   = _cache_get(REDIS_KEY_SYNC_BN)
+    matches   = _cache_get(REDIS_KEY_MATCHES)
 
-    data, err = _fetch(f"{_BASE}/live/changes", {
-        "eventPathId": _CRICKET_PATH_ID,
-        "marketTypeIds": _CRICKET_MARKET_TYPE_IDS,
-        "periodTypeIds": _CRICKET_PERIOD_TYPE_IDS,
-        "includeOpponentMarkets": "true",
-        "bn": bn,
-        "v": "2",
-    })
-    if err:
-        return err
+    if matches is None:
+        fetch_and_cache_cricket_data()
+        matches   = _cache_get(REDIS_KEY_MATCHES) or []
+        next_bn   = _cache_get(REDIS_KEY_SYNC_BN)
+        last_sync = _cache_get(REDIS_KEY_SYNC_TS)
 
-    items = data if isinstance(data, list) else []
-    next_bn = next((i.get("bn") for i in items if i.get("t") == "b"), None)
-
-    # Store last known bn for the worker to pick up
-    if next_bn:
-        _cache_set(REDIS_KEY_SYNC_BN, next_bn, 3600)
-
-    changes = [
-        {
-            "outcome_id": c.get("id"),
-            "event_id": c.get("eid"),
-            "market_id": c.get("mid"),
-            "price_decimal": ((c.get("clp") or {}).get("cp") or {}).get("d"),
-            "price_formatted": ((c.get("clp") or {}).get("cp") or {}).get("f"),
-            "hidden": c.get("h", False),
-        }
-        for c in items if c.get("t") == "p"
-    ]
+    # Build a flat list of all current outcome prices so clients can diff locally
+    changes = []
+    for m in (matches or []):
+        eid = m.get("id")
+        for market in (m.get("odds") or {}).get("markets") or []:
+            mid = market.get("id")
+            for outcome in market.get("outcomes") or []:
+                changes.append({
+                    "outcome_id":      outcome.get("id"),
+                    "event_id":        eid,
+                    "market_id":       mid,
+                    "price_decimal":   outcome.get("price_decimal"),
+                    "price_formatted": outcome.get("price_formatted"),
+                    "hidden":          outcome.get("hidden", False),
+                })
 
     return Response({
-        "next_bn": next_bn,
+        "next_bn":      next_bn,
+        "last_sync":    last_sync,
         "change_count": len(changes),
-        "changes": changes,
+        "changes":      changes,
     })
 
 
@@ -764,8 +765,11 @@ def cricket_markets(request):
         )
 
     data, err = _fetch(f"{_BASE}/markets/{ids}", {"includePrices": "true", "l": "en-GB"})
-    if err:
-        return err
+    if err or data is None:
+        return Response(
+            {"error": "upstream_unavailable", "detail": "Market data temporarily unavailable. Retry in a moment."},
+            status=status.HTTP_503_SERVICE_UNAVAILABLE,
+        )
 
     markets_raw = data if isinstance(data, list) else []
     simplified = []
@@ -815,8 +819,11 @@ def cricket_all_live_events(request):
         "onlySports": "true",
         "l": "en-GB",
     })
-    if err:
-        return err
+    if err or data is None:
+        return Response(
+            {"error": "upstream_unavailable", "detail": "Live event data temporarily unavailable. Retry in a moment."},
+            status=status.HTTP_503_SERVICE_UNAVAILABLE,
+        )
 
     sports = data.get("sports", []) if isinstance(data, dict) else []
     cricket = next((s for s in sports if s.get("id") == int(_CRICKET_PATH_ID)), None)
