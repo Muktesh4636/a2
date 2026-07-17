@@ -153,8 +153,14 @@ class Command(BaseCommand):
                     elapsed = time.time() - t0
 
                     if err or data is None:
+                        # 502 from Dafabet usually means stale batch number — reset so
+                        # next delta starts from scratch (avoids permanent delta failure)
+                        err_str = str(err) if err else ""
+                        if "502" in err_str or "400" in err_str:
+                            last_bn = "-1"
+                            _cache_set(REDIS_KEY_SYNC_BN, "-1", 3600)
                         self.stdout.write(self.style.WARNING(
-                            f"[#{iteration}] DELTA failed — {elapsed:.2f}s"
+                            f"[#{iteration}] DELTA failed ({err_str[:40]}) — {elapsed:.2f}s"
                         ))
                     else:
                         items = data if isinstance(data, list) else []
