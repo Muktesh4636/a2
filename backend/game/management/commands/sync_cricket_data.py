@@ -75,6 +75,7 @@ class Command(BaseCommand):
 
         from game.cricket_views import (
             fetch_and_cache_cricket_data,
+            fetch_and_cache_upcoming_matches,
             _fetch, _cache_get, _cache_set,
             REDIS_KEY_MATCHES, REDIS_KEY_SCORES, REDIS_KEY_ODDS,
             REDIS_KEY_SYNC_TS, REDIS_KEY_SYNC_BN,
@@ -83,14 +84,31 @@ class Command(BaseCommand):
             _BASE,
         )
 
-        last_full_time = 0   # force full refresh on first iteration
-        last_bn        = "-1"
-        iteration      = 0
+        UPCOMING_INTERVAL = 120   # refresh upcoming matches every 2 minutes
+
+        last_full_time     = 0   # force full refresh on first iteration
+        last_upcoming_time = 0   # force upcoming refresh on first iteration
+        last_bn            = "-1"
+        iteration          = 0
 
         while self._running:
             iteration += 1
             t0   = time.time()
             now  = t0
+
+            # ----------------------------------------------------------------
+            # UPCOMING REFRESH — every 2 minutes
+            # ----------------------------------------------------------------
+            if now - last_upcoming_time >= UPCOMING_INTERVAL:
+                try:
+                    ures = fetch_and_cache_upcoming_matches()
+                    if ures.get("ok"):
+                        last_upcoming_time = now
+                        self.stdout.write(self.style.SUCCESS(
+                            f"[#{iteration}] UPCOMING — {ures['matches']} matches"
+                        ))
+                except Exception as exc:
+                    logger.exception("Upcoming sync error: %s", exc)
 
             # ----------------------------------------------------------------
             # FULL REFRESH — every full_interval seconds

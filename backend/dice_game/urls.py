@@ -106,8 +106,9 @@ urlpatterns = [
     # ----------------------------------------------------------------
     # Cricket live data proxy (public — no auth required)
     # ----------------------------------------------------------------
-    path('api/cricket/matches/',               cricket_views.cricket_match_list,   name='cricket_match_list'),
+    path('api/cricket/matches/',               cricket_views.cricket_match_list,     name='cricket_match_list'),
     path('api/cricket/matches/<int:match_id>/', cricket_views.cricket_match_detail, name='cricket_match_detail'),
+    path('api/cricket/upcoming/',              cricket_views.cricket_upcoming_matches, name='cricket_upcoming_matches'),
     path('api/cricket/live-matches/', cricket_views.cricket_live_matches,   name='cricket_live_matches'),
     path('api/cricket/scores/',       cricket_views.cricket_scores,         name='cricket_scores'),
     path('api/cricket/odds/',         cricket_views.cricket_odds,           name='cricket_odds'),

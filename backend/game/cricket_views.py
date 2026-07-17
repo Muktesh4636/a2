@@ -60,6 +60,7 @@ _HEADERS = {
 
 _CRICKET_MARKET_TYPE_IDS = (
     "22,24,25,76,622,130069,130079,130081,"
+    "130080,130082,"   # over odd/even + per-delivery markets (gives ball-level precision)
     "145136,145142,145145,10112523,"
     "20670747,20670748,40671455,40671613"
 )
@@ -67,11 +68,12 @@ _CRICKET_PERIOD_TYPE_IDS = "257,258,100258"
 _CRICKET_PATH_ID = "215"
 
 # Redis key names
-REDIS_KEY_MATCHES = "cricket:matches"
-REDIS_KEY_SCORES  = "cricket:scores"
-REDIS_KEY_ODDS    = "cricket:odds"
-REDIS_KEY_SYNC_TS = "cricket:last_sync"
-REDIS_KEY_SYNC_BN = "cricket:sync_bn"
+REDIS_KEY_MATCHES  = "cricket:matches"
+REDIS_KEY_SCORES   = "cricket:scores"
+REDIS_KEY_ODDS     = "cricket:odds"
+REDIS_KEY_UPCOMING = "cricket:upcoming"
+REDIS_KEY_SYNC_TS  = "cricket:last_sync"
+REDIS_KEY_SYNC_BN  = "cricket:sync_bn"
 REDIS_TTL = 5   # seconds before cache is considered stale (worker refreshes every 1s)
 
 
@@ -157,7 +159,13 @@ _BALL_CODES = {
 }
 
 
-def _parse_cricket_outcomes(co: dict | None, markets: list, opponents: dict) -> dict | None:
+def _parse_cricket_outcomes(
+    co: dict | None,
+    markets: list,
+    opponents: dict,
+    batting_team: str | None = None,
+    clock_status: str | None = None,
+) -> dict | None:
     """
     Parse the `cricketOutcomes` field (when present) and market descriptions
     to produce a clean over/ball summary.
@@ -171,8 +179,13 @@ def _parse_cricket_outcomes(co: dict | None, markets: list, opponents: dict) -> 
     """
     import re
 
-    # Ball codes that are NOT legal deliveries (wides, no-balls)
-    _EXTRAS = {9, 10, 11, 12, 13, 14, 15}
+    # Don't infer over data during innings breaks (clock PAUSED between innings)
+    if clock_status == "PAUSED" and not co:
+        return None
+
+    # Ball codes that are NOT legal deliveries (wides, no-balls, no-ball wickets)
+    # Code 8 = W+1 (wicket on a no-ball free-hit) — not a legal delivery
+    _EXTRAS = {8, 9, 10, 11, 12, 13, 14, 15}
 
     def _is_complete(balls: list) -> bool:
         """An over is complete when 6 legal deliveries have been bowled."""
@@ -227,25 +240,58 @@ def _parse_cricket_outcomes(co: dict | None, markets: list, opponents: dict) -> 
 
     # Fallback: infer current over from market descriptions.
     # Supported patterns for the CURRENT over being bowled:
-    #   "Total runs for over 14 in 1st inning"  → "for over (\d+)"
-    #   "Runs in Over 6"                         → "in Over (\d+)"
-    #   "Total runs in over 16"                  → "in over (\d+)"
+    #   "Total runs for over 14 in 1st inning - TeamName"  → "for over (\d+)"
+    #   "Runs in Over 6"                                    → "in Over (\d+)"
     # Ignored patterns (future milestones):
     #   "Total runs after 10 overs"
     #   "Total runs after Over 6"
+    #
+    # When we know the batting team, only use markets mentioning that team.
+    # This prevents picking up pre-set markets for the NEXT innings
+    # (e.g. "for over 1 - Zimbabwe" when Bangladesh are actually batting).
     if not result and markets:
-        for_over_nums = []
+        for_over_nums  = []
+        delivery_hints = []   # (over, ball) tuples from per-delivery markets
+
         for m in markets:
             desc = m.get("description", "")
-            # "for over X" — directly names the over being bowled
+
+            # Skip markets for the non-batting team
+            if batting_team:
+                if " - " in desc:
+                    market_team = desc.rsplit(" - ", 1)[-1].strip()
+                    if market_team and market_team.lower() != batting_team.lower():
+                        continue
+
+            # "Total runs in 3rd delivery of over 15 in 1st innings - Team"
+            # → gives both ball number AND over number (most precise)
+            for ball_str, over_str in re.findall(
+                r'in (\d+)(?:st|nd|rd|th) delivery of over (\d+)',
+                desc, re.IGNORECASE
+            ):
+                delivery_hints.append((int(over_str), int(ball_str)))
+
+            # "for over X" — names the over being bowled
             for n in re.findall(r'for over (\d+)', desc, re.IGNORECASE):
                 for_over_nums.append(int(n))
-            # "Runs in Over X" / "runs in over X" — but NOT "after Over X"
-            # Use negative lookbehind to skip "after Over X"
+
+            # "Runs in Over X" / "in over X" — but NOT "after Over X"
             for n in re.findall(r'(?<!after )\bin [Oo]ver (\d+)', desc):
                 for_over_nums.append(int(n))
 
-        if for_over_nums:
+        if delivery_hints:
+            # Pick the hint with the lowest over, then lowest ball (earliest open market)
+            delivery_hints.sort()
+            best_over, best_ball = delivery_hints[0]
+            result = {
+                "current_over":        best_over,
+                "current_ball":        best_ball - 1,  # ball already bowled (market opens after)
+                "current_over_balls":  None,
+                "last_ball_timestamp": None,
+                "recent_overs":        None,
+                "source":              "delivery_inference",
+            }
+        elif for_over_nums:
             result = {
                 "current_over":        min(for_over_nums),
                 "current_ball":        None,
@@ -264,19 +310,25 @@ def _parse_cricket_outcomes(co: dict | None, markets: list, opponents: dict) -> 
 
 def _is_real_match(event: dict) -> bool:
     """
-    Returns True only for real live cricket matches.
+    Returns True only for real cricket matches (live or upcoming).
     Filters out:
       - Virtual matches  (team/match name contains "(Virtual)")
-      - SRL matches      (Simulated Reality League — competition or team contains "SRL" / " Srl")
+      - SRL matches      (Simulated Reality League — any path or team contains "SRL" / "Srl")
     """
     description = event.get("description", "")
     if "(Virtual)" in description:
         return False
 
-    paths = event.get("eventPaths", [])
-    competition = next((p["description"] for p in paths if p.get("tag") == "Tournament"), "")
-    if "SRL" in competition or "Srl" in competition:
+    # Check match description itself for " Srl" (e.g. "Hobart Hurricanes Srl vs ...")
+    if " Srl " in description or description.endswith(" Srl"):
         return False
+
+    # Check all event paths (Tournament, League, Category, Country)
+    paths = event.get("eventPaths", [])
+    for p in paths:
+        pdesc = p.get("description", "")
+        if "SRL" in pdesc or "Srl" in pdesc or "Simulated Reality" in pdesc:
+            return False
 
     # Guard against team-level SRL naming (e.g. "Central Districts Srl")
     for opp in event.get("opponents", []):
@@ -346,10 +398,17 @@ def _build_match(event: dict, include_odds: bool = True) -> dict:
     clock = event.get("clock") or {}
 
     raw_markets = event.get("markets") or []
+    batting_team = next(
+        (opponents.get(s.get("opponentId"), "") for s in (event.get("scores") or {}).get("score", []) if s.get("serving")),
+        None,
+    )
+    clock_status = (event.get("clock") or {}).get("status")
     over_ball = _parse_cricket_outcomes(
         event.get("cricketOutcomes"),
         raw_markets,
         opponents,
+        batting_team=batting_team,
+        clock_status=clock_status,
     )
 
     result = {
@@ -469,6 +528,72 @@ def fetch_and_cache_cricket_data() -> dict:
         len(events), len(raw_events), total_markets,
     )
     return {"ok": True, "matches": len(events), "markets": total_markets}
+
+
+def _build_upcoming_match(event: dict) -> dict:
+    """Convert a raw Dafabet upcoming event into a clean upcoming-match object."""
+    opponents = {o["id"]: o["description"] for o in event.get("opponents", [])}
+    paths     = event.get("eventPaths", [])
+
+    # Build odds from all available markets
+    markets_out = []
+    for m in (event.get("markets") or []):
+        simple = _simplify_market(m, opponents)
+        markets_out.append(simple)
+
+    return {
+        "id":          event.get("id"),
+        "match":       event.get("description", ""),
+        "competition": next((p["description"] for p in paths if p.get("tag") in ("Tournament", "League")), ""),
+        "country":     next((p["description"] for p in paths if p.get("tag") == "Country"), ""),
+        "date":        event.get("eventDate"),
+        "slug":        event.get("slug"),
+        "betradar_id": event.get("betRadarId"),
+        "odds": {
+            "market_count": len(markets_out),
+            "markets":      markets_out,
+        },
+    }
+
+
+def fetch_and_cache_upcoming_matches() -> dict:
+    """
+    Fetch upcoming (pre-match) cricket events from Dafabet and store in Redis.
+    Only real matches (no SRL / Virtual). Includes available odds (H2H, totals etc.)
+    """
+    data, err = _fetch(f"{_BASE}/events", {
+        "bettable":               "true",
+        "includeMarkets":         "true",
+        "lightWeightResponse":    "false",
+        "marketFilter":           "GAME",
+        "marketStatus":           "OPEN",
+        "sportGroups":            "REGULAR",
+        "eventPathIds":           _CRICKET_PATH_ID,
+        "liveOnly":               "false",
+        "includeLiveEvents":      "false",
+        "marketTypeIds":          _CRICKET_MARKET_TYPE_IDS,
+        "maxMarketsPerMarketType": "10",
+        "maxMarketPerEvent":      "30",
+        "l":                      "en-GB",
+    })
+
+    if err or data is None:
+        logger.warning("Cricket upcoming sync: upstream fetch failed")
+        return {"ok": False}
+
+    raw_events = data if isinstance(data, list) else data.get("events", [])
+
+    # Only real MATCH events (type GAMEEVENT), no SRL/Virtual, no outright bets
+    events = [
+        e for e in raw_events
+        if e.get("eventType") == "GAMEEVENT" and _is_real_match(e)
+    ]
+
+    upcoming = [_build_upcoming_match(e) for e in events]
+    _cache_set(REDIS_KEY_UPCOMING, upcoming, REDIS_TTL * 4)   # cache 4x longer than live
+
+    logger.info("Cricket upcoming sync OK — %d matches", len(upcoming))
+    return {"ok": True, "matches": len(upcoming)}
 
 
 # ---------------------------------------------------------------------------
@@ -780,6 +905,37 @@ def cricket_match_detail(request, match_id: int):
 
     last_sync = _cache_get(REDIS_KEY_SYNC_TS)
     return Response({"last_sync": last_sync, "match": match})
+
+
+@api_view(["GET"])
+@permission_classes([AllowAny])
+def cricket_upcoming_matches(request):
+    """
+    GET /api/cricket/upcoming/
+
+    Returns all upcoming (pre-match) real cricket matches with available odds.
+    Served from Redis cache, refreshed every ~2 minutes by the background worker.
+
+    Response fields per match:
+      id          — Dafabet event ID
+      match       — "Team A vs Team B"
+      competition — tournament/league name
+      country     — country
+      date        — ISO-8601 start time (UTC)
+      odds        — markets with outcomes and decimal prices
+    """
+    upcoming = _cache_get(REDIS_KEY_UPCOMING)
+    if upcoming is None:
+        fetch_and_cache_upcoming_matches()
+        upcoming = _cache_get(REDIS_KEY_UPCOMING) or []
+
+    last_sync = _cache_get(REDIS_KEY_SYNC_TS)
+
+    return Response({
+        "count":     len(upcoming),
+        "last_sync": last_sync,
+        "matches":   upcoming,
+    })
 
 
 @api_view(["GET"])
