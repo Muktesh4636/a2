@@ -179,9 +179,9 @@ def _parse_cricket_outcomes(
     """
     import re
 
-    # Don't infer over data during innings breaks (clock PAUSED between innings)
-    if clock_status == "PAUSED" and not co:
-        return None
+    # If PAUSED with no ball-by-ball data, still attempt market inference — the
+    # batting_team filter below prevents picking up next-innings markets.
+    # (Returning early was too aggressive: Test matches are often PAUSED between overs.)
 
     # Ball codes that are NOT legal deliveries (wides, no-balls, no-ball wickets)
     # Code 8 = W+1 (wicket on a no-ball free-hit) — not a legal delivery
@@ -276,7 +276,7 @@ def _parse_cricket_outcomes(
                 for_over_nums.append(int(n))
 
             # "Runs in Over X" / "in over X" — but NOT "after Over X"
-            for n in re.findall(r'(?<!after )\bin [Oo]ver (\d+)', desc):
+            for n in re.findall(r'(?<!after )\bin [Oo]ver\s+(\d+)', desc):
                 for_over_nums.append(int(n))
 
         if delivery_hints:
