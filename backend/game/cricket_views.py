@@ -36,9 +36,10 @@ import time
 import requests
 
 from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework import status
+from decimal import Decimal
 
 logger = logging.getLogger("game")
 
@@ -74,7 +75,9 @@ REDIS_KEY_ODDS     = "cricket:odds"
 REDIS_KEY_UPCOMING = "cricket:upcoming"
 REDIS_KEY_SYNC_TS  = "cricket:last_sync"
 REDIS_KEY_SYNC_BN  = "cricket:sync_bn"
-REDIS_TTL = 5   # seconds before cache is considered stale (worker refreshes every 1s)
+# Must be longer than the full-sync interval (30s). If this is too short the
+# cache goes empty between syncs and /matches + /bet fail intermittently.
+REDIS_TTL = 120
 
 
 # ---------------------------------------------------------------------------
@@ -142,13 +145,19 @@ def _fetch(url: str, params: dict | None = None, timeout: int = 12, retries: int
         except requests.exceptions.HTTPError as exc:
             code = exc.response.status_code if exc.response is not None else 0
             logger.warning("Cricket upstream HTTP %s (attempt %d): %s", code, attempt + 1, url)
-            last_err = exc.response  # store for caller
+            last_err = Response(
+                {"error": "upstream_error", "detail": f"HTTP {code}", "status_code": code},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
             if code < 500:
                 # 4xx errors won't improve with retry — fail fast
                 return None, last_err
         except Exception as exc:
             logger.exception("Cricket upstream error (attempt %d): %s", attempt + 1, exc)
-            last_err = exc
+            last_err = Response(
+                {"error": "proxy_error", "detail": str(exc)},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
 
         if attempt < retries:
             _time.sleep(0.5 * (attempt + 1))   # 0.5s, then 1.0s backoff
@@ -982,4 +991,220 @@ def cricket_sync_status(request):
         "cached_matches": len(matches),
         "cached_markets": total_markets,
         "last_batch_number": sync_bn,
+    })
+
+
+# ---------------------------------------------------------------------------
+# Betting
+# ---------------------------------------------------------------------------
+
+def _find_cached_match(event_id: int) -> dict | None:
+    """Find a match by id in live or upcoming Redis caches."""
+    for key in (REDIS_KEY_MATCHES, REDIS_KEY_UPCOMING):
+        for m in (_cache_get(key) or []):
+            if m.get("id") == event_id:
+                return m
+    return None
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def place_cricket_bet(request):
+    """
+    POST /api/cricket/bet/
+
+    Place a bet on a cricket market outcome.
+    Odds are always taken from Redis live/upcoming cache — client odds ignored.
+
+    Body:
+      event_id    (int)
+      market_id   (int)
+      outcome_id  (int)
+      stake       (int)  — amount in rupees
+    """
+    from django.db import transaction as db_transaction
+    from game.models import CricketBet
+    from accounts.models import Wallet, Transaction as Txn
+
+    data = request.data
+    required = ["event_id", "market_id", "outcome_id", "stake"]
+    missing = [f for f in required if f not in data]
+    if missing:
+        return Response(
+            {"error": f"Missing fields: {', '.join(missing)}"},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    try:
+        stake = int(data["stake"])
+        event_id = int(data["event_id"])
+        market_id = int(data["market_id"])
+        outcome_id = int(data["outcome_id"])
+    except (ValueError, TypeError):
+        return Response(
+            {"error": "event_id, market_id, outcome_id and stake must be integers"},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    if stake <= 0:
+        return Response({"error": "stake must be positive"}, status=status.HTTP_400_BAD_REQUEST)
+
+    match = _find_cached_match(event_id)
+    if not match:
+        return Response(
+            {"error": f"Event {event_id} not found in live/upcoming data"},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    event_name = match.get("match") or match.get("description") or ""
+    markets = (match.get("odds") or {}).get("markets") or match.get("markets") or []
+
+    market_obj = next((m for m in markets if m.get("id") == market_id), None)
+    if market_obj is None:
+        return Response(
+            {"error": f"Market {market_id} not found for this event"},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    market_status = (market_obj.get("status") or "OPEN").upper()
+    if market_status not in ("OPEN", "ACTIVE", ""):
+        return Response(
+            {"error": f'Market "{market_obj.get("description")}" is not open for betting'},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    market_name = market_obj.get("description") or ""
+    outcome_obj = next(
+        (o for o in (market_obj.get("outcomes") or []) if o.get("id") == outcome_id),
+        None,
+    )
+    if outcome_obj is None:
+        return Response(
+            {"error": f"Outcome {outcome_id} not found in market"},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    if outcome_obj.get("hidden") or outcome_obj.get("withdrawn"):
+        return Response(
+            {"error": "This outcome is no longer available"},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    outcome_name = outcome_obj.get("description") or ""
+    try:
+        real_odds = Decimal(str(outcome_obj.get("price_decimal")))
+    except Exception:
+        real_odds = None
+
+    if real_odds is None or real_odds <= 1:
+        return Response(
+            {"error": "Odds not available or invalid for this outcome"},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    potential_payout = int(Decimal(stake) * real_odds)
+
+    try:
+        with db_transaction.atomic():
+            wallet = Wallet.objects.select_for_update().get(user=request.user)
+            if wallet.balance < stake:
+                return Response(
+                    {"error": f"Insufficient balance. Need {stake}, have {wallet.balance}"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            balance_before = wallet.balance
+            wallet.balance -= stake
+            # Count cricket stakes toward turnover unlock rules when field exists
+            if hasattr(wallet, "turnover"):
+                wallet.turnover = (wallet.turnover or 0) + stake
+                wallet.save(update_fields=["balance", "turnover", "updated_at"])
+            else:
+                wallet.save(update_fields=["balance", "updated_at"])
+
+            bet = CricketBet.objects.create(
+                user=request.user,
+                event_id=event_id,
+                event_name=event_name[:255],
+                market_id=market_id,
+                market_name=market_name[:255],
+                outcome_id=outcome_id,
+                outcome_name=outcome_name[:255],
+                odds=real_odds,
+                stake=stake,
+                potential_payout=potential_payout,
+                status="PENDING",
+            )
+
+            Txn.objects.create(
+                user=request.user,
+                transaction_type="BET",
+                amount=-stake,
+                balance_before=balance_before,
+                balance_after=wallet.balance,
+                description=(
+                    f"Cricket bet #{bet.id}: {event_name} / {market_name} / "
+                    f"{outcome_name} @ {real_odds}"
+                ),
+            )
+
+        return Response(
+            {
+                "id": bet.id,
+                "event_id": bet.event_id,
+                "event_name": bet.event_name,
+                "market_id": bet.market_id,
+                "market_name": bet.market_name,
+                "outcome_id": bet.outcome_id,
+                "outcome_name": bet.outcome_name,
+                "odds": str(bet.odds),
+                "stake": int(bet.stake),
+                "potential_payout": int(bet.potential_payout),
+                "status": bet.status,
+                "created_at": bet.created_at.isoformat(),
+                "wallet_balance": wallet.balance,
+            },
+            status=status.HTTP_201_CREATED,
+        )
+
+    except Wallet.DoesNotExist:
+        return Response({"error": "Wallet not found"}, status=status.HTTP_400_BAD_REQUEST)
+    except Exception as exc:
+        logger.exception("place_cricket_bet error: %s", exc)
+        return Response(
+            {"error": "Failed to place bet"},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def my_cricket_bets(request):
+    """
+    GET /api/cricket/bets/
+    Authenticated user's cricket bet history (most recent first).
+    """
+    from game.models import CricketBet
+
+    bets = CricketBet.objects.filter(user=request.user).order_by("-created_at")[:50]
+    return Response({
+        "bets": [
+            {
+                "id": b.id,
+                "event_id": b.event_id,
+                "event_name": b.event_name,
+                "market_id": b.market_id,
+                "market_name": b.market_name,
+                "outcome_id": b.outcome_id,
+                "outcome_name": b.outcome_name,
+                "odds": str(b.odds),
+                "stake": int(b.stake) if b.stake is not None else 0,
+                "potential_payout": int(b.potential_payout) if b.potential_payout is not None else 0,
+                "status": b.status,
+                "payout_amount": int(b.payout_amount) if b.payout_amount is not None else 0,
+                "created_at": b.created_at.isoformat(),
+                "settled_at": b.settled_at.isoformat() if b.settled_at else None,
+            }
+            for b in bets
+        ]
     })

@@ -116,6 +116,8 @@ urlpatterns = [
     path('api/cricket/markets/',      cricket_views.cricket_markets,        name='cricket_markets'),
     path('api/cricket/all-live-events/', cricket_views.cricket_all_live_events, name='cricket_all_live_events'),
     path('api/cricket/sync-status/',     cricket_views.cricket_sync_status,     name='cricket_sync_status'),
+    path('api/cricket/bet/',             cricket_views.place_cricket_bet,       name='place_cricket_bet'),
+    path('api/cricket/bets/',            cricket_views.my_cricket_bets,         name='my_cricket_bets'),
 
     # Colour game endpoints
     path('api/colour/round/', game_views.colour_round_status, name='colour_round_status'),
