@@ -76,6 +76,7 @@ class Command(BaseCommand):
         from game.cricket_views import (
             fetch_and_cache_cricket_data,
             fetch_and_cache_upcoming_matches,
+            refresh_pending_bet_results,
             _fetch, _cache_get, _cache_set,
             REDIS_KEY_MATCHES, REDIS_KEY_SCORES, REDIS_KEY_ODDS,
             REDIS_KEY_SYNC_TS, REDIS_KEY_SYNC_BN,
@@ -85,9 +86,11 @@ class Command(BaseCommand):
         )
 
         UPCOMING_INTERVAL = 120   # refresh upcoming matches every 2 minutes
+        RESULT_INTERVAL   = 60    # refresh results + settle pending bets every 1 minute
 
         last_full_time     = 0   # force full refresh on first iteration
         last_upcoming_time = 0   # force upcoming refresh on first iteration
+        last_result_time   = 0
         last_bn            = "-1"
         iteration          = 0
 
@@ -109,6 +112,24 @@ class Command(BaseCommand):
                         ))
                 except Exception as exc:
                     logger.exception("Upcoming sync error: %s", exc)
+
+            # ----------------------------------------------------------------
+            # RESULTS + SETTLEMENT — every 60 seconds
+            # Uses Dafabet outcome.result only (WIN / LOSE / VOID)
+            # ----------------------------------------------------------------
+            if now - last_result_time >= RESULT_INTERVAL:
+                try:
+                    rres = refresh_pending_bet_results()
+                    last_result_time = now
+                    settle = rres.get("settle") or {}
+                    self.stdout.write(self.style.SUCCESS(
+                        f"[#{iteration}] RESULTS — events={rres.get('events', 0)} "
+                        f"final={((rres.get('ingest') or {}).get('final', 0))} "
+                        f"settled={settle.get('settled', 0)} "
+                        f"(W{settle.get('won', 0)}/L{settle.get('lost', 0)}/V{settle.get('void', 0)})"
+                    ))
+                except Exception as exc:
+                    logger.exception("Result sync/settle error: %s", exc)
 
             # ----------------------------------------------------------------
             # FULL REFRESH — every full_interval seconds

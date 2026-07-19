@@ -622,6 +622,46 @@ class CricketBet(models.Model):
         return f"{self.user.username} — {self.event_name} — {self.outcome_name} — {self.status}"
 
 
+class CricketOutcomeResult(models.Model):
+    """
+    Clean settlement source copied from Dafabet outcome.result.
+    Bets are settled ONLY from this table — never from client input.
+    """
+
+    RESULT_CODES = [
+        ('NO_RESULT', 'No Result'),
+        ('WIN', 'Win'),
+        ('LOSE', 'Lose'),
+        ('VOID', 'Void'),
+        ('UNKNOWN', 'Unknown'),
+    ]
+
+    event_id = models.BigIntegerField(db_index=True)
+    event_name = models.CharField(max_length=255, blank=True, default='')
+    market_id = models.BigIntegerField(db_index=True)
+    market_name = models.CharField(max_length=255, blank=True, default='')
+    market_status = models.CharField(max_length=40, blank=True, default='')
+    outcome_id = models.BigIntegerField(unique=True, db_index=True)
+    outcome_name = models.CharField(max_length=255, blank=True, default='')
+    result_code = models.CharField(max_length=20, choices=RESULT_CODES, default='NO_RESULT', db_index=True)
+    raw_result = models.CharField(max_length=40, blank=True, default='')
+    is_final = models.BooleanField(default=False, db_index=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-updated_at']
+        verbose_name = 'Cricket Outcome Result'
+        verbose_name_plural = 'Cricket Outcome Results'
+        indexes = [
+            models.Index(fields=['event_id', 'market_id']),
+            models.Index(fields=['is_final', 'result_code']),
+        ]
+
+    def __str__(self):
+        return f"{self.event_name} / {self.outcome_name} = {self.result_code}"
+
+
 # ── Colour Game Models ─────────────────────────────────────────────────────────
 
 COLOUR_ROUND_STATUS = [

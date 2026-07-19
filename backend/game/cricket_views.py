@@ -73,11 +73,31 @@ REDIS_KEY_MATCHES  = "cricket:matches"
 REDIS_KEY_SCORES   = "cricket:scores"
 REDIS_KEY_ODDS     = "cricket:odds"
 REDIS_KEY_UPCOMING = "cricket:upcoming"
+REDIS_KEY_RESULTS  = "cricket:results"
 REDIS_KEY_SYNC_TS  = "cricket:last_sync"
 REDIS_KEY_SYNC_BN  = "cricket:sync_bn"
 # Must be longer than the full-sync interval (30s). If this is too short the
 # cache goes empty between syncs and /matches + /bet fail intermittently.
 REDIS_TTL = 120
+
+# Dafabet outcome.result.result → our clean codes
+_RESULT_MAP = {
+    "NO_RESULT": "NO_RESULT",
+    "WIN": "WIN",
+    "WON": "WIN",
+    "WINNER": "WIN",
+    "LOSE": "LOSE",
+    "LOST": "LOSE",
+    "LOSER": "LOSE",
+    "VOID": "VOID",
+    "CANCEL": "VOID",
+    "CANCELLED": "VOID",
+    "CANCELED": "VOID",
+    "PUSH": "VOID",
+    "REFUND": "VOID",
+    "DEAD_HEAT": "VOID",
+    "DEADHEAT": "VOID",
+}
 
 
 # ---------------------------------------------------------------------------
@@ -361,9 +381,26 @@ def _is_real_match(event: dict) -> bool:
 # Data transformation helpers
 # ---------------------------------------------------------------------------
 
+def _normalize_result_code(raw) -> tuple[str, str]:
+    """
+    Convert Dafabet outcome.result into (clean_code, raw_string).
+    clean_code: NO_RESULT | WIN | LOSE | VOID | UNKNOWN
+    """
+    if raw is None:
+        return "NO_RESULT", ""
+    if isinstance(raw, dict):
+        raw_str = str(raw.get("result") or "").strip().upper()
+    else:
+        raw_str = str(raw).strip().upper()
+    if not raw_str:
+        return "NO_RESULT", ""
+    return _RESULT_MAP.get(raw_str, "UNKNOWN"), raw_str
+
+
 def _simplify_outcome(outcome: dict) -> dict:
     cp = (outcome.get("consolidatedPrice") or {}).get("currentPrice") or {}
     pp = (outcome.get("consolidatedPrice") or {}).get("penultimatePrice") or {}
+    result_code, raw_result = _normalize_result_code(outcome.get("result"))
     return {
         "id": outcome.get("id"),
         "description": outcome.get("description"),
@@ -373,7 +410,234 @@ def _simplify_outcome(outcome: dict) -> dict:
         "line": outcome.get("extraKey1"),
         "withdrawn": outcome.get("withdrawn", False),
         "hidden": outcome.get("hidden", False),
+        "result": result_code,
+        "result_raw": raw_result or None,
     }
+
+
+def ingest_cricket_results_from_events(raw_events: list) -> dict:
+    """
+    Persist Dafabet outcome.result values into CricketOutcomeResult.
+    This is the ONLY source used for settlement.
+    """
+    from game.models import CricketOutcomeResult
+
+    if not raw_events:
+        return {"upserted": 0, "final": 0}
+
+    upserted = 0
+    final_count = 0
+    for event in raw_events:
+        if not _is_real_match(event):
+            continue
+        event_id = event.get("id")
+        event_name = (event.get("description") or "")[:255]
+        for market in (event.get("markets") or []):
+            market_id = market.get("id")
+            if not market_id:
+                continue
+            market_name = (market.get("description") or "")[:255]
+            market_status = str(market.get("status") or "")[:40]
+            for outcome in (market.get("outcomes") or []):
+                outcome_id = outcome.get("id")
+                if not outcome_id:
+                    continue
+                result_code, raw_result = _normalize_result_code(outcome.get("result"))
+                is_final = result_code in ("WIN", "LOSE", "VOID")
+                CricketOutcomeResult.objects.update_or_create(
+                    outcome_id=outcome_id,
+                    defaults={
+                        "event_id": event_id,
+                        "event_name": event_name,
+                        "market_id": market_id,
+                        "market_name": market_name,
+                        "market_status": market_status,
+                        "outcome_name": (outcome.get("description") or "")[:255],
+                        "result_code": result_code,
+                        "raw_result": raw_result[:40],
+                        "is_final": is_final,
+                    },
+                )
+                upserted += 1
+                if is_final:
+                    final_count += 1
+
+    # Refresh Redis snapshot of final results for the public API
+    _cache_results_snapshot()
+    return {"upserted": upserted, "final": final_count}
+
+
+def _cache_results_snapshot():
+    """Cache a clean nested results payload for fast API reads."""
+    from game.models import CricketOutcomeResult
+
+    rows = CricketOutcomeResult.objects.filter(is_final=True).order_by("-updated_at")[:500]
+    by_event: dict[int, dict] = {}
+    for r in rows:
+        ev = by_event.setdefault(r.event_id, {
+            "event_id": r.event_id,
+            "event_name": r.event_name,
+            "markets": {},
+        })
+        mk = ev["markets"].setdefault(r.market_id, {
+            "market_id": r.market_id,
+            "market_name": r.market_name,
+            "market_status": r.market_status,
+            "settled": True,
+            "outcomes": [],
+        })
+        mk["outcomes"].append({
+            "outcome_id": r.outcome_id,
+            "outcome_name": r.outcome_name,
+            "result": r.result_code,
+            "result_raw": r.raw_result or None,
+            "updated_at": r.updated_at.isoformat() if r.updated_at else None,
+        })
+
+    payload = []
+    for ev in by_event.values():
+        payload.append({
+            "event_id": ev["event_id"],
+            "event_name": ev["event_name"],
+            "markets": list(ev["markets"].values()),
+        })
+    _cache_set(REDIS_KEY_RESULTS, payload, 300)
+
+
+def settle_cricket_bets_from_results() -> dict:
+    """
+    Settle PENDING CricketBet rows using CricketOutcomeResult only.
+    WIN  → credit stake * odds
+    LOSE → no credit
+    VOID → refund stake
+    """
+    from django.db import transaction as db_transaction
+    from django.utils import timezone
+    from game.models import CricketBet, CricketOutcomeResult
+    from accounts.models import Wallet, Transaction as Txn
+
+    pending = list(CricketBet.objects.filter(status="PENDING").select_related("user"))
+    if not pending:
+        return {"settled": 0, "won": 0, "lost": 0, "void": 0}
+
+    outcome_ids = [b.outcome_id for b in pending]
+    results = {
+        r.outcome_id: r
+        for r in CricketOutcomeResult.objects.filter(outcome_id__in=outcome_ids, is_final=True)
+    }
+    if not results:
+        return {"settled": 0, "won": 0, "lost": 0, "void": 0}
+
+    won = lost = voided = 0
+    now = timezone.now()
+
+    for bet in pending:
+        result = results.get(bet.outcome_id)
+        if not result:
+            continue
+        code = result.result_code
+        if code not in ("WIN", "LOSE", "VOID"):
+            continue
+
+        try:
+            with db_transaction.atomic():
+                locked = CricketBet.objects.select_for_update().get(pk=bet.pk)
+                if locked.status != "PENDING":
+                    continue
+
+                wallet = Wallet.objects.select_for_update().get(user=locked.user)
+                balance_before = wallet.balance
+                payout = 0
+                txn_type = "WIN"
+                desc = ""
+
+                if code == "WIN":
+                    payout = int(Decimal(locked.stake) * Decimal(locked.odds))
+                    wallet.balance += payout
+                    locked.status = "WON"
+                    locked.payout_amount = payout
+                    won += 1
+                    txn_type = "WIN"
+                    desc = (
+                        f"Cricket win #{locked.id}: {locked.event_name} / "
+                        f"{locked.outcome_name} @ {locked.odds}"
+                    )
+                elif code == "LOSE":
+                    locked.status = "LOST"
+                    locked.payout_amount = 0
+                    lost += 1
+                    desc = ""
+                else:  # VOID
+                    payout = int(locked.stake)
+                    wallet.balance += payout
+                    locked.status = "VOID"
+                    locked.payout_amount = payout
+                    voided += 1
+                    txn_type = "REFUND"
+                    desc = (
+                        f"Cricket void/refund #{locked.id}: {locked.event_name} / "
+                        f"{locked.outcome_name}"
+                    )
+
+                locked.settled_at = now
+                locked.save(update_fields=["status", "payout_amount", "settled_at"])
+
+                if code in ("WIN", "VOID") and payout > 0:
+                    wallet.save(update_fields=["balance", "updated_at"])
+                    Txn.objects.create(
+                        user=locked.user,
+                        transaction_type=txn_type,
+                        amount=payout,
+                        balance_before=balance_before,
+                        balance_after=wallet.balance,
+                        description=desc,
+                    )
+        except Exception as exc:
+            logger.exception("settle cricket bet #%s failed: %s", bet.id, exc)
+
+    return {"settled": won + lost + voided, "won": won, "lost": lost, "void": voided}
+
+
+def refresh_pending_bet_results() -> dict:
+    """
+    Re-fetch Dafabet markets for events that still have PENDING bets,
+    ingest outcome.result, then settle.
+    """
+    from game.models import CricketBet
+
+    event_ids = list(
+        CricketBet.objects.filter(status="PENDING")
+        .values_list("event_id", flat=True)
+        .distinct()
+    )
+    if not event_ids:
+        return {"events": 0, "ingest": {"upserted": 0, "final": 0}, "settle": {"settled": 0}}
+
+    # Pull live+prematch book with H2H and main markets — same feed that carries outcome.result
+    data, err = _fetch(f"{_BASE}/events", {
+        "bettable": "true",
+        "includeLiveEvents": "true",
+        "includeMarkets": "true",
+        "lightWeightResponse": "false",
+        "marketFilter": "GAME",
+        "marketStatus": "OPEN,SUSPENDED,CLOSED,RESULTED,SETTLED",
+        "liveMarketStatus": "OPEN,SUSPENDED,CLOSED,RESULTED,SETTLED",
+        "sportGroups": "REGULAR",
+        "eventPathIds": _CRICKET_PATH_ID,
+        "liveOnly": "false",
+        "marketTypeIds": _CRICKET_MARKET_TYPE_IDS,
+        "periodTypeIds": _CRICKET_PERIOD_TYPE_IDS,
+        "maxMarketsPerMarketType": "20",
+        "maxMarketPerEvent": "100",
+        "l": "en-GB",
+    })
+    raw_events = data if isinstance(data, list) else []
+    wanted = {int(x) for x in event_ids}
+    matched = [e for e in raw_events if e.get("id") in wanted]
+
+    ingest = ingest_cricket_results_from_events(matched)
+    settle = settle_cricket_bets_from_results()
+    return {"events": len(matched), "pending_events": len(event_ids), "ingest": ingest, "settle": settle}
 
 
 def _simplify_market(market: dict, opponent_map: dict) -> dict:
@@ -513,6 +777,12 @@ def fetch_and_cache_cricket_data() -> dict:
     # Strip virtual / SRL (Simulated Reality League) matches
     events = [e for e in raw_events if _is_real_match(e)]
 
+    # Persist Dafabet outcome.result for settlement (source of truth)
+    try:
+        ingest_cricket_results_from_events(events)
+    except Exception as exc:
+        logger.warning("Cricket result ingest failed: %s", exc)
+
     # Build the three different views of the data
     matches_with_odds = [_build_match(e, include_odds=True)  for e in events]
     scores_only       = [_build_match(e, include_odds=False) for e in events]
@@ -607,6 +877,11 @@ def fetch_and_cache_upcoming_matches() -> dict:
         e for e in raw_events
         if e.get("eventType") == "GAMEEVENT" and _is_real_match(e)
     ]
+
+    try:
+        ingest_cricket_results_from_events(events)
+    except Exception as exc:
+        logger.warning("Cricket upcoming result ingest failed: %s", exc)
 
     upcoming = [_build_upcoming_match(e) for e in events]
     _cache_set(REDIS_KEY_UPCOMING, upcoming, REDIS_TTL * 4)   # cache 4x longer than live
@@ -1208,3 +1483,91 @@ def my_cricket_bets(request):
             for b in bets
         ]
     })
+
+
+@api_view(["GET"])
+@permission_classes([AllowAny])
+def cricket_results(request):
+    """
+    GET /api/cricket/results/
+    GET /api/cricket/results/?event_id=123
+    GET /api/cricket/results/?refresh=true
+
+    Clean settlement results copied from Dafabet outcome.result.
+    Only final results (WIN / LOSE / VOID) are returned.
+
+    This is the source used to settle cricket bets.
+    """
+    from game.models import CricketOutcomeResult
+
+    force = request.GET.get("refresh", "false").lower() == "true"
+    if force:
+        refresh_pending_bet_results()
+
+    event_id = request.GET.get("event_id")
+    cached = _cache_get(REDIS_KEY_RESULTS)
+    if cached is None or event_id:
+        qs = CricketOutcomeResult.objects.filter(is_final=True).order_by("-updated_at")
+        if event_id:
+            try:
+                qs = qs.filter(event_id=int(event_id))
+            except (TypeError, ValueError):
+                return Response(
+                    {"error": "event_id must be an integer"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+        by_event: dict[int, dict] = {}
+        for r in qs[:500]:
+            ev = by_event.setdefault(r.event_id, {
+                "event_id": r.event_id,
+                "event_name": r.event_name,
+                "markets": {},
+            })
+            mk = ev["markets"].setdefault(r.market_id, {
+                "market_id": r.market_id,
+                "market_name": r.market_name,
+                "market_status": r.market_status,
+                "settled": True,
+                "outcomes": [],
+            })
+            mk["outcomes"].append({
+                "outcome_id": r.outcome_id,
+                "outcome_name": r.outcome_name,
+                "result": r.result_code,
+                "result_raw": r.raw_result or None,
+                "updated_at": r.updated_at.isoformat() if r.updated_at else None,
+            })
+        results = [
+            {
+                "event_id": ev["event_id"],
+                "event_name": ev["event_name"],
+                "markets": list(ev["markets"].values()),
+            }
+            for ev in by_event.values()
+        ]
+        if not event_id:
+            _cache_set(REDIS_KEY_RESULTS, results, 300)
+    else:
+        results = cached
+
+    return Response({
+        "count": len(results),
+        "source": "dafa_outcome_result",
+        "settlement_rule": "Bets settle only when outcome.result is WIN, LOSE, or VOID",
+        "results": results,
+    })
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def cricket_settle_now(request):
+    """
+    POST /api/cricket/settle/
+    Admin/ops helper: refresh pending-bet results from Dafa and settle bets.
+    Restricted to staff users.
+    """
+    if not (request.user.is_staff or request.user.is_superuser):
+        return Response({"error": "Staff only"}, status=status.HTTP_403_FORBIDDEN)
+
+    summary = refresh_pending_bet_results()
+    return Response({"ok": True, **summary})
