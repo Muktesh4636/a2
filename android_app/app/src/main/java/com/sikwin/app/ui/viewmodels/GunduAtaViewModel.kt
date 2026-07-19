@@ -287,7 +287,6 @@ class GunduAtaViewModel(private val sessionManager: SessionManager) : ViewModel(
                         
                         userProfile = it.user
                         loginSuccess = true
-                        registerFcmTokenIfNeeded()
                         fetchWallet()
                         fetchProfile()
                     }
@@ -301,11 +300,6 @@ class GunduAtaViewModel(private val sessionManager: SessionManager) : ViewModel(
                 isLoading = false
             }
         }
-    }
-
-    /** Registers FCM token with backend. No-op when Firebase is not configured. See FCM_SETUP.md. */
-    fun registerFcmTokenIfNeeded() {
-        // FCM disabled until google-services.json is added. Uncomment Firebase in build.gradle and restore implementation.
     }
 
     fun sendOtp(phoneNumber: String) {
@@ -375,7 +369,6 @@ class GunduAtaViewModel(private val sessionManager: SessionManager) : ViewModel(
                         sessionManager.saveReferralCode(it.user.referral_code)
                         loginSuccess = true
                         otpSent = false // Reset OTP state
-                        registerFcmTokenIfNeeded()
                         fetchWallet()
                         fetchProfile()
                     }
@@ -1084,9 +1077,13 @@ class GunduAtaViewModel(private val sessionManager: SessionManager) : ViewModel(
                     userRank = (userStats?.get("rank") as? Double)?.toInt() ?: (userStats?.get("rank") as? Int) ?: 0
                     userRotationMoney = (userStats?.get("turnover") as? Double) ?: (userStats?.get("turnover") as? Int)?.toDouble() ?: 0.0
 
-                    val prizes = data?.get("prizes") as? Map<String, String>
-                    if (prizes != null) {
-                        leaderboardPrizes = prizes
+                    val prizesRaw = data?.get("prizes") as? Map<*, *>
+                    if (prizesRaw != null) {
+                        leaderboardPrizes = mapOf(
+                            "1st" to (prizesRaw["1st"]?.toString()?.takeIf { it.isNotBlank() } ?: "₹1,000"),
+                            "2nd" to (prizesRaw["2nd"]?.toString()?.takeIf { it.isNotBlank() } ?: "₹500"),
+                            "3rd" to (prizesRaw["3rd"]?.toString()?.takeIf { it.isNotBlank() } ?: "₹100"),
+                        )
                     }
                 }
             } catch (e: Exception) {

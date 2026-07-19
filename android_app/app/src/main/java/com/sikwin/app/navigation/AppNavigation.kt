@@ -67,13 +67,6 @@ fun AppNavigation(
         }
     }
 
-    // Register FCM token when user is logged in (for push notifications)
-    LaunchedEffect(Unit) {
-        if (sessionManager.fetchAuthToken() != null) {
-            viewModel.registerFcmTokenIfNeeded()
-        }
-    }
-
     // App Update Check
     LaunchedEffect(Unit) {
         try {

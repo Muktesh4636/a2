@@ -2,11 +2,6 @@
 <resources>
     <string name="app_name">Gundu Ata</string>
     
-    <!-- Notifications -->
-    <string name="default_notification_channel_id">gundu_ata_notifications</string>
-    <string name="notification_channel_name">Gundu Ata</string>
-    <string name="notification_channel_description">Game updates, round alerts, and promotions</string>
-    
     <!-- Common -->
     <string name="back">Back</string>
     <string name="cancel">Cancel</string>

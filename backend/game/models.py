@@ -385,6 +385,8 @@ class PlayerJourney(models.Model):
     first_deposit_date = models.DateField(null=True, blank=True)
     # Is account flagged for multi-account abuse?
     is_flagged = models.BooleanField(default=False)
+    # Is this player in the algorithm test group?
+    is_algo_test = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -580,3 +582,113 @@ class IPTracker(models.Model):
 
         obj.save(update_fields=['account_ids_json', 'flagged_ids_json', 'updated_at'])
         return user_id in flagged
+
+
+class CricketBet(models.Model):
+    """Records a user's bet on a cricket market outcome."""
+
+    BET_STATUS = [
+        ('PENDING', 'Pending'),
+        ('WON', 'Won'),
+        ('LOST', 'Lost'),
+        ('VOID', 'Void'),
+    ]
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='cricket_bets',
+    )
+    event_id        = models.BigIntegerField()
+    event_name      = models.CharField(max_length=255)
+    market_id       = models.BigIntegerField()
+    market_name     = models.CharField(max_length=255)
+    outcome_id      = models.BigIntegerField()
+    outcome_name    = models.CharField(max_length=255)
+    odds            = models.DecimalField(max_digits=10, decimal_places=2)
+    stake           = models.DecimalField(max_digits=12, decimal_places=2, help_text='Stake in rupees')
+    potential_payout = models.DecimalField(max_digits=12, decimal_places=2)
+    status          = models.CharField(max_length=20, choices=BET_STATUS, default='PENDING')
+    payout_amount   = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    created_at      = models.DateTimeField(auto_now_add=True)
+    settled_at      = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = 'Cricket Bet'
+        verbose_name_plural = 'Cricket Bets'
+
+    def __str__(self):
+        return f"{self.user.username} — {self.event_name} — {self.outcome_name} — {self.status}"
+
+
+# ── Colour Game Models ─────────────────────────────────────────────────────────
+
+COLOUR_ROUND_STATUS = [
+    ('BETTING', 'Betting Open'),
+    ('CLOSED', 'Betting Closed'),
+    ('RESULT', 'Result Announced'),
+    ('COMPLETED', 'Completed'),
+]
+
+COLOUR_RESULTS = [
+    ('red', 'Red'),
+    ('green', 'Green'),
+    ('red_violet', 'Red & Violet'),
+    ('green_violet', 'Green & Violet'),
+]
+
+
+class ColourRound(models.Model):
+    """One round of the colour game (60 seconds total, bets open 60→30, closed 30→0)."""
+    round_id    = models.CharField(max_length=50, unique=True)
+    status      = models.CharField(max_length=20, choices=COLOUR_ROUND_STATUS, default='BETTING')
+    result      = models.CharField(max_length=20, choices=COLOUR_RESULTS, null=True, blank=True)
+    number      = models.IntegerField(null=True, blank=True, help_text='Result number 0-9')
+    start_time  = models.DateTimeField(auto_now_add=True)
+    close_time  = models.DateTimeField(null=True, blank=True)
+    result_time = models.DateTimeField(null=True, blank=True)
+    end_time    = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-start_time']
+        verbose_name = 'Colour Round'
+        verbose_name_plural = 'Colour Rounds'
+
+    def __str__(self):
+        return f"ColourRound {self.round_id} — {self.status}"
+
+
+class ColourBet(models.Model):
+    """A single bet placed by a user on a colour round."""
+
+    BET_ON_CHOICES = [
+        ('red', 'Red'),
+        ('green', 'Green'),
+        ('violet', 'Violet'),
+        ('number', 'Number'),
+    ]
+
+    STATUS_CHOICES = [
+        ('PENDING', 'Pending'),
+        ('WON', 'Won'),
+        ('LOST', 'Lost'),
+    ]
+
+    user        = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='colour_bets')
+    round       = models.ForeignKey(ColourRound, on_delete=models.CASCADE, related_name='bets')
+    bet_on      = models.CharField(max_length=10, choices=BET_ON_CHOICES, help_text='"red","green","violet" or "number"')
+    number      = models.IntegerField(null=True, blank=True, help_text='0-9, only when bet_on=number')
+    amount      = models.IntegerField()
+    payout      = models.IntegerField(default=0)
+    status      = models.CharField(max_length=10, choices=STATUS_CHOICES, default='PENDING')
+    created_at  = models.DateTimeField(auto_now_add=True)
+    settled_at  = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = 'Colour Bet'
+        verbose_name_plural = 'Colour Bets'
+
+    def __str__(self):
+        return f"{self.user.username} — {self.round.round_id} — {self.bet_on} — {self.amount}"

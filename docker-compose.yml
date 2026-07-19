@@ -142,6 +142,78 @@ services:
           cpus: '0.25'
           memory: 256M
 
+  # Colour Game Timer — runs 60-second colour game rounds continuously
+  colour_game_timer:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: dice_game_colour_timer
+    command: python manage.py colour_game_timer
+    volumes:
+      - ./backend:/app
+      - logs_volume:/app/logs
+    environment:
+      - DEBUG=${DEBUG:-False}
+      - SECRET_KEY=GunduataSecretKey2026_HighScale_Secure
+      - USE_SQLITE=${USE_SQLITE:-False}
+      - DB_NAME=${DB_NAME:-dice_game}
+      - DB_USER=${DB_USER:-muktesh}
+      - DB_PASSWORD=${DB_PASSWORD:-Gunduata@123}
+      - DB_HOST=72.61.255.231
+      - DB_PORT=6432
+      - REDIS_HOST=${REDIS_HOST:-72.61.254.74}
+      - REDIS_PORT=6379
+      - REDIS_DB=${REDIS_DB:-0}
+      - REDIS_PASSWORD=Gunduata@123
+      - REDIS_POOL_SIZE=${REDIS_POOL_SIZE:-20}
+    restart: unless-stopped
+    networks:
+      - dice_game_network
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.1'
+          memory: 64M
+
+  # Cricket Live Data Sync — pulls from Dafabet every 1 second into Redis
+  cricket_sync:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: dice_game_cricket_sync
+    command: python manage.py sync_cricket_data --delta-interval 2 --full-interval 30
+    volumes:
+      - ./backend:/app
+      - logs_volume:/app/logs
+    environment:
+      - DEBUG=${DEBUG:-False}
+      - SECRET_KEY=GunduataSecretKey2026_HighScale_Secure
+      - USE_SQLITE=${USE_SQLITE:-False}
+      - DB_NAME=${DB_NAME:-dice_game}
+      - DB_USER=${DB_USER:-muktesh}
+      - DB_PASSWORD=${DB_PASSWORD:-Gunduata@123}
+      - DB_HOST=72.61.255.231
+      - DB_PORT=6432
+      - REDIS_HOST=${REDIS_HOST:-72.61.254.74}
+      - REDIS_PORT=6379
+      - REDIS_DB=${REDIS_DB:-0}
+      - REDIS_PASSWORD=Gunduata@123
+      - REDIS_POOL_SIZE=${REDIS_POOL_SIZE:-50}
+    restart: unless-stopped
+    networks:
+      - dice_game_network
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.1'
+          memory: 64M
+
   # Daily Journey Reset — runs at midnight IST (18:30 UTC)
   daily_reset:
     build:

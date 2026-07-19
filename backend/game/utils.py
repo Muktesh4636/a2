@@ -55,6 +55,88 @@ def get_leaderboard_period_date(dt=None):
     return period_start.date()
 
 
+def get_leaderboard_period_utc_bounds(period_date):
+    """Return (start_utc, end_utc) for a leaderboard period_date (IST 23:00–23:00)."""
+    from datetime import datetime, time as dtime
+
+    if not IST:
+        start = timezone.make_aware(datetime.combine(period_date, dtime.min))
+        return start, start + timedelta(days=1)
+    period_start_ist = IST.localize(datetime.combine(period_date, dtime(23, 0)))
+    period_end_ist = period_start_ist + timedelta(days=1)
+    return period_start_ist.astimezone(pytz.UTC), period_end_ist.astimezone(pytz.UTC)
+
+
+def get_leaderboard_turnover_rows(period_date, limit=10):
+    """
+    Top users by daily turnover for the period.
+    Uses UserDailyTurnover cache; falls back to Bet aggregation if cache is empty.
+    Returns list of dicts: {'user': User, 'turnover': int}
+    """
+    from django.db.models import Sum
+    from accounts.models import User
+    from game.models import Bet, UserDailyTurnover
+
+    cached = list(
+        UserDailyTurnover.objects.filter(period_date=period_date, turnover__gt=0)
+        .select_related('user')
+        .order_by('-turnover', 'user_id')[:limit]
+    )
+    if cached:
+        return [{'user': row.user, 'turnover': int(row.turnover)} for row in cached]
+
+    start_utc, end_utc = get_leaderboard_period_utc_bounds(period_date)
+    agg = list(
+        Bet.objects.filter(created_at__gte=start_utc, created_at__lt=end_utc)
+        .values('user_id')
+        .annotate(turnover=Sum('chip_amount'))
+        .filter(turnover__gt=0)
+        .order_by('-turnover', 'user_id')[:limit]
+    )
+    if not agg:
+        return []
+
+    users = {u.id: u for u in User.objects.filter(id__in=[r['user_id'] for r in agg])}
+    rows = []
+    for item in agg:
+        user = users.get(item['user_id'])
+        if not user:
+            continue
+        turnover = int(item['turnover'])
+        rows.append({'user': user, 'turnover': turnover})
+        # Repair cache so later API calls are fast
+        UserDailyTurnover.objects.update_or_create(
+            user_id=user.id,
+            period_date=period_date,
+            defaults={'turnover': turnover},
+        )
+    return rows
+
+
+def get_user_period_turnover(user_id, period_date):
+    """Turnover for one user in the leaderboard period (cache + Bet fallback)."""
+    from django.db.models import Sum
+    from game.models import Bet, UserDailyTurnover
+
+    row = UserDailyTurnover.objects.filter(user_id=user_id, period_date=period_date).first()
+    if row and int(row.turnover) > 0:
+        return float(row.turnover)
+
+    start_utc, end_utc = get_leaderboard_period_utc_bounds(period_date)
+    total = (
+        Bet.objects.filter(user_id=user_id, created_at__gte=start_utc, created_at__lt=end_utc)
+        .aggregate(total=Sum('chip_amount'))['total']
+    )
+    turnover = int(total or 0)
+    if turnover > 0:
+        UserDailyTurnover.objects.update_or_create(
+            user_id=user_id,
+            period_date=period_date,
+            defaults={'turnover': turnover},
+        )
+    return float(turnover)
+
+
 def get_current_round_state(redis_client):
     """
     Get the current round state from Redis or Database.

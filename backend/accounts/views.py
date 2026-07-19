@@ -2306,7 +2306,7 @@ def leaderboard(request):
 
     Response shape (stable for clients):
     {
-      "leaderboard": [{"username": "...", "turnover": 123.0}, ...],
+      "leaderboard": [{"rank": 1, "username": "...", "turnover": 123.0, "prize": "₹1,000"}, ...],
       "user_stats": {"rank": 7, "turnover": 1500.0},
       "prizes": {"1st": "₹1,000", "2nd": "₹500", "3rd": "₹100"}
     }
@@ -2314,68 +2314,80 @@ def leaderboard(request):
     Note: Rank is returned as 0 when the user's daily turnover is <= 50 (client shows "Unranked").
     """
     try:
-        from game.models import LeaderboardSetting, UserDailyTurnover
-        from game.utils import get_leaderboard_period_date
+        from game.models import LeaderboardSetting
+        from game.utils import (
+            format_indian_int,
+            get_leaderboard_period_date,
+            get_leaderboard_period_utc_bounds,
+            get_leaderboard_turnover_rows,
+            get_user_period_turnover,
+        )
 
-        # Use real DB user so ID/username are consistent (request.user may be minimal cached user)
         try:
             db_user = User.objects.get(pk=getattr(request.user, 'id', None))
         except Exception:
             return Response({'error': 'User not found'}, status=status.HTTP_401_UNAUTHORIZED)
         current_user_id = db_user.id
 
-        # Current leaderboard period (23:00–23:00 IST); daily turnover is stored in UserDailyTurnover
         period_date = get_leaderboard_period_date()
 
-        # Get prizes from settings
         setting = LeaderboardSetting.objects.first()
         if not setting:
             setting = LeaderboardSetting.objects.create()
 
-        prizes = {
-            1: f"₹{setting.prize_1st:,}",
-            2: f"₹{setting.prize_2nd:,}",
-            3: f"₹{setting.prize_3rd:,}"
+        prize_strings = {
+            '1st': f"₹{format_indian_int(setting.prize_1st)}",
+            '2nd': f"₹{format_indian_int(setting.prize_2nd)}",
+            '3rd': f"₹{format_indian_int(setting.prize_3rd)}",
         }
+        prize_by_rank = {1: prize_strings['1st'], 2: prize_strings['2nd'], 3: prize_strings['3rd']}
 
-        # 1) Top 10 from cached daily turnover (no Bet aggregation)
-        ranked_top10 = UserDailyTurnover.objects.filter(period_date=period_date, turnover__gt=0) \
-            .select_related('user') \
-            .order_by('-turnover', 'user_id')[:10]
-        leaderboard_list = [
-            {
-                'username': (row.user.username or ''),
-                'turnover': float(row.turnover),
+        ranked_rows = get_leaderboard_turnover_rows(period_date, limit=10)
+        leaderboard_list = []
+        for idx, row in enumerate(ranked_rows, start=1):
+            entry = {
+                'rank': idx,
+                'username': (row['user'].username or ''),
+                'turnover': float(row['turnover']),
             }
-            for row in ranked_top10
-        ]
+            if idx <= 3:
+                entry['prize'] = prize_by_rank[idx]
+            leaderboard_list.append(entry)
 
-        # 2) Current user's turnover from cache
-        user_row = UserDailyTurnover.objects.filter(user_id=current_user_id, period_date=period_date).first()
-        user_turnover = float(user_row.turnover) if user_row else 0.0
+        user_turnover = get_user_period_turnover(current_user_id, period_date)
 
-        # 3) Current user's rank: only rank users with meaningful turnover (> 50)
         if user_turnover > 50:
+            from django.db.models import Sum
+            from game.models import Bet, UserDailyTurnover
+
             users_above_count = UserDailyTurnover.objects.filter(
                 period_date=period_date, turnover__gt=user_turnover
             ).count()
+            if users_above_count == 0 and not UserDailyTurnover.objects.filter(period_date=period_date).exists():
+                start_utc, end_utc = get_leaderboard_period_utc_bounds(period_date)
+                users_above_count = (
+                    Bet.objects.filter(created_at__gte=start_utc, created_at__lt=end_utc)
+                    .values('user_id')
+                    .annotate(total=Sum('chip_amount'))
+                    .filter(total__gt=user_turnover)
+                    .count()
+                )
             user_rank = users_above_count + 1
         else:
             user_rank = 0
 
-        logger.info(f"Leaderboard Request - User: {db_user.username} (ID: {current_user_id}), Rank: {user_rank}, Turnover: {user_turnover}")
-        
+        logger.info(
+            f"Leaderboard Request - User: {db_user.username} (ID: {current_user_id}), "
+            f"Rank: {user_rank}, Turnover: {user_turnover}, Period: {period_date}"
+        )
+
         return Response({
             'leaderboard': leaderboard_list,
             'user_stats': {
                 'rank': user_rank,
                 'turnover': user_turnover,
             },
-            'prizes': {
-                '1st': prizes[1],
-                '2nd': prizes[2],
-                '3rd': prizes[3]
-            }
+            'prizes': prize_strings,
         })
     except Exception as e:
         logger.error(f"Error in leaderboard API: {str(e)}", exc_info=True)

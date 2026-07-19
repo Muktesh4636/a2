@@ -152,7 +152,7 @@ fun LeaderboardScreen(viewModel: GunduAtaViewModel, onBack: () -> Unit) {
                 }
             } else if (viewModel.leaderboardPlayers.isEmpty()) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text(stringResource(R.string.no_data_available), color = TextGrey)
+                    Text("No players ranked yet today.\nPlace bets to join the leaderboard!", color = TextGrey, textAlign = TextAlign.Center)
                 }
             } else {
                 // Leaderboard List
@@ -160,8 +160,10 @@ fun LeaderboardScreen(viewModel: GunduAtaViewModel, onBack: () -> Unit) {
                     modifier = Modifier.fillMaxSize(),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    itemsIndexed(viewModel.leaderboardPlayers) { _, playerMap ->
-                        val rank = (playerMap["rank"] as? Double)?.toInt() ?: (playerMap["rank"] as? Int) ?: 0
+                    itemsIndexed(viewModel.leaderboardPlayers) { index, playerMap ->
+                        val rank = (playerMap["rank"] as? Double)?.toInt()
+                            ?: (playerMap["rank"] as? Int)
+                            ?: (index + 1)
                         val name = playerMap["username"] as? String ?: "Unknown"
                         val turnover = (playerMap["turnover"] as? Double) ?: (playerMap["turnover"] as? Int)?.toDouble() ?: 0.0
                         val prize = playerMap["prize"] as? String

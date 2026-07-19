@@ -3106,3 +3106,233 @@ def ending_payment_for_user(request, user_id):
         'username': user.username,
         'ending_payment': str(ending_payment),
     })
+
+
+# ── Colour Game ────────────────────────────────────────────────────────────────
+
+COLOUR_RATIOS = {
+    'red':    1.9,
+    'green':  1.9,
+    'violet': 4.5,
+    'number': {
+        0: 8.0,
+        5: 8.0,
+        **{n: 5.0 for n in range(1, 10) if n != 5},
+    }
+}
+
+
+def _settle_colour_bet(bet_on, bet_number, result, result_number):
+    """Returns payout multiplier (>0 = win, 0 = loss)."""
+    colours_in_result = result.split('_')
+    if bet_on == 'number':
+        if bet_number == result_number:
+            return COLOUR_RATIOS['number'].get(bet_number, 5.0)
+        return 0
+    if bet_on in colours_in_result:
+        return COLOUR_RATIOS[bet_on]
+    return 0
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def colour_round_status(request):
+    """GET /api/colour/round/ — current active colour round status and timer."""
+    from .models import ColourRound
+
+    now = timezone.now()
+    round_obj = ColourRound.objects.filter(
+        status__in=['BETTING', 'CLOSED', 'RESULT']
+    ).order_by('-start_time').first()
+
+    if not round_obj:
+        return Response({'status': 'no_round', 'message': 'No active round'})
+
+    elapsed = (now - round_obj.start_time).total_seconds()
+    timer   = max(0, int(60 - elapsed))
+
+    return Response({
+        'round_id':     round_obj.round_id,
+        'status':       round_obj.status,
+        'timer':        timer,
+        'betting_open': round_obj.status == 'BETTING',
+        'result':       round_obj.result,
+        'number':       round_obj.number,
+        'start_time':   round_obj.start_time.isoformat(),
+    })
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def colour_place_bet(request):
+    """
+    POST /api/colour/bet/
+    Place one or more bets on the current colour round.
+
+    Single bet body:
+        bet_on   (str)  – "red" | "green" | "violet" | "number"
+        number   (int)  – 0-9, required only when bet_on="number"
+        amount   (int)  – stake in rupees
+
+    Multi-bet body:
+        bets: [{"bet_on": "red", "amount": 100}, ...]
+    """
+    from .models import ColourRound, ColourBet
+    from accounts.models import Wallet, Transaction as Txn
+    from django.db import transaction as db_transaction
+
+    raw = request.data
+    bets_input = raw.get('bets', [raw])
+
+    if not bets_input:
+        return Response({'error': 'No bets provided'}, status=status.HTTP_400_BAD_REQUEST)
+
+    round_obj = ColourRound.objects.filter(status='BETTING').order_by('-start_time').first()
+    if not round_obj:
+        return Response({'error': 'No round open for betting right now'}, status=status.HTTP_400_BAD_REQUEST)
+
+    validated = []
+    for b in bets_input:
+        bet_on = str(b.get('bet_on', '')).strip().lower()
+        if bet_on not in ('red', 'green', 'violet', 'number'):
+            return Response({'error': f'bet_on must be red, green, violet or number. Got: {bet_on}'}, status=status.HTTP_400_BAD_REQUEST)
+
+        number = None
+        if bet_on == 'number':
+            try:
+                number = int(b['number'])
+            except (KeyError, ValueError, TypeError):
+                return Response({'error': 'number (0-9) is required when bet_on=number'}, status=status.HTTP_400_BAD_REQUEST)
+            if number not in range(0, 10):
+                return Response({'error': 'number must be between 0 and 9'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            amount = int(b['amount'])
+        except (KeyError, ValueError, TypeError):
+            return Response({'error': 'amount must be an integer'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if amount <= 0:
+            return Response({'error': 'amount must be positive'}, status=status.HTTP_400_BAD_REQUEST)
+
+        validated.append({'bet_on': bet_on, 'number': number, 'amount': amount})
+
+    total_stake = sum(v['amount'] for v in validated)
+
+    try:
+        with db_transaction.atomic():
+            wallet = Wallet.objects.select_for_update().get(user=request.user)
+            if wallet.balance < total_stake:
+                return Response({'error': f'Insufficient balance. Need {total_stake}, have {wallet.balance}'}, status=status.HTTP_400_BAD_REQUEST)
+
+            balance_before = wallet.balance
+            wallet.balance -= total_stake
+            wallet.save(update_fields=['balance', 'updated_at'])
+
+            created_bets = []
+            for v in validated:
+                bet = ColourBet.objects.create(
+                    user=request.user,
+                    round=round_obj,
+                    bet_on=v['bet_on'],
+                    number=v['number'],
+                    amount=v['amount'],
+                    status='PENDING',
+                )
+                created_bets.append(bet)
+
+            Txn.objects.create(
+                user=request.user,
+                transaction_type='BET',
+                amount=-total_stake,
+                balance_before=balance_before,
+                balance_after=wallet.balance,
+                description=f'Colour game bets on round {round_obj.round_id}: {[v["bet_on"] for v in validated]}',
+            )
+
+    except Wallet.DoesNotExist:
+        return Response({'error': 'Wallet not found'}, status=status.HTTP_400_BAD_REQUEST)
+    except Exception as e:
+        logger.error(f"colour_place_bet error: {e}", exc_info=True)
+        return Response({'error': 'Failed to place bet'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    return Response({
+        'round_id':       round_obj.round_id,
+        'bets_placed':    len(created_bets),
+        'total_stake':    total_stake,
+        'wallet_balance': wallet.balance,
+        'bets': [
+            {'id': b.id, 'bet_on': b.bet_on, 'number': b.number, 'amount': b.amount, 'status': b.status}
+            for b in created_bets
+        ],
+    }, status=status.HTTP_201_CREATED)
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def colour_round_result(request, round_id):
+    """GET /api/colour/round/<round_id>/result/ — result of a specific colour round."""
+    from .models import ColourRound
+
+    try:
+        round_obj = ColourRound.objects.get(round_id=round_id)
+    except ColourRound.DoesNotExist:
+        return Response({'error': 'Round not found'}, status=status.HTTP_404_NOT_FOUND)
+
+    return Response({
+        'round_id':    round_obj.round_id,
+        'status':      round_obj.status,
+        'result':      round_obj.result,
+        'number':      round_obj.number,
+        'result_time': round_obj.result_time.isoformat() if round_obj.result_time else None,
+    })
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def colour_my_bets(request):
+    """GET /api/colour/bets/ — authenticated user's colour bet history (last 50)."""
+    from .models import ColourBet
+
+    bets = ColourBet.objects.filter(user=request.user).select_related('round').order_by('-created_at')[:50]
+    return Response({
+        'bets': [
+            {
+                'id':            b.id,
+                'round_id':      b.round.round_id,
+                'bet_on':        b.bet_on,
+                'number':        b.number,
+                'amount':        b.amount,
+                'payout':        b.payout,
+                'status':        b.status,
+                'result':        b.round.result,
+                'result_number': b.round.number,
+                'created_at':    b.created_at.isoformat(),
+                'settled_at':    b.settled_at.isoformat() if b.settled_at else None,
+            }
+            for b in bets
+        ]
+    })
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def colour_recent_results(request):
+    """GET /api/colour/results/ — last 50 completed colour rounds."""
+    from .models import ColourRound
+
+    rounds = ColourRound.objects.filter(
+        status='COMPLETED',
+        result__isnull=False,
+    ).order_by('-result_time')[:50]
+
+    return Response({
+        'results': [
+            {
+                'round_id':    r.round_id,
+                'result':      r.result,
+                'number':      r.number,
+                'result_time': r.result_time.isoformat() if r.result_time else None,
+            }
+            for r in rounds
+        ]
+    })
