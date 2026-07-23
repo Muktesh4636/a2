@@ -13,7 +13,7 @@ const stageEl = document.getElementById("stage");
 
 function stageSize() {
   const w = stageEl?.clientWidth || window.innerWidth;
-  const h = stageEl?.clientHeight || Math.floor(window.innerHeight * 0.28);
+  const h = stageEl?.clientHeight || Math.floor(window.innerHeight * 0.27);
   return { w: Math.max(1, w), h: Math.max(1, h) };
 }
 
@@ -34,29 +34,29 @@ renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x000000);
+scene.background = new THREE.Color(0x0c0406);
 
-const camera = new THREE.PerspectiveCamera(38, startW / startH, 0.05, 50);
+const camera = new THREE.PerspectiveCamera(36, startW / startH, 0.05, 50);
 /* Slight tilt toward the viewer — not a flat top-down */
-camera.position.set(0, 3.45, 1.93);
+camera.position.set(0, 3.15, 1.76);
 
 const controls = new OrbitControls(camera, canvas);
 controls.enableDamping = false;
 controls.enableRotate = false;
 controls.enablePan = false;
 controls.enableZoom = false;
-controls.minDistance = 3.95;
-controls.maxDistance = 3.95;
+controls.minDistance = 3.6;
+controls.maxDistance = 3.6;
 controls.target.set(0, 0.08, 0);
 controls.update();
 controls.enabled = false;
 
 /* ——— Result zoom: physical dolly move + slight lens FOV zoom ——— */
-const CAM_DEFAULT_POS = new THREE.Vector3(0, 3.45, 1.93);
+const CAM_DEFAULT_POS = new THREE.Vector3(0, 3.15, 1.76);
 const CAM_DEFAULT_TARGET = new THREE.Vector3(0, 0.08, 0);
-const CAM_ZOOM_POS = new THREE.Vector3(0, 2.35, 1.28); // physically closer for the win
-const CAM_DEFAULT_FOV = 38;
-const CAM_ZOOM_FOV = 32; // subtle lens zoom to assist the dolly
+const CAM_ZOOM_POS = new THREE.Vector3(0, 2.15, 1.18); // physically closer for the win
+const CAM_DEFAULT_FOV = 36;
+const CAM_ZOOM_FOV = 30; // subtle lens zoom to assist the dolly
 
 const camZoom = {
   mix: 0, // 0 = full wheel view, 1 = zoomed on winning pocket
@@ -1112,6 +1112,8 @@ const betState = {
   pendingRequest: false,
   lastServerWin: 0,
   pendingSpin: null,
+  roundHistory: [], // recent settled results for stats / history panel
+  soundOn: localStorage.getItem("roultee_sound") !== "0",
 };
 
 /** Django API base — production uses Gundu /roulette/api → /api/roulette/ */
@@ -1244,6 +1246,14 @@ function pushHistory(num) {
   chip.className = `hist-chip ${colorClass(num)} latest`;
   chip.textContent = String(num);
   historyEl.replaceChildren(chip);
+
+  betState.roundHistory.unshift({
+    number: num,
+    color: colorClass(num),
+    win: betState.lastServerWin || 0,
+    at: Date.now(),
+  });
+  if (betState.roundHistory.length > 50) betState.roundHistory.length = 50;
 }
 
 function totalBetAmount() {
@@ -1518,6 +1528,7 @@ function settleBets(num) {
 function initBettingUi() {
   buildBetTableV2();
   refreshMoneyUi();
+  initGameMenu();
 
   const chipStack = document.getElementById("chip-stack");
   document.querySelectorAll(".chip[data-chip]").forEach((btn) => {
@@ -1540,6 +1551,198 @@ function initBettingUi() {
   });
   document.getElementById("undo-bet")?.addEventListener("click", () => undoBet());
   document.getElementById("double-bet")?.addEventListener("click", () => doubleBets());
+}
+
+/* ——— Bottom hamburger menu ——— */
+function goLobby() {
+  try {
+    if (window.AndroidBridge?.goHome) {
+      window.AndroidBridge.goHome();
+      return;
+    }
+    if (window.Android?.goHome) {
+      window.Android.goHome();
+      return;
+    }
+    if (window.ReactNativeWebView?.postMessage) {
+      window.ReactNativeWebView.postMessage(JSON.stringify({ type: "lobby", action: "home" }));
+      return;
+    }
+    if (window.parent && window.parent !== window) {
+      window.parent.postMessage({ type: "roultee-lobby", action: "home" }, "*");
+    }
+  } catch (_) {
+    /* fall through */
+  }
+  const home =
+    new URLSearchParams(location.search).get("home") ||
+    localStorage.getItem("roultee_home") ||
+    `${location.origin}/`;
+  location.href = home;
+}
+
+function setMenuOpen(open) {
+  const menu = document.getElementById("game-menu");
+  const btn = document.getElementById("menu-btn");
+  if (!menu) return;
+  menu.classList.toggle("open", open);
+  menu.setAttribute("aria-hidden", String(!open));
+  btn?.setAttribute("aria-expanded", String(open));
+  if (!open) hideAllMenuPanels();
+}
+
+function hideAllMenuPanels() {
+  document.querySelectorAll(".menu-panel").forEach((p) => {
+    p.hidden = true;
+  });
+  const nav = document.getElementById("menu-nav");
+  if (nav) nav.hidden = false;
+}
+
+function showMenuPanel(id) {
+  const nav = document.getElementById("menu-nav");
+  if (nav) nav.hidden = true;
+  document.querySelectorAll(".menu-panel").forEach((p) => {
+    p.hidden = p.id !== id;
+  });
+}
+
+function refreshSoundUi() {
+  const el = document.getElementById("sound-state");
+  if (el) el.textContent = betState.soundOn ? "On" : "Off";
+}
+
+function renderStatsPanel() {
+  const body = document.getElementById("stats-body");
+  if (!body) return;
+  const list = betState.roundHistory;
+  if (!list.length) {
+    body.innerHTML = `<p class="menu-empty">No rounds yet — place a bet and spin.</p>`;
+    return;
+  }
+  let red = 0;
+  let black = 0;
+  let green = 0;
+  const counts = new Map();
+  for (const r of list) {
+    if (r.color === "red") red += 1;
+    else if (r.color === "black") black += 1;
+    else green += 1;
+    counts.set(r.number, (counts.get(r.number) || 0) + 1);
+  }
+  const hot = [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5);
+  const recent = list.slice(0, 12);
+  body.innerHTML = `
+    <div class="stats-grid">
+      <div class="stat-card"><span class="n">${list.length}</span><span class="l">Rounds</span></div>
+      <div class="stat-card red"><span class="n">${red}</span><span class="l">Red</span></div>
+      <div class="stat-card black"><span class="n">${black}</span><span class="l">Black</span></div>
+      <div class="stat-card green"><span class="n">${green}</span><span class="l">Zero</span></div>
+    </div>
+    <h4>Recent</h4>
+    <div class="hist-list">${recent
+      .map((r) => `<div class="hist-chip ${r.color}">${r.number}</div>`)
+      .join("")}</div>
+    <h4>Hot numbers</h4>
+    <div class="hist-list">${
+      hot.length
+        ? hot
+            .map(
+              ([n, c]) =>
+                `<div class="hist-chip ${colorClass(n)}" title="${c}×">${n}</div>`
+            )
+            .join("")
+        : `<span class="menu-empty">—</span>`
+    }</div>
+  `;
+}
+
+async function renderHistoryPanel() {
+  const body = document.getElementById("history-body");
+  if (!body) return;
+  body.innerHTML = `<p class="menu-empty">Loading…</p>`;
+
+  let rows = null;
+  if (betState.apiReady && betState.accessToken) {
+    try {
+      const data = await api("/history/?limit=30");
+      rows = data.results || [];
+    } catch (_) {
+      rows = null;
+    }
+  }
+
+  if (rows && rows.length) {
+    body.innerHTML = `
+      <div class="hist-list" style="margin-bottom:12px">${rows
+        .map(
+          (r) =>
+            `<div class="hist-chip ${colorClass(r.number)}" title="stake ${r.stake}">${r.number}</div>`
+        )
+        .join("")}</div>
+      <div class="panel-body">${rows
+        .slice(0, 15)
+        .map((r) => {
+          const net = (r.payout || 0) - (r.stake || 0);
+          const sign = net >= 0 ? "+" : "";
+          return `<p><strong class="${colorClass(r.number)}">${r.number}</strong>
+            · stake ${fmtMoney(r.stake || 0)}
+            · ${sign}${fmtMoney(net)}</p>`;
+        })
+        .join("")}</div>
+    `;
+    return;
+  }
+
+  if (!betState.roundHistory.length) {
+    body.innerHTML = `<p class="menu-empty">No game history yet.</p>`;
+    return;
+  }
+  body.innerHTML = `
+    <div class="hist-list">${betState.roundHistory
+      .map((r) => `<div class="hist-chip ${r.color}">${r.number}</div>`)
+      .join("")}</div>
+  `;
+}
+
+function initGameMenu() {
+  const menuBtn = document.getElementById("menu-btn");
+  const closeBtn = document.getElementById("menu-close");
+  const backdrop = document.getElementById("menu-backdrop");
+  const soundBtn = document.getElementById("sound-toggle");
+  const lobbyBtn = document.getElementById("lobby-btn");
+  const supportHome = document.getElementById("support-home-btn");
+
+  refreshSoundUi();
+
+  menuBtn?.addEventListener("click", () => {
+    const open = !document.getElementById("game-menu")?.classList.contains("open");
+    setMenuOpen(open);
+  });
+  closeBtn?.addEventListener("click", () => setMenuOpen(false));
+  backdrop?.addEventListener("click", () => setMenuOpen(false));
+
+  document.querySelectorAll(".menu-item[data-panel]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const id = `panel-${btn.dataset.panel}`;
+      if (btn.dataset.panel === "stats") renderStatsPanel();
+      if (btn.dataset.panel === "history") renderHistoryPanel();
+      showMenuPanel(id);
+    });
+  });
+
+  document.querySelectorAll("[data-back]").forEach((btn) => {
+    btn.addEventListener("click", () => hideAllMenuPanels());
+  });
+
+  soundBtn?.addEventListener("click", () => {
+    betState.soundOn = !betState.soundOn;
+    localStorage.setItem("roultee_sound", betState.soundOn ? "1" : "0");
+    refreshSoundUi();
+  });
+
+  lobbyBtn?.addEventListener("click", () => goLobby());
+  supportHome?.addEventListener("click", () => goLobby());
 }
 
 function animate() {

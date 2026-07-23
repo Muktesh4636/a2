@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>Speed Auto Roulette</title>
-  <link rel="stylesheet" href="styles.css?v=145" />
+  <link rel="stylesheet" href="styles.css?v=162" />
   <script type="importmap">
   {
     "imports": {
@@ -18,62 +18,138 @@
   <div id="loading-overlay">Loading…</div>
 
   <div id="app">
-    <!-- TOP: smaller wheel feed -->
-    <section class="stage" id="stage">
-      <header class="top-bar">
-        <div class="top-left">
-          <div class="live-badge" aria-label="Live">
-            <span class="live-dot" aria-hidden="true"></span>
-            <span class="live-text">LIVE</span>
+    <!-- Wheel + board share one continuous game surface -->
+    <section class="game-shell">
+      <div class="stage" id="stage">
+        <header class="top-bar">
+          <div class="top-left">
+            <div class="live-badge" aria-label="Live">
+              <span class="live-dot" aria-hidden="true"></span>
+              <span class="live-text">LIVE</span>
+            </div>
           </div>
-          <div class="game-title">Roulette</div>
+          <div class="top-balance">Balance <strong id="top-balance">₹10,000</strong></div>
+        </header>
+        <canvas id="wheel-canvas"></canvas>
+        <button type="button" id="spin-btn" class="spin-btn">Spin</button>
+        <div id="result" class="result" aria-live="polite"></div>
+        <div id="result-banner" class="result-banner" aria-hidden="true">
+          <span class="rb-side" id="rb-left"></span>
+          <div class="rb-card" id="rb-card"><span id="rb-num"></span></div>
+          <span class="rb-side" id="rb-right"></span>
         </div>
-        <div class="top-balance">Balance <strong id="top-balance">₹10,000</strong></div>
-      </header>
-      <canvas id="wheel-canvas"></canvas>
-      <button type="button" id="spin-btn" class="spin-btn">Spin</button>
-      <div id="result" class="result" aria-live="polite"></div>
-      <div id="result-banner" class="result-banner" aria-hidden="true">
-        <span class="rb-side" id="rb-left"></span>
-        <div class="rb-card" id="rb-card"><span id="rb-num"></span></div>
-        <span class="rb-side" id="rb-right"></span>
+      </div>
+
+      <div class="betting" id="betting">
+        <div class="board-area">
+          <div class="table" id="bet-table"></div>
+
+          <aside class="side-tools">
+            <div class="side-group">
+              <span class="side-label">UNDO</span>
+              <button type="button" id="undo-bet" class="fab undo-fab" title="Undo">↺</button>
+            </div>
+            <div class="chip-stack" id="chip-stack" aria-label="Select chip" aria-expanded="false">
+              <button type="button" class="chip active" data-chip="10">10</button>
+              <button type="button" class="chip" data-chip="20">20</button>
+              <button type="button" class="chip" data-chip="50">50</button>
+              <button type="button" class="chip" data-chip="100">100</button>
+              <button type="button" class="chip" data-chip="500">500</button>
+              <button type="button" class="chip" data-chip="1000">1K</button>
+            </div>
+            <div class="side-group">
+              <button type="button" id="double-bet" class="fab fab-label" title="Double">×2</button>
+              <span class="side-label">DOUBLE</span>
+            </div>
+            <button type="button" id="menu-btn" class="menu-btn" aria-label="Open menu" aria-expanded="false">
+              <span></span><span></span><span></span>
+            </button>
+          </aside>
+        </div>
+
+        <footer class="bet-footer">
+          <span class="last-round-label">Last round is</span>
+          <div class="history" id="history" aria-label="Last round result">
+            <span class="last-round-empty">—</span>
+          </div>
+        </footer>
       </div>
     </section>
 
-    <!-- BOTTOM: betting board like reference -->
-    <section class="betting" id="betting">
-      <div class="board-area">
-        <div class="table" id="bet-table"></div>
-
-        <aside class="side-tools">
-          <div class="side-group">
-            <span class="side-label">UNDO</span>
-            <button type="button" id="undo-bet" class="fab undo-fab" title="Undo">↺</button>
-          </div>
-          <div class="chip-stack" id="chip-stack" aria-label="Select chip" aria-expanded="false">
-            <button type="button" class="chip active" data-chip="10">10</button>
-            <button type="button" class="chip" data-chip="20">20</button>
-            <button type="button" class="chip" data-chip="50">50</button>
-            <button type="button" class="chip" data-chip="100">100</button>
-            <button type="button" class="chip" data-chip="500">500</button>
-            <button type="button" class="chip" data-chip="1000">1K</button>
-          </div>
-          <div class="side-group">
-            <button type="button" id="double-bet" class="fab fab-label" title="Double">×2</button>
-            <span class="side-label">DOUBLE</span>
-          </div>
-        </aside>
-      </div>
-
-      <footer class="bet-footer">
-        <span class="last-round-label">Last round is</span>
-        <div class="history" id="history" aria-label="Last round result">
-          <span class="last-round-empty">—</span>
+    <!-- Bottom menu (hamburger) -->
+    <div id="game-menu" class="game-menu" aria-hidden="true">
+      <button type="button" class="game-menu-backdrop" id="menu-backdrop" aria-label="Close menu"></button>
+      <div class="game-menu-sheet" role="dialog" aria-modal="true" aria-labelledby="menu-title">
+        <div class="game-menu-head">
+          <h2 id="menu-title">Menu</h2>
+          <button type="button" id="menu-close" class="menu-close" aria-label="Close">×</button>
         </div>
-      </footer>
-    </section>
+        <nav class="game-menu-nav" id="menu-nav">
+          <button type="button" class="menu-item" data-panel="stats">Statistics</button>
+          <button type="button" class="menu-item" data-panel="history">Game History</button>
+          <button type="button" class="menu-item" data-panel="rules">Rules</button>
+          <button type="button" class="menu-item" data-panel="info">Info</button>
+          <button type="button" class="menu-item" data-panel="support">Support</button>
+          <button type="button" class="menu-item" id="sound-toggle">
+            Sound <strong id="sound-state">On</strong>
+          </button>
+          <button type="button" class="menu-item menu-item-lobby" id="lobby-btn">Lobby</button>
+        </nav>
+
+        <section class="menu-panel" id="panel-stats" hidden>
+          <button type="button" class="panel-back" data-back>← Back</button>
+          <h3>Statistics</h3>
+          <div id="stats-body" class="panel-body"></div>
+        </section>
+
+        <section class="menu-panel" id="panel-history" hidden>
+          <button type="button" class="panel-back" data-back>← Back</button>
+          <h3>Game History</h3>
+          <div id="history-body" class="panel-body"></div>
+        </section>
+
+        <section class="menu-panel" id="panel-rules" hidden>
+          <button type="button" class="panel-back" data-back>← Back</button>
+          <h3>How to place bets</h3>
+          <div class="panel-body rules-body">
+            <p><strong>1. Choose a chip</strong> — tap the chip stack on the right, then pick a value.</p>
+            <p><strong>2. Place bets</strong> — tap any number or outside bet on the board. Tap again to add another chip.</p>
+            <p><strong>3. Undo / Double</strong> — use Undo to remove the last chip, or ×2 to double all open bets.</p>
+            <p><strong>4. Spin</strong> — press Spin. The server settles the round against your real balance.</p>
+            <h4>Bet types &amp; payouts</h4>
+            <ul>
+              <li><strong>Straight</strong> (single number) — pays 35:1 (36× stake returned)</li>
+              <li><strong>Dozen</strong> (1st/2nd/3rd 12) — pays 2:1</li>
+              <li><strong>Column</strong> (2 TO 1) — pays 2:1</li>
+              <li><strong>Red / Black, Even / Odd, 1–18 / 19–36</strong> — pays 1:1</li>
+              <li><strong>0</strong> — only straight bets on 0 win; even-money bets lose</li>
+            </ul>
+          </div>
+        </section>
+
+        <section class="menu-panel" id="panel-info" hidden>
+          <button type="button" class="panel-back" data-back>← Back</button>
+          <h3>Info</h3>
+          <div class="panel-body">
+            <p><strong>Roulette</strong> — European single-zero wheel (0–36).</p>
+            <p>Results are decided by the server. Your Gundu wallet balance is used for all bets — there is no demo mode.</p>
+            <p>Minimum chip: ₹10. Place at least one bet before spinning.</p>
+          </div>
+        </section>
+
+        <section class="menu-panel" id="panel-support" hidden>
+          <button type="button" class="panel-back" data-back>← Back</button>
+          <h3>Support</h3>
+          <div class="panel-body">
+            <p>Need help with deposits, withdrawals, or game issues?</p>
+            <p>Open <strong>Support</strong> from the Gundu Ata home screen, or contact your agent.</p>
+            <button type="button" class="menu-action" id="support-home-btn">Go to Lobby / Support</button>
+          </div>
+        </section>
+      </div>
+    </div>
   </div>
 
-  <script type="module" src="app.js?v=145"></script>
+  <script type="module" src="app.js?v=162"></script>
 </body>
 </html>
