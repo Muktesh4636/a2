@@ -1,0 +1,32 @@
+# Large media / reference assets
+*.mp4
+*.webm
+*.mov
+*.mp3
+*.wav
+
+# Images / screenshots / previews
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.webp
+
+# Keep game UI assets
+!frontend/chips/*.png
+!android-native/app-web/src/main/assets/web/chips/*.png
+
+# Python / local tooling
+__pycache__/
+_models/
+*.pyc
+.Python
+.venv/
+venv/
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*~

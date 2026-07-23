@@ -22,6 +22,7 @@ from accounts import handoff as handoff_views
 from game import views as game_views
 from game import admin_views as game_admin_views
 from game import cricket_views
+from game import roulette_views
 
 urlpatterns = [
     # APK Download endpoints (MUST come first, before everything else)
@@ -127,6 +128,15 @@ urlpatterns = [
     path('api/colour/round/<str:round_id>/result/', game_views.colour_round_result, name='colour_round_result'),
     path('api/colour/bets/', game_views.colour_my_bets, name='colour_my_bets'),
     path('api/colour/results/', game_views.colour_recent_results, name='colour_recent_results'),
+
+    # Roulette — real JWT + wallet only (no guest sessions)
+    path('api/roulette/me/', roulette_views.roulette_me, name='roulette_me'),
+    path('api/roulette/bets/', roulette_views.roulette_place_bet, name='roulette_place_bet'),
+    path('api/roulette/bets/undo/', roulette_views.roulette_undo, name='roulette_undo'),
+    path('api/roulette/bets/double/', roulette_views.roulette_double, name='roulette_double'),
+    path('api/roulette/bets/clear/', roulette_views.roulette_clear, name='roulette_clear'),
+    path('api/roulette/spin/', roulette_views.roulette_spin, name='roulette_spin'),
+    path('api/roulette/history/', roulette_views.roulette_history, name='roulette_history'),
 
     # Game endpoints (api/game/)
     path('api/game/', include('game.urls')),

@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.Roultee" parent="android:Theme.Material.NoActionBar">
+        <item name="android:statusBarColor">#120408</item>
+        <item name="android:navigationBarColor">#0c0406</item>
+        <item name="android:windowBackground">#120408</item>
+    </style>
+</resources>

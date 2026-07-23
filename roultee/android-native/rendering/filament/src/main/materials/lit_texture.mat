@@ -1,0 +1,24 @@
+material {
+    name : LitTexture,
+    shadingModel : lit,
+    blending : opaque,
+    doubleSided : true,
+    parameters : [
+        { type : sampler2d, name : baseMap },
+        { type : float, name : roughness },
+        { type : float, name : metallic }
+    ],
+    requires : [
+        position,
+        tangents,
+        uv0
+    ]
+}
+fragment {
+    void material(inout MaterialInputs material) {
+        prepareMaterial(material);
+        material.baseColor = texture(materialParams_baseMap, getUV0());
+        material.roughness = materialParams.roughness;
+        material.metallic = materialParams.metallic;
+    }
+}

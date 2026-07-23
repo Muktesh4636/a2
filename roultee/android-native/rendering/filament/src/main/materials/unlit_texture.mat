@@ -1,0 +1,20 @@
+material {
+    name : UnlitTexture,
+    shadingModel : unlit,
+    blending : transparent,
+    depthWrite : false,
+    doubleSided : true,
+    parameters : [
+        { type : sampler2d, name : baseMap }
+    ],
+    requires : [
+        position,
+        uv0
+    ]
+}
+fragment {
+    void material(inout MaterialInputs material) {
+        prepareMaterial(material);
+        material.baseColor = texture(materialParams_baseMap, getUV0());
+    }
+}

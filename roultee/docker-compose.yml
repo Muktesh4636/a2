@@ -1,0 +1,20 @@
+services:
+  roultee_web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: roultee_web
+    ports:
+      - "127.0.0.1:8010:8010"
+    volumes:
+      - ./backend:/app
+      - roultee_db:/app/data
+    environment:
+      - DJANGO_SETTINGS_MODULE=config.settings
+    restart: unless-stopped
+    command: >
+      sh -c "python manage.py migrate --noinput &&
+             gunicorn config.wsgi:application --bind 0.0.0.0:8010 --workers 2 --timeout 60"
+
+volumes:
+  roultee_db:

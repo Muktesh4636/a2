@@ -1,0 +1,23 @@
+material {
+    name : LitColor,
+    shadingModel : lit,
+    blending : opaque,
+    doubleSided : true,
+    parameters : [
+        { type : float4, name : baseColor },
+        { type : float, name : roughness },
+        { type : float, name : metallic }
+    ],
+    requires : [
+        position,
+        tangents
+    ]
+}
+fragment {
+    void material(inout MaterialInputs material) {
+        prepareMaterial(material);
+        material.baseColor = materialParams.baseColor;
+        material.roughness = materialParams.roughness;
+        material.metallic = materialParams.metallic;
+    }
+}

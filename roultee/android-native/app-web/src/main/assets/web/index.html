@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Speed Auto Roulette</title>
+  <link rel="stylesheet" href="styles.css?v=145" />
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "./vendor/three/three.module.js",
+      "three/addons/": "./vendor/three/addons/"
+    }
+  }
+  </script>
+</head>
+<body>
+  <div id="loading-overlay">Loading…</div>
+
+  <div id="app">
+    <!-- TOP: smaller wheel feed -->
+    <section class="stage" id="stage">
+      <header class="top-bar">
+        <div class="top-left">
+          <div class="live-badge" aria-label="Live">
+            <span class="live-dot" aria-hidden="true"></span>
+            <span class="live-text">LIVE</span>
+          </div>
+          <div class="game-title">Roulette</div>
+        </div>
+        <div class="top-balance">Balance <strong id="top-balance">₹10,000</strong></div>
+      </header>
+      <canvas id="wheel-canvas"></canvas>
+      <button type="button" id="spin-btn" class="spin-btn">Spin</button>
+      <div id="result" class="result" aria-live="polite"></div>
+      <div id="result-banner" class="result-banner" aria-hidden="true">
+        <span class="rb-side" id="rb-left"></span>
+        <div class="rb-card" id="rb-card"><span id="rb-num"></span></div>
+        <span class="rb-side" id="rb-right"></span>
+      </div>
+    </section>
+
+    <!-- BOTTOM: betting board like reference -->
+    <section class="betting" id="betting">
+      <div class="board-area">
+        <div class="table" id="bet-table"></div>
+
+        <aside class="side-tools">
+          <div class="side-group">
+            <span class="side-label">UNDO</span>
+            <button type="button" id="undo-bet" class="fab undo-fab" title="Undo">↺</button>
+          </div>
+          <div class="chip-stack" id="chip-stack" aria-label="Select chip" aria-expanded="false">
+            <button type="button" class="chip active" data-chip="10">10</button>
+            <button type="button" class="chip" data-chip="20">20</button>
+            <button type="button" class="chip" data-chip="50">50</button>
+            <button type="button" class="chip" data-chip="100">100</button>
+            <button type="button" class="chip" data-chip="500">500</button>
+            <button type="button" class="chip" data-chip="1000">1K</button>
+          </div>
+          <div class="side-group">
+            <button type="button" id="double-bet" class="fab fab-label" title="Double">×2</button>
+            <span class="side-label">DOUBLE</span>
+          </div>
+        </aside>
+      </div>
+
+      <footer class="bet-footer">
+        <span class="last-round-label">Last round is</span>
+        <div class="history" id="history" aria-label="Last round result">
+          <span class="last-round-empty">—</span>
+        </div>
+      </footer>
+    </section>
+  </div>
+
+  <script type="module" src="app.js?v=145"></script>
+</body>
+</html>

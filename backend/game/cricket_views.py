@@ -289,11 +289,20 @@ def _parse_cricket_outcomes(
     # When we know the batting team, only use markets mentioning that team.
     # This prevents picking up pre-set markets for the NEXT innings
     # (e.g. "for over 1 - Zimbabwe" when Bangladesh are actually batting).
+    #
+    # IMPORTANT: bookmakers often leave the previous over's market open for a
+    # short time (e.g. both "Runs in Over 5" and "Runs in Over 6"). Always take
+    # the HIGHEST over number — min() wrongly reports a completed over as current.
     if not result and markets:
         for_over_nums  = []
         delivery_hints = []   # (over, ball) tuples from per-delivery markets
 
         for m in markets:
+            # Only open markets reflect the over currently being bowled
+            m_status = str(m.get("status") or "").lower()
+            if m_status and m_status not in ("open", "o", "active", "1"):
+                continue
+
             desc = m.get("description", "")
 
             # Skip markets for the non-batting team
@@ -302,6 +311,12 @@ def _parse_cricket_outcomes(
                     market_team = desc.rsplit(" - ", 1)[-1].strip()
                     if market_team and market_team.lower() != batting_team.lower():
                         continue
+                elif (
+                    batting_team.lower() not in desc.lower()
+                    and re.search(r'\bover\b', desc, re.IGNORECASE)
+                ):
+                    # "OtherTeam Runs in Over X" while our team is batting
+                    continue
 
             # "Total runs in 3rd delivery of over 15 in 1st innings - Team"
             # → gives both ball number AND over number (most precise)
@@ -320,8 +335,8 @@ def _parse_cricket_outcomes(
                 for_over_nums.append(int(n))
 
         if delivery_hints:
-            # Pick the hint with the lowest over, then lowest ball (earliest open market)
-            delivery_hints.sort()
+            # Highest over, then highest ball = over currently being bowled
+            delivery_hints.sort(reverse=True)
             best_over, best_ball = delivery_hints[0]
             result = {
                 "current_over":        best_over,
@@ -333,7 +348,7 @@ def _parse_cricket_outcomes(
             }
         elif for_over_nums:
             result = {
-                "current_over":        min(for_over_nums),
+                "current_over":        max(for_over_nums),
                 "current_ball":        None,
                 "current_over_balls":  None,
                 "last_ball_timestamp": None,

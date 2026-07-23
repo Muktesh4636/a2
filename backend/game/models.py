@@ -732,3 +732,80 @@ class ColourBet(models.Model):
 
     def __str__(self):
         return f"{self.user.username} — {self.round.round_id} — {self.bet_on} — {self.amount}"
+
+
+# ── Roulette (real-wallet) ─────────────────────────────────────────────────────
+
+class RouletteBetType(models.TextChoices):
+    STRAIGHT = "straight", "Straight"
+    RED = "red", "Red"
+    BLACK = "black", "Black"
+    EVEN = "even", "Even"
+    ODD = "odd", "Odd"
+    LOW = "low", "1-18"
+    HIGH = "high", "19-36"
+    DOZEN = "dozen", "Dozen"
+    COLUMN = "column", "Column"
+
+
+class RoulettePendingBet(models.Model):
+    """Open roulette bet before spin settles — linked to real Gundu user."""
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="roulette_pending_bets"
+    )
+    bet_type = models.CharField(max_length=16, choices=RouletteBetType.choices)
+    bet_value = models.CharField(max_length=8, blank=True, default="")
+    amount = models.PositiveIntegerField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["user", "bet_type", "bet_value"],
+                name="uniq_roulette_pending_bet_key",
+            ),
+        ]
+
+    @property
+    def bet_key(self) -> str:
+        return f"{self.bet_type}:{self.bet_value}" if self.bet_value else self.bet_type
+
+
+class RouletteUndoEntry(models.Model):
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="roulette_undo_stack"
+    )
+    bet_type = models.CharField(max_length=16, choices=RouletteBetType.choices)
+    bet_value = models.CharField(max_length=8, blank=True, default="")
+    chip = models.PositiveIntegerField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["id"]
+
+
+class RouletteRound(models.Model):
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="roulette_rounds"
+    )
+    winning_number = models.PositiveSmallIntegerField()
+    total_stake = models.PositiveIntegerField(default=0)
+    total_payout = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+
+class RouletteSettledBet(models.Model):
+    round = models.ForeignKey(RouletteRound, on_delete=models.CASCADE, related_name="bets")
+    bet_type = models.CharField(max_length=16, choices=RouletteBetType.choices)
+    bet_value = models.CharField(max_length=8, blank=True, default="")
+    amount = models.PositiveIntegerField()
+    won = models.BooleanField(default=False)
+    payout = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ["id"]
