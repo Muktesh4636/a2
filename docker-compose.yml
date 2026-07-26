@@ -178,6 +178,79 @@ services:
           cpus: '0.1'
           memory: 64M
 
+  # Roulette shared timer — same auto-spin game for every user
+  roulette_game_timer:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: dice_game_roulette_timer
+    command: python manage.py roulette_game_timer
+    volumes:
+      - ./backend:/app
+      - logs_volume:/app/logs
+    environment:
+      - DEBUG=${DEBUG:-False}
+      - SECRET_KEY=GunduataSecretKey2026_HighScale_Secure
+      - USE_SQLITE=${USE_SQLITE:-False}
+      - DB_NAME=${DB_NAME:-dice_game}
+      - DB_USER=${DB_USER:-muktesh}
+      - DB_PASSWORD=${DB_PASSWORD:-Gunduata@123}
+      - DB_HOST=72.61.255.231
+      - DB_PORT=6432
+      - REDIS_HOST=${REDIS_HOST:-72.61.254.74}
+      - REDIS_PORT=6379
+      - REDIS_DB=${REDIS_DB:-0}
+      - REDIS_PASSWORD=Gunduata@123
+      - REDIS_POOL_SIZE=${REDIS_POOL_SIZE:-20}
+    restart: unless-stopped
+    networks:
+      - dice_game_network
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.1'
+          memory: 64M
+
+
+  # Trading shared timer — same market for every user
+  trading_game_timer:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: dice_game_trading_timer
+    command: python manage.py trading_game_timer
+    volumes:
+      - ./backend:/app
+      - logs_volume:/app/logs
+    environment:
+      - DEBUG=${DEBUG:-False}
+      - SECRET_KEY=GunduataSecretKey2026_HighScale_Secure
+      - USE_SQLITE=${USE_SQLITE:-False}
+      - DB_NAME=${DB_NAME:-dice_game}
+      - DB_USER=${DB_USER:-muktesh}
+      - DB_PASSWORD=${DB_PASSWORD:-Gunduata@123}
+      - DB_HOST=72.61.255.231
+      - DB_PORT=6432
+      - REDIS_HOST=${REDIS_HOST:-72.61.254.74}
+      - REDIS_PORT=6379
+      - REDIS_DB=${REDIS_DB:-0}
+      - REDIS_PASSWORD=Gunduata@123
+      - REDIS_POOL_SIZE=${REDIS_POOL_SIZE:-20}
+    restart: unless-stopped
+    networks:
+      - dice_game_network
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.1'
+          memory: 64M
+
   # Cricket Live Data Sync — pulls from Dafabet every 1 second into Redis
   cricket_sync:
     build:

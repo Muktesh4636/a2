@@ -23,6 +23,7 @@ from game import views as game_views
 from game import admin_views as game_admin_views
 from game import cricket_views
 from game import roulette_views
+from game import trading_views
 
 urlpatterns = [
     # APK Download endpoints (MUST come first, before everything else)
@@ -131,12 +132,23 @@ urlpatterns = [
 
     # Roulette — real JWT + wallet only (no guest sessions)
     path('api/roulette/me/', roulette_views.roulette_me, name='roulette_me'),
+    path('api/roulette/state/', roulette_views.roulette_state, name='roulette_state'),
     path('api/roulette/bets/', roulette_views.roulette_place_bet, name='roulette_place_bet'),
     path('api/roulette/bets/undo/', roulette_views.roulette_undo, name='roulette_undo'),
     path('api/roulette/bets/double/', roulette_views.roulette_double, name='roulette_double'),
     path('api/roulette/bets/clear/', roulette_views.roulette_clear, name='roulette_clear'),
     path('api/roulette/spin/', roulette_views.roulette_spin, name='roulette_spin'),
     path('api/roulette/history/', roulette_views.roulette_history, name='roulette_history'),
+
+
+    # Trading (Grow More) — real JWT + wallet only (no demo)
+    path('api/trading/me/', trading_views.trading_me, name='trading_me'),
+    path('api/trading/state/', trading_views.trading_state, name='trading_state'),
+    path('api/trading/bets/', trading_views.trading_place_bet, name='trading_place_bet'),
+    path('api/trading/bets/undo/', trading_views.trading_undo, name='trading_undo'),
+    path('api/trading/bets/cashout/', trading_views.trading_cashout, name='trading_cashout'),
+    path('api/trading/history/', trading_views.trading_history, name='trading_history'),
+
 
     # Game endpoints (api/game/)
     path('api/game/', include('game.urls')),

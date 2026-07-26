@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover" />
+  <title>Grow More</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css?v=41" />
+</head>
+<body>
+  <div class="phone">
+    <header class="topbar">
+      <div class="brand">
+        <span class="logo">GROW<span>MORE</span></span>
+      </div>
+      <div class="top-right">
+        <div class="wallet">
+          <span>₹</span>
+          <strong id="balance">10000.00</strong>
+        </div>
+        <button class="deposit" id="deposit" aria-label="Add funds">+</button>
+      </div>
+    </header>
+
+    <div class="chart-area">
+      <div class="cashed-out" id="cashedOut">
+        <div class="co-title">CASHED OUT</div>
+        <div class="co-list" id="cashedOutList"></div>
+      </div>
+
+      <div class="live-badge" id="liveBadge" hidden>
+        <span id="liveArrow">▼</span>
+        <strong id="livePct">0%</strong>
+      </div>
+
+      <canvas id="chart"></canvas>
+
+      <div class="zone-labels" aria-hidden="true">
+        <span class="zone-up">▲ UP</span>
+        <span class="zone-down">▼ DOWN</span>
+      </div>
+
+      <div class="host-pip" id="hostPip">
+        <div class="host-video">
+          <video class="host-face" id="hostFace"
+            src="photos/host-speaking.mp4?v=27"
+            autoplay muted loop playsinline
+            poster="photos/host-girl.jpg"></video>
+        </div>
+        <span class="live-tag">LIVE</span>
+      </div>
+
+      <div class="bets-banner" id="betsBanner">
+        PLACE YOUR BETS <span id="timerNum">7</span>
+      </div>
+
+      <div class="result-flash" id="resultFlash" hidden></div>
+    </div>
+
+    <div class="mini-wrap">
+      <canvas id="miniChart"></canvas>
+    </div>
+
+    <div class="sentiment" id="sentiment">
+      <!-- Green UP half -->
+      <div class="sent-half sent-half-up">
+        <canvas id="liquidUp" class="liquid-canvas"></canvas>
+        <strong class="sent-pct" id="upPctLabel">50%</strong>
+        <div class="sent-info">
+          <span class="sent-amt" id="upAmount">₹ 18,674</span>
+          <span class="sent-players"><span class="sent-person">👤</span><span id="upPlayers">46</span></span>
+        </div>
+      </div>
+      <!-- Red DOWN half -->
+      <div class="sent-half sent-half-down">
+        <canvas id="liquidDown" class="liquid-canvas"></canvas>
+        <div class="sent-info sent-info-right">
+          <span class="sent-amt" id="downAmount">₹ 18,860</span>
+          <span class="sent-players"><span class="sent-person">👤</span><span id="downPlayers">32</span></span>
+        </div>
+        <strong class="sent-pct" id="downPctLabel">50%</strong>
+      </div>
+      <!-- Progress bar at bottom -->
+      <div class="sent-fill">
+        <div class="sent-fill-up" id="sentFillUp" style="width:50%"></div>
+      </div>
+    </div>
+
+    <div class="bottom-dock">
+      <div class="portfolio-row">
+        <div class="portfolio-box">
+          <span>PORTFOLIO</span>
+          <strong>₹<em id="portfolioValue">0.00</em></strong>
+          <small>3% FEE</small>
+        </div>
+        <button class="cashout" id="cashOutBtn" disabled>CASH OUT</button>
+      </div>
+
+      <div class="sides">
+        <button class="side up" id="betUp">
+          <span class="chip-side left"></span>
+          <span class="side-label">UP</span>
+          <span class="tri">▲</span>
+        </button>
+        <button class="side down" id="betDown">
+          <span class="side-label">DOWN</span>
+          <span class="tri">▼</span>
+          <span class="chip-side right"></span>
+        </button>
+      </div>
+
+      <div class="tools">
+        <div class="chip-stack" id="chipStack" aria-label="Select chip" aria-expanded="false">
+          <button type="button" class="chip active" data-amt="10" data-chip="10" aria-label="Chip 10">10</button>
+          <button type="button" class="chip" data-amt="20" data-chip="20" aria-label="Chip 20">20</button>
+          <button type="button" class="chip" data-amt="50" data-chip="50" aria-label="Chip 50">50</button>
+          <button type="button" class="chip" data-amt="100" data-chip="100" aria-label="Chip 100">100</button>
+          <button type="button" class="chip" data-amt="500" data-chip="500" aria-label="Chip 500">500</button>
+          <button type="button" class="chip" data-amt="1000" data-chip="1000" aria-label="Chip 1000">1K</button>
+        </div>
+        <span id="stakeDisplay" class="sr-only">10</span>
+        <button class="tool menu" id="menuBtn" title="Menu">☰</button>
+      </div>
+
+    </div>
+  </div>
+
+  <div class="toast" id="toast" hidden></div>
+  <script src="game.js?v=41"></script>
+</body>
+</html>
