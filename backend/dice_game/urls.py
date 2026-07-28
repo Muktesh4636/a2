@@ -24,6 +24,8 @@ from game import admin_views as game_admin_views
 from game import cricket_views
 from game import roulette_views
 from game import trading_views
+from game import chicken_road_views
+from game import chicken_road2_views
 
 urlpatterns = [
     # APK Download endpoints (MUST come first, before everything else)
@@ -148,6 +150,23 @@ urlpatterns = [
     path('api/trading/bets/undo/', trading_views.trading_undo, name='trading_undo'),
     path('api/trading/bets/cashout/', trading_views.trading_cashout, name='trading_cashout'),
     path('api/trading/history/', trading_views.trading_history, name='trading_history'),
+
+    # Chicken Road (v1) — JWT + wallet
+    path('api/chicken-road/config/', chicken_road_views.chicken_road_config, name='chicken_road_config'),
+    path('api/chicken-road/me/', chicken_road_views.chicken_road_me, name='chicken_road_me'),
+    path('api/chicken-road/start/', chicken_road_views.chicken_road_start, name='chicken_road_start'),
+    path('api/chicken-road/<uuid:round_id>/', chicken_road_views.chicken_road_round, name='chicken_road_round'),
+    path('api/chicken-road/<uuid:round_id>/go/', chicken_road_views.chicken_road_go, name='chicken_road_go'),
+    path('api/chicken-road/<uuid:round_id>/cashout/', chicken_road_views.chicken_road_cashout, name='chicken_road_cashout'),
+
+    # Chicken Road 2 — JWT + wallet
+    path('api/chicken-road-2/config/', chicken_road2_views.chicken_road2_config, name='chicken_road2_config'),
+    path('api/chicken-road-2/me/', chicken_road2_views.chicken_road2_me, name='chicken_road2_me'),
+    path('api/chicken-road-2/start/', chicken_road2_views.chicken_road2_start, name='chicken_road2_start'),
+    path('api/chicken-road-2/<uuid:round_id>/', chicken_road2_views.chicken_road2_round, name='chicken_road2_round'),
+    path('api/chicken-road-2/<uuid:round_id>/step/', chicken_road2_views.chicken_road2_step, name='chicken_road2_step'),
+    path('api/chicken-road-2/<uuid:round_id>/cashout/', chicken_road2_views.chicken_road2_cashout, name='chicken_road2_cashout'),
+    path('api/chicken-road-2/<uuid:round_id>/forfeit/', chicken_road2_views.chicken_road2_forfeit, name='chicken_road2_forfeit'),
 
 
     # Game endpoints (api/game/)

@@ -1,0 +1,688 @@
+/* Tokens measured from official ChickenRoadTwoClient */
+:root {
+  --bg: #313131;
+  --panel: #424242;
+  --input: #545454;
+  --minmax: #656678;
+  --play: #3dc55b;
+  --cash: #fdcf4b;
+  --cash-text: #1d1f21;
+  --text: #ffffff;
+  --border-soft: rgba(255, 255, 255, 0.1);
+  --shadow: rgba(0, 0, 0, 0.25) 0px 2.99px 3.987px 0px;
+  --font: -apple-system, "system-ui", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --mont: Montserrat, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  overflow: hidden;
+}
+
+button,
+input {
+  font: inherit;
+}
+
+.ThemeBackground {
+  min-height: 100%;
+  height: 100%;
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+}
+
+/* ===== Header (45px, #424242, pad 8px 12px) ===== */
+.HeaderContainer {
+  height: 45px;
+  background: var(--panel);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  flex-shrink: 0;
+}
+
+.HeaderLogo img {
+  display: block;
+  height: 27px;
+  width: auto;
+}
+
+.HeaderContent {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.WrapperAmount {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 33px;
+  padding: 4px 16px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+  font-size: 16px;
+  line-height: 18.4px;
+  white-space: nowrap;
+}
+
+.WrapperFullscreen {
+  display: none;
+}
+
+.HeaderMenuWrapperIcon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.HeaderMenuWrapperIcon {
+  width: 24px;
+  height: 27px;
+}
+
+/* ===== Game layout ===== */
+.ChickenRoadGameUIRoot {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.GameBlockContainer {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+
+.GameViewport {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+}
+
+.StageContainer {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: #2a2a2a;
+}
+
+#game {
+  display: block;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+  cursor: grab;
+  user-select: none;
+}
+
+.LiveOverlay {
+  position: absolute;
+  top: 10px;
+  left: 12px;
+  z-index: 3;
+  pointer-events: none;
+  font-size: 12px;
+}
+
+.LiveLine {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.LiveLine .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #3dc55b;
+  box-shadow: 0 0 0 2px rgba(61, 197, 91, 0.25);
+}
+
+.WinToast {
+  margin-top: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 10px 5px 6px;
+  border-radius: 20px;
+  background: rgba(20, 20, 20, 0.78);
+  width: max-content;
+  max-width: 240px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.WinToast .avatar {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #e11d48 url("./static/image/winNotification.png") center/cover no-repeat;
+  flex-shrink: 0;
+}
+
+.WinToast .name {
+  color: #fff;
+  font-size: 12px;
+}
+
+.WinToast .amt {
+  color: #3dc55b;
+  font-weight: 700;
+  font-size: 12px;
+}
+
+.MultBadge {
+  position: absolute;
+  z-index: 4;
+  left: 18%;
+  bottom: 28%;
+  transform: translateX(-50%);
+  background: #1e3a8a;
+  color: #fff;
+  font-family: var(--mont);
+  font-weight: 700;
+  font-size: 14px;
+  padding: 8px 14px;
+  border-radius: 8px;
+  pointer-events: none;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
+}
+
+.MultBadge::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: -7px;
+  transform: translateX(-50%);
+  border-left: 8px solid transparent;
+  border-right: 8px solid transparent;
+  border-bottom: 8px solid #1e3a8a;
+}
+
+/* ===== Bet bar (#424242, radius 12, border soft, pad 16 12) ===== */
+.ResizableBlockOverflow {
+  flex-shrink: 0;
+  padding: 14px 15px 16px;
+}
+
+.ResizableBlockContainer {
+  width: 100%;
+}
+
+.BetBarWrapper {
+  background: var(--panel);
+  border: 2px solid var(--border-soft);
+  border-radius: 12px;
+  padding: 16px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.BetInputWrapper .Container {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.InputWrapper {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 43px;
+  padding: 8px;
+  border-radius: 6px;
+  background: var(--input);
+  border: 1px solid var(--input);
+}
+
+.BetInput {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: #fff;
+  text-align: center;
+  font-weight: 600;
+  font-size: 14px;
+  line-height: 21px;
+}
+
+.InputButton {
+  border: 0;
+  cursor: pointer;
+  color: #fff;
+  font-weight: 600;
+  font-size: 14px;
+  line-height: 21px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+}
+
+.InputButton.minmax {
+  background: var(--minmax);
+  border-radius: 4px;
+  padding: 4px 8px;
+  height: 26px;
+}
+
+.InputButton.fast {
+  background: var(--input);
+  border: 1px solid var(--input);
+  border-radius: 8px;
+  padding: 11px 1px;
+  height: 41px;
+  flex: 1;
+  box-shadow: var(--shadow);
+}
+
+.InputControls {
+  display: flex;
+  gap: 8px;
+}
+
+.InputButton:disabled,
+.Button:disabled,
+.SelectControl:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* Difficulty select */
+.SelectContainer {
+  position: relative;
+  width: 100%;
+}
+
+.SelectContainer[hidden] {
+  display: none !important;
+}
+
+.SelectControl {
+  width: 100%;
+  height: 48px;
+  min-height: 42px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--input);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 12px;
+  cursor: pointer;
+  gap: 10px;
+}
+
+.DiffCurrent {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.DiffCurrentText {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  min-width: 0;
+}
+
+.difficulty-value {
+  font-size: 14px;
+  font-weight: 700;
+  color: #fff;
+  line-height: 1.15;
+}
+
+.DiffHeatTag {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: rgba(255, 255, 255, 0.55);
+  line-height: 1.1;
+}
+
+.DiffHeatTag.hot {
+  color: #ffb347;
+}
+
+.DiffHeatTag.hotter {
+  color: #ff7a3d;
+}
+
+.DiffHeatTag.extreme {
+  color: #ff4d4d;
+}
+
+.DiffChevron {
+  flex-shrink: 0;
+  opacity: 0.85;
+}
+
+.SelectControl[aria-expanded="true"] .DiffChevron {
+  transform: rotate(180deg);
+}
+
+.SelectMenu {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: calc(100% + 8px);
+  background: #2f2f2f;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  overflow: hidden;
+  z-index: 20;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.SelectMenu[hidden] {
+  display: none !important;
+}
+
+.DiffOption {
+  width: 100%;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 12px;
+  text-align: left;
+  background: transparent;
+  border: 0;
+  color: #fff;
+  padding: 10px 12px;
+  border-radius: 9px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.DiffOption:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.DiffOption[aria-selected="true"] {
+  background: linear-gradient(90deg, rgba(253, 207, 75, 0.18), rgba(255, 255, 255, 0.04));
+  box-shadow: inset 0 0 0 1px rgba(253, 207, 75, 0.35);
+}
+
+.DiffOptionBody {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.DiffOptionName {
+  font-weight: 700;
+  font-size: 14px;
+  line-height: 1.15;
+}
+
+.DiffOptionTag {
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.DiffOptionTag.hot {
+  color: #ffb347;
+}
+
+.DiffOptionTag.hotter {
+  color: #ff7a3d;
+}
+
+.DiffOptionTag.extreme {
+  color: #ff4d4d;
+}
+
+.DiffOptionCheck {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: transparent;
+}
+
+.DiffOption[aria-selected="true"] .DiffOptionCheck {
+  background: #fdcf4b;
+  box-shadow: 0 0 8px rgba(253, 207, 75, 0.65);
+}
+
+/* Flame heat meter */
+.DiffHeat {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 2px;
+  min-width: 34px;
+  height: 22px;
+}
+
+.DiffHeat .flame {
+  display: block;
+  width: 8px;
+  border-radius: 6px 6px 3px 3px;
+  background: linear-gradient(180deg, #ffe566 0%, #ff9a1f 45%, #ff4d00 100%);
+  box-shadow: 0 0 6px rgba(255, 140, 0, 0.45);
+  position: relative;
+}
+
+.DiffHeat .flame::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: -3px;
+  width: 55%;
+  height: 55%;
+  transform: translateX(-50%) rotate(45deg);
+  border-radius: 2px 60% 2px 60%;
+  background: inherit;
+}
+
+.DiffHeat[data-heat="1"] .flame:nth-child(1) {
+  height: 10px;
+  background: linear-gradient(180deg, #9ad0ff 0%, #4aa3ff 55%, #2f6fd6 100%);
+  box-shadow: 0 0 6px rgba(74, 163, 255, 0.45);
+}
+
+.DiffHeat[data-heat="2"] .flame:nth-child(1) {
+  height: 10px;
+  opacity: 0.55;
+}
+
+.DiffHeat[data-heat="2"] .flame:nth-child(2) {
+  height: 16px;
+}
+
+.DiffHeat[data-heat="3"] .flame:nth-child(1) {
+  height: 9px;
+  opacity: 0.45;
+}
+
+.DiffHeat[data-heat="3"] .flame:nth-child(2) {
+  height: 14px;
+  opacity: 0.75;
+}
+
+.DiffHeat[data-heat="3"] .flame:nth-child(3) {
+  height: 18px;
+  background: linear-gradient(180deg, #ffd36a 0%, #ff7a1f 40%, #ff2d00 100%);
+}
+
+.DiffHeat[data-heat="4"] .flame:nth-child(1) {
+  height: 9px;
+  opacity: 0.4;
+}
+
+.DiffHeat[data-heat="4"] .flame:nth-child(2) {
+  height: 13px;
+  opacity: 0.65;
+}
+
+.DiffHeat[data-heat="4"] .flame:nth-child(3) {
+  height: 17px;
+  opacity: 0.85;
+}
+
+.DiffHeat[data-heat="4"] .flame:nth-child(4) {
+  height: 21px;
+  background: linear-gradient(180deg, #fff1a0 0%, #ff5a1f 40%, #d10000 100%);
+  box-shadow: 0 0 10px rgba(255, 60, 0, 0.7);
+}
+
+.DiffOption[data-diff="medium"] .DiffHeat .flame {
+  animation: heatPulse 1.4s ease-in-out infinite;
+}
+
+.DiffOption[data-diff="hard"] .DiffHeat .flame:nth-child(3),
+.DiffOption[data-diff="hardcore"] .DiffHeat .flame:nth-child(4) {
+  animation: heatPulse 1.1s ease-in-out infinite;
+}
+
+@keyframes heatPulse {
+  0%,
+  100% {
+    filter: brightness(1);
+    transform: scaleY(1);
+  }
+  50% {
+    filter: brightness(1.25);
+    transform: scaleY(1.08);
+  }
+}
+
+/* Action buttons */
+.ButtonWrapper {
+  display: flex;
+  gap: 10px;
+}
+
+.ButtonWrapper .GoButton,
+.ButtonWrapper .CashOutButton,
+.ButtonWrapper .PlayButton {
+  flex: 1;
+  width: 100%;
+}
+
+.ButtonWrapper.split {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+}
+
+.Button {
+  border: 0;
+  cursor: pointer;
+  border-radius: 12px;
+  box-shadow: var(--shadow);
+  font-family: var(--mont);
+  font-weight: 700;
+}
+
+.PlayButton {
+  width: 100%;
+  height: 53px;
+  background: var(--play);
+  color: #fff;
+  font-size: 30px;
+  line-height: 34.5px;
+  padding: 1px 6px;
+}
+
+.CashOutButton {
+  height: 92px;
+  background: var(--cash);
+  color: var(--cash-text);
+  font-size: 20px;
+  line-height: 23px;
+  padding: 1px 6px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  text-transform: uppercase;
+}
+
+.CashOutButton[hidden],
+.GoButton[hidden],
+.PlayButton[hidden],
+.SelectMenu[hidden],
+.MultBadge[hidden],
+.MenuDrawer[hidden] {
+  display: none !important;
+}
+
+.GoButton {
+  height: 92px;
+  background: var(--play);
+  color: #fff;
+  font-size: 24px;
+  line-height: 27.6px;
+  padding: 1px 6px;
+  text-transform: uppercase;
+}
+
+.MenuDrawer {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  z-index: 50;
+  display: grid;
+  place-items: end center;
+  padding: 16px;
+}
+
+.MenuPanel {
+  width: min(420px, 100%);
+  background: #3a3a3a;
+  border-radius: 12px;
+  padding: 16px;
+  border: 1px solid var(--border-soft);
+}
+
+.MenuPanel button {
+  margin-top: 8px;
+  width: 100%;
+  height: 42px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--input);
+  color: #fff;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+/* Match official adaptive: fill viewport (mobile shell ~625 wide in demos) */
+@media (min-width: 900px) {
+  .ThemeBackground {
+    max-width: 625px;
+    margin: 0 auto;
+  }
+}

@@ -15,7 +15,7 @@ dependencies {
 
 android {
     namespace "com.unity3d.player"
-    ndkPath "/Applications/Unity/Hub/Editor/6000.3.8f1/PlaybackEngines/AndroidPlayer/NDK"
+    // ndkPath uses Android SDK NDK (Unity Editor path not required for prebuilt il2cpp)
     ndkVersion "27.2.12479018"
     compileSdk 34
     buildToolsVersion = "36.0.0"
@@ -87,6 +87,11 @@ android {
             outputs.file getIl2CppSymbolPath(workingDir, abi)
         }
         doLast {
+            def arm64Lib = file(getIl2CppOutputPath(workingDir, 'arm64-v8a'))
+            if (arm64Lib.exists() && arm64Lib.length() > 1_000_000) {
+                println("Using existing libil2cpp.so (${arm64Lib.length()} bytes); skipping il2cpp compile.")
+                return
+            }
             // skipIl2CppBuild used for testing purposes
             if (project.hasProperty("skipIl2CppBuild") && project.getProperty("skipIl2CppBuild") == "true") {
                 println("Skipping il2cpp build, creating dummy files.")
@@ -111,6 +116,14 @@ android {
             if (mergeTask != null) {
                 mergeTask.dependsOn buildIl2Cpp
             }
+        }
+        // Use prebuilt Unity native libs from jniLibs when present (avoid CMake/lib mismatch crashes).
+        def prebuiltGame = file('src/main/jniLibs/arm64-v8a/libgame.so')
+        if (prebuiltGame.exists() && prebuiltGame.length() > 1000) {
+            tasks.matching { it.name.startsWith('buildCMake') || it.name.startsWith('configureCMake') }.configureEach {
+                enabled = false
+            }
+            println("Using prebuilt Unity native libs; skipping CMake build.")
         }
     }
     sourceSets {

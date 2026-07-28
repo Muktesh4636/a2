@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="styles.css?v=41" />
+  <link rel="stylesheet" href="styles.css?v=68" />
 </head>
 <body>
   <div class="phone">
@@ -44,10 +44,7 @@
 
       <div class="host-pip" id="hostPip">
         <div class="host-video">
-          <video class="host-face" id="hostFace"
-            src="photos/host-speaking.mp4?v=27"
-            autoplay muted loop playsinline
-            poster="photos/host-girl.jpg"></video>
+          <canvas class="host-face" id="hostFace" width="360" height="440" aria-label="Live host"></canvas>
         </div>
         <span class="live-tag">LIVE</span>
       </div>
@@ -100,18 +97,23 @@
 
       <div class="sides">
         <button class="side up" id="betUp">
-          <span class="chip-side left"></span>
+          <span class="chip-side left" id="chipSlotUp" aria-hidden="true"></span>
           <span class="side-label">UP</span>
           <span class="tri">▲</span>
         </button>
         <button class="side down" id="betDown">
           <span class="side-label">DOWN</span>
           <span class="tri">▼</span>
-          <span class="chip-side right"></span>
+          <span class="chip-side right" id="chipSlotDown" aria-hidden="true"></span>
         </button>
       </div>
 
       <div class="tools">
+        <div class="tool-group tool-group-left">
+          <span class="tool-label">UNDO</span>
+          <button class="tool fab" id="undoBtn" title="Undo" aria-label="Undo">↺</button>
+        </div>
+
         <div class="chip-stack" id="chipStack" aria-label="Select chip" aria-expanded="false">
           <button type="button" class="chip active" data-amt="10" data-chip="10" aria-label="Chip 10">10</button>
           <button type="button" class="chip" data-amt="20" data-chip="20" aria-label="Chip 20">20</button>
@@ -121,13 +123,28 @@
           <button type="button" class="chip" data-amt="1000" data-chip="1000" aria-label="Chip 1000">1K</button>
         </div>
         <span id="stakeDisplay" class="sr-only">10</span>
-        <button class="tool menu" id="menuBtn" title="Menu">☰</button>
+
+        <div class="tool-group tool-group-right">
+          <button class="tool fab fab-double" id="doubleBtn" title="Double" aria-label="Double">×2</button>
+          <span class="tool-label">DOUBLE</span>
+          <button class="tool menu" id="menuBtn" title="Menu" aria-label="Menu">☰</button>
+        </div>
+      </div>
+
+      <div class="bet-footer">
+        <div class="footer-left">
+          <div class="footer-line">Total Bet <strong id="totalBet">₹0</strong></div>
+          <div class="footer-line">Balance <strong id="footerBalance">₹0.00</strong></div>
+        </div>
+        <div class="footer-right">
+          <span class="footer-limits">Grow More <strong>₹10 – 1,000</strong></span>
+        </div>
       </div>
 
     </div>
   </div>
 
   <div class="toast" id="toast" hidden></div>
-  <script src="game.js?v=41"></script>
+  <script src="game.js?v=68"></script>
 </body>
 </html>

@@ -104,9 +104,62 @@ public class UnityPlayerGameActivity extends GameActivity implements IUnityPlaye
      * Unity uses getPackageName() + ".v2.playerprefs" - write there FIRST.
      */
     private void writeTokensToPlayerPrefsBeforeUnityLoads() {
-        Log.d("UnityTokenPass", "writeTokensToPlayerPrefsBeforeUnityLoads - DISABLED");
-        // Disabled access token passing as requested
-        return;
+        try {
+            String access = null;
+            String refresh = null;
+            Intent intent = getIntent();
+            if (intent != null) {
+                access = firstNonEmpty(
+                    intent.getStringExtra("token"),
+                    intent.getStringExtra("auth_token"),
+                    intent.getStringExtra("access_token"),
+                    intent.getStringExtra("access")
+                );
+                refresh = firstNonEmpty(
+                    intent.getStringExtra("refresh_token"),
+                    intent.getStringExtra("refresh")
+                );
+            }
+            if (access == null) {
+                access = UnityTokenHolder.getAccessToken();
+            }
+            if (refresh == null) {
+                refresh = UnityTokenHolder.getRefreshToken();
+            }
+            if (access == null || access.isEmpty()) {
+                return;
+            }
+            String pkg = getPackageName();
+            String[] prefNames = {
+                pkg + ".v2.playerprefs",
+                "com.sikwin.app.v2.playerprefs",
+                "gunduata_prefs",
+                "UnityPlayerPrefs"
+            };
+            for (String prefName : prefNames) {
+                getSharedPreferences(prefName, MODE_PRIVATE).edit()
+                    .putString("auth_token", access)
+                    .putString("access_token", access)
+                    .putString("access", access)
+                    .putString("refresh_token", refresh != null ? refresh : "")
+                    .putString("refresh", refresh != null ? refresh : "")
+                    .putInt("is_logged_in", 1)
+                    .commit();
+            }
+            Log.d("UnityTokenPass", "Wrote tokens to PlayerPrefs before Unity load");
+        } catch (Throwable t) {
+            Log.e("UnityTokenPass", "writeTokensToPlayerPrefsBeforeUnityLoads failed", t);
+        }
+    }
+
+    private static String firstNonEmpty(String... values) {
+        if (values == null) return null;
+        for (String value : values) {
+            if (value != null && !value.isEmpty()) {
+                return value;
+            }
+        }
+        return null;
     }
 
     class GameActivitySurfaceView extends InputEnabledSurfaceView
@@ -132,19 +185,12 @@ public class UnityPlayerGameActivity extends GameActivity implements IUnityPlaye
 
     static
     {
-        ClassLoader cl = UnityPlayerGameActivity.class.getClassLoader();
         try {
-            Class.forName("com.unity3d.player.UnityPlayerForActivityOrService", true, cl);
-            Class.forName("com.unity3d.player.UnityPlayerForGameActivity", true, cl);
-            Class.forName("com.unity3d.player.UnityPlayer", true, cl);
+            Class.forName("com.unity3d.player.UnityPlayerForActivityOrService");
+            Class.forName("com.unity3d.player.UnityPlayerForGameActivity");
+            Class.forName("com.unity3d.player.UnityPlayer");
         } catch (Throwable t) {
             Log.e("UnityPlayerPatch", "Failed to preload Unity glue classes", t);
-        }
-        try {
-            System.loadLibrary("unity");
-            System.loadLibrary("il2cpp");
-        } catch (Throwable t) {
-            Log.e("UnityPlayerPatch", "Failed to preload unity/il2cpp libs", t);
         }
         System.loadLibrary("game");
     }
@@ -156,13 +202,7 @@ public class UnityPlayerGameActivity extends GameActivity implements IUnityPlaye
         
         // CRITICAL: Pre-load tokens from static holder or Intent before Unity engine starts
         writeTokensToPlayerPrefsBeforeUnityLoads();
-        
-        // After Unity is created, do a couple of low-frequency attempts to set in-memory tokens/creds.
-        // This prevents early unauthenticated calls from triggering 401->refresh without refresh token.
-        android.os.Handler handler = new android.os.Handler(android.os.Looper.getMainLooper());
-        handler.postDelayed(this::sendLoginDataToUnity, 600);
-        handler.postDelayed(this::sendLoginDataToUnity, 1600);
-        
+
         IntentFilter filter = new IntentFilter("com.sikwin.app.TOKEN_UPDATE");
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             registerReceiver(tokenReceiver, filter, Context.RECEIVER_EXPORTED);
@@ -200,7 +240,12 @@ public class UnityPlayerGameActivity extends GameActivity implements IUnityPlaye
         // Unity requires access to frame layout for setting the static splash screen.
         // Note: we cannot initialize in onCreate (after super.onCreate), because game activity native thread would be already started and unity runtime initialized
         //       we also cannot initialize before super.onCreate since frameLayout is not yet available.
-        mUnityPlayer = new UnityPlayerForGameActivity(this, frameLayout, mSurfaceView, this);
+        try {
+            mUnityPlayer = new UnityPlayerForGameActivity(this, frameLayout, mSurfaceView, this);
+        } catch (Throwable t) {
+            Log.e("UnityPlayerGameActivity", "Failed to create Unity player", t);
+            finish();
+        }
     }
 
     @Override
@@ -266,11 +311,6 @@ public class UnityPlayerGameActivity extends GameActivity implements IUnityPlaye
         
         if (mUnityPlayer != null) {
             mUnityPlayer.onResume();
-            // Single attempt on resume (no retries) to restore in-memory tokens.
-            sendLoginDataToUnity();
-            
-            // Extra attempt to ensure credentials are set if Unity was just initialized
-            new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(this::sendLoginDataToUnity, 1000);
         }
         super.onResume();
     }
@@ -306,7 +346,6 @@ public class UnityPlayerGameActivity extends GameActivity implements IUnityPlaye
         if (mUnityPlayer != null) {
             mUnityPlayer.newIntent(intent);
         }
-        sendLoginDataToUnity();
     }
 
     @Override
@@ -347,6 +386,24 @@ public class UnityPlayerGameActivity extends GameActivity implements IUnityPlaye
         } catch (ClassNotFoundException e) {
             Log.e("UnityPlayerGameActivity", "MainActivity not found during redirect", e);
         }
+    }
+
+    private void sendServerUrlsToUnity() {
+        final String baseUrl = "http://gunduata.tech";
+        final String wsUrl = "ws://gunduata.tech/ws/game/";
+        new android.os.Handler(android.os.Looper.getMainLooper()).post(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    UnityPlayer.UnitySendMessage("GameManager", "SetBaseUrl", baseUrl);
+                    UnityPlayer.UnitySendMessage("GameManager", "SetWsUrl", wsUrl);
+                    UnityPlayer.UnitySendMessage("GameApiClient", "SetBaseUrl", baseUrl);
+                    UnityPlayer.UnitySendMessage("GameApiClient", "SetWsUrl", wsUrl);
+                    Log.d("UnityServerUrl", "Sent direct server URLs (no Cloudflare)");
+                } catch (Throwable ignored) {
+                }
+            }
+        });
     }
 
     private void sendLoginDataToUnity() {

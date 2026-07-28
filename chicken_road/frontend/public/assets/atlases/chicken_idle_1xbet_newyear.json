@@ -1,0 +1,591 @@
+{
+  "frames": {
+    "chicken_idle_0": {
+      "frame": {
+        "x": 4,
+        "y": 4,
+        "w": 222,
+        "h": 241
+      },
+      "rotated": false,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 39,
+        "y": 28,
+        "w": 222,
+        "h": 241
+      },
+      "sourceSize": {
+        "w": 300,
+        "h": 300
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "chicken_idle_1": {
+      "frame": {
+        "x": 234,
+        "y": 4,
+        "w": 222,
+        "h": 242
+      },
+      "rotated": false,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 39,
+        "y": 28,
+        "w": 222,
+        "h": 242
+      },
+      "sourceSize": {
+        "w": 300,
+        "h": 300
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "chicken_idle_2": {
+      "frame": {
+        "x": 464,
+        "y": 4,
+        "w": 223,
+        "h": 242
+      },
+      "rotated": false,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 39,
+        "y": 28,
+        "w": 223,
+        "h": 242
+      },
+      "sourceSize": {
+        "w": 300,
+        "h": 300
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "chicken_idle_3": {
+      "frame": {
+        "x": 695,
+        "y": 4,
+        "w": 223,
+        "h": 242
+      },
+      "rotated": false,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 39,
+        "y": 28,
+        "w": 223,
+        "h": 242
+      },
+      "sourceSize": {
+        "w": 300,
+        "h": 300
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "chicken_idle_4": {
+      "frame": {
+        "x": 926,
+        "y": 4,
+        "w": 223,
+        "h": 242
+      },
+      "rotated": false,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 39,
+        "y": 28,
+        "w": 223,
+        "h": 242
+      },
+      "sourceSize": {
+        "w": 300,
+        "h": 300
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "chicken_idle_5": {
+      "frame": {
+        "x": 1157,
+        "y": 4,
+        "w": 222,
+        "h": 242
+      },
+      "rotated": false,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 40,
+        "y": 28,
+        "w": 222,
+        "h": 242
+      },
+      "sourceSize": {
+        "w": 300,
+        "h": 300
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "chicken_idle_6": {
+      "frame": {
+        "x": 1387,
+        "y": 4,
+        "w": 223,
+        "h": 242
+      },
+      "rotated": false,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 40,
+        "y": 28,
+        "w": 223,
+        "h": 242
+      },
+      "sourceSize": {
+        "w": 300,
+        "h": 300
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "chicken_idle_10": {
+      "frame": {
+        "x": 1618,
+        "y": 4,
+        "w": 224,
+        "h": 243
+      },
+      "rotated": false,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 40,
+        "y": 27,
+        "w": 224,
+        "h": 243
+      },
+      "sourceSize": {
+        "w": 300,
+        "h": 300
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "chicken_idle_11": {
+      "frame": {
+        "x": 4,
+        "y": 254,
+        "w": 224,
+        "h": 243
+      },
+      "rotated": false,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 40,
+        "y": 27,
+        "w": 224,
+        "h": 243
+      },
+      "sourceSize": {
+        "w": 300,
+        "h": 300
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "chicken_idle_7": {
+      "frame": {
+        "x": 236,
+        "y": 254,
+        "w": 223,
+        "h": 243
+      },
+      "rotated": false,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 40,
+        "y": 27,
+        "w": 223,
+        "h": 243
+      },
+      "sourceSize": {
+        "w": 300,
+        "h": 300
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "chicken_idle_8": {
+      "frame": {
+        "x": 467,
+        "y": 254,
+        "w": 223,
+        "h": 243
+      },
+      "rotated": false,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 40,
+        "y": 27,
+        "w": 223,
+        "h": 243
+      },
+      "sourceSize": {
+        "w": 300,
+        "h": 300
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "chicken_idle_9": {
+      "frame": {
+        "x": 698,
+        "y": 254,
+        "w": 223,
+        "h": 243
+      },
+      "rotated": false,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 40,
+        "y": 27,
+        "w": 223,
+        "h": 243
+      },
+      "sourceSize": {
+        "w": 300,
+        "h": 300
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "chicken_idle_12": {
+      "frame": {
+        "x": 929,
+        "y": 254,
+        "w": 224,
+        "h": 244
+      },
+      "rotated": false,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 40,
+        "y": 26,
+        "w": 224,
+        "h": 244
+      },
+      "sourceSize": {
+        "w": 300,
+        "h": 300
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "chicken_idle_13": {
+      "frame": {
+        "x": 1161,
+        "y": 254,
+        "w": 224,
+        "h": 244
+      },
+      "rotated": false,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 40,
+        "y": 26,
+        "w": 224,
+        "h": 244
+      },
+      "sourceSize": {
+        "w": 300,
+        "h": 300
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "chicken_idle_14": {
+      "frame": {
+        "x": 1393,
+        "y": 255,
+        "w": 224,
+        "h": 244
+      },
+      "rotated": false,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 41,
+        "y": 26,
+        "w": 224,
+        "h": 244
+      },
+      "sourceSize": {
+        "w": 300,
+        "h": 300
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "chicken_idle_15": {
+      "frame": {
+        "x": 1625,
+        "y": 255,
+        "w": 224,
+        "h": 244
+      },
+      "rotated": false,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 41,
+        "y": 26,
+        "w": 224,
+        "h": 244
+      },
+      "sourceSize": {
+        "w": 300,
+        "h": 300
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "chicken_idle_16": {
+      "frame": {
+        "x": 4,
+        "y": 505,
+        "w": 224,
+        "h": 244
+      },
+      "rotated": false,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 41,
+        "y": 26,
+        "w": 224,
+        "h": 244
+      },
+      "sourceSize": {
+        "w": 300,
+        "h": 300
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "chicken_idle_17": {
+      "frame": {
+        "x": 236,
+        "y": 505,
+        "w": 224,
+        "h": 244
+      },
+      "rotated": false,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 41,
+        "y": 26,
+        "w": 224,
+        "h": 244
+      },
+      "sourceSize": {
+        "w": 300,
+        "h": 300
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "chicken_idle_18": {
+      "frame": {
+        "x": 468,
+        "y": 505,
+        "w": 225,
+        "h": 245
+      },
+      "rotated": false,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 41,
+        "y": 25,
+        "w": 225,
+        "h": 245
+      },
+      "sourceSize": {
+        "w": 300,
+        "h": 300
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "chicken_idle_19": {
+      "frame": {
+        "x": 701,
+        "y": 506,
+        "w": 225,
+        "h": 245
+      },
+      "rotated": false,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 41,
+        "y": 25,
+        "w": 225,
+        "h": 245
+      },
+      "sourceSize": {
+        "w": 300,
+        "h": 300
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "chicken_idle_20": {
+      "frame": {
+        "x": 934,
+        "y": 506,
+        "w": 225,
+        "h": 245
+      },
+      "rotated": false,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 41,
+        "y": 25,
+        "w": 225,
+        "h": 245
+      },
+      "sourceSize": {
+        "w": 300,
+        "h": 300
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "chicken_idle_21": {
+      "frame": {
+        "x": 1167,
+        "y": 507,
+        "w": 225,
+        "h": 245
+      },
+      "rotated": false,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 41,
+        "y": 25,
+        "w": 225,
+        "h": 245
+      },
+      "sourceSize": {
+        "w": 300,
+        "h": 300
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "chicken_idle_22": {
+      "frame": {
+        "x": 1400,
+        "y": 507,
+        "w": 226,
+        "h": 245
+      },
+      "rotated": false,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 41,
+        "y": 25,
+        "w": 226,
+        "h": 245
+      },
+      "sourceSize": {
+        "w": 300,
+        "h": 300
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "chicken_idle_23": {
+      "frame": {
+        "x": 1634,
+        "y": 507,
+        "w": 225,
+        "h": 245
+      },
+      "rotated": false,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 42,
+        "y": 25,
+        "w": 225,
+        "h": 245
+      },
+      "sourceSize": {
+        "w": 300,
+        "h": 300
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    }
+  },
+  "meta": {
+    "app": "http://free-tex-packer.com",
+    "version": "0.6.7",
+    "image": "chicken_idle_1xbet_newyear.png",
+    "format": "RGBA8888",
+    "size": {
+      "w": 1863,
+      "h": 756
+    },
+    "scale": 1
+  }
+}

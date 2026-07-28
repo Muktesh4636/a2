@@ -3,6 +3,7 @@ from django.conf import settings
 from decimal import Decimal
 import json
 import random
+import uuid
 
 
 class GameRound(models.Model):
@@ -809,3 +810,124 @@ class RouletteSettledBet(models.Model):
 
     class Meta:
         ordering = ["id"]
+
+
+class TradingPendingBet(models.Model):
+    """Open trading position for the current shared round (JWT user + Wallet)."""
+
+    SIDE_UP = "up"
+    SIDE_DOWN = "down"
+    SIDE_CHOICES = [(SIDE_UP, "Up"), (SIDE_DOWN, "Down")]
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="trading_pending_bets"
+    )
+    side = models.CharField(max_length=4, choices=SIDE_CHOICES)
+    stake = models.PositiveIntegerField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["id"]
+        constraints = [
+            models.UniqueConstraint(fields=["user"], name="uniq_trading_pending_per_user"),
+        ]
+
+
+class TradingUndoEntry(models.Model):
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="trading_undo_stack"
+    )
+    chip = models.PositiveIntegerField()
+    side = models.CharField(max_length=4)
+    action = models.CharField(max_length=8, default="add")  # add | flip
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["id"]
+
+
+class TradingRound(models.Model):
+    """Per-user settle record for a shared trading round."""
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="trading_rounds"
+    )
+    shared_round = models.PositiveIntegerField(default=0)
+    final_pct = models.FloatField()
+    side = models.CharField(max_length=4, blank=True, default="")
+    stake = models.PositiveIntegerField(default=0)
+    payout = models.PositiveIntegerField(default=0)
+    cashed_out = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+
+class ChickenRoadRound(models.Model):
+    """Chicken Road (v1) round — JWT user + Wallet."""
+
+    class Difficulty(models.TextChoices):
+        EASY = "easy", "Easy"
+        MEDIUM = "medium", "Medium"
+        HARD = "hard", "Hard"
+        HARDCORE = "hardcore", "Hardcore"
+
+    class Status(models.TextChoices):
+        PLAYING = "playing", "Playing"
+        CASHED_OUT = "cashed_out", "Cashed Out"
+        BURNED = "burned", "Burned"
+        WON = "won", "Won"
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="chicken_road_rounds"
+    )
+    difficulty = models.CharField(max_length=16, choices=Difficulty.choices)
+    bet = models.PositiveIntegerField()
+    status = models.CharField(max_length=16, choices=Status.choices, default=Status.PLAYING, db_index=True)
+    step = models.PositiveSmallIntegerField(default=0)
+    road_secret = models.JSONField(default=list)
+    payout = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+
+class ChickenRoad2Round(models.Model):
+    """Chicken Road 2 round — JWT user + Wallet (provably fair crash_at)."""
+
+    class Difficulty(models.TextChoices):
+        EASY = "easy", "Easy"
+        MEDIUM = "medium", "Medium"
+        HARD = "hard", "Hard"
+        HARDCORE = "hardcore", "Hardcore"
+
+    class Status(models.TextChoices):
+        ACTIVE = "active", "Active"
+        CASHED_OUT = "cashed_out", "Cashed out"
+        CRASHED = "crashed", "Crashed"
+        COMPLETED = "completed", "Completed"
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="chicken_road2_rounds"
+    )
+    difficulty = models.CharField(max_length=16, choices=Difficulty.choices)
+    bet = models.PositiveIntegerField()
+    step = models.PositiveIntegerField(default=0)
+    crash_at = models.PositiveIntegerField(null=True, blank=True)
+    status = models.CharField(max_length=16, choices=Status.choices, default=Status.ACTIVE, db_index=True)
+    payout = models.PositiveIntegerField(default=0)
+    server_seed = models.CharField(max_length=64)
+    server_seed_hash = models.CharField(max_length=64)
+    client_seed = models.CharField(max_length=64, blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    finished_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-created_at"]

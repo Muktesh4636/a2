@@ -78,6 +78,10 @@ def user_payload(user) -> dict:
 
 @transaction.atomic
 def place_bet(user, raw_key: str, amount: int):
+    from game.roulette_engine import is_betting_open
+
+    if not is_betting_open():
+        raise GameError("betting closed — wait for next round")
     if amount <= 0:
         raise GameError("amount must be positive")
     key = parse_bet_key(raw_key)
@@ -118,6 +122,10 @@ def place_bet(user, raw_key: str, amount: int):
 
 @transaction.atomic
 def undo_bet(user):
+    from game.roulette_engine import is_betting_open
+
+    if not is_betting_open():
+        raise GameError("betting closed — wait for next round")
     wallet = Wallet.objects.select_for_update().get(user=user)
     last = RouletteUndoEntry.objects.filter(user=user).order_by("-id").first()
     if last is None:
@@ -157,6 +165,10 @@ def undo_bet(user):
 
 @transaction.atomic
 def double_bets(user):
+    from game.roulette_engine import is_betting_open
+
+    if not is_betting_open():
+        raise GameError("betting closed — wait for next round")
     wallet = Wallet.objects.select_for_update().get(user=user)
     bets = list(RoulettePendingBet.objects.select_for_update().filter(user=user))
     need = sum(b.amount for b in bets)
@@ -192,6 +204,10 @@ def double_bets(user):
 
 @transaction.atomic
 def clear_bets(user):
+    from game.roulette_engine import is_betting_open
+
+    if not is_betting_open():
+        raise GameError("betting closed — wait for next round")
     wallet = Wallet.objects.select_for_update().get(user=user)
     refund = total_pending(user)
     RoulettePendingBet.objects.filter(user=user).delete()
@@ -294,3 +310,85 @@ def history(user, limit: int = 20) -> list[dict]:
         }
         for r in rounds
     ]
+
+
+def settle_user_for_number(user, number: int, shared_round: int) -> int:
+    """Settle one user's pending bets for a shared winning number. Returns win amount."""
+    from game.roulette_engine import set_user_win
+
+    with transaction.atomic():
+        wallet = Wallet.objects.select_for_update().get(user=user)
+        bets = list(RoulettePendingBet.objects.select_for_update().filter(user=user))
+        if not bets:
+            set_user_win(shared_round, user.id, 0)
+            return 0
+
+        total_stake = sum(b.amount for b in bets)
+        win = 0
+        settled_rows: list[RouletteSettledBet] = []
+
+        round_obj = RouletteRound.objects.create(
+            user=user,
+            winning_number=number,
+            total_stake=total_stake,
+            total_payout=0,
+        )
+
+        for bet in bets:
+            key = BetKey(bet_type=bet.bet_type, bet_value=bet.bet_value)
+            payout = settle_amount(key, bet.amount, number)
+            won = payout > 0
+            if won:
+                win += payout
+            settled_rows.append(
+                RouletteSettledBet(
+                    round=round_obj,
+                    bet_type=bet.bet_type,
+                    bet_value=bet.bet_value,
+                    amount=bet.amount,
+                    won=won,
+                    payout=payout,
+                )
+            )
+
+        RouletteSettledBet.objects.bulk_create(settled_rows)
+        round_obj.total_payout = win
+        round_obj.save(update_fields=["total_payout"])
+
+        RoulettePendingBet.objects.filter(user=user).delete()
+        RouletteUndoEntry.objects.filter(user=user).delete()
+
+        if win:
+            before = int(wallet.balance)
+            wallet.balance += win
+            wallet.save(update_fields=["balance", "updated_at"])
+            Txn.objects.create(
+                user=user,
+                transaction_type="WIN",
+                amount=win,
+                balance_before=before,
+                balance_after=int(wallet.balance),
+                description=f"Roulette WIN number={number} payout ₹{win} (shared round {shared_round})",
+            )
+            _sync_redis_balance(user.id, int(wallet.balance))
+
+        set_user_win(shared_round, user.id, win)
+        return win
+
+
+def settle_all_pending_for_number(number: int, shared_round: int) -> int:
+    """Settle every user who has open roulette bets against the shared number."""
+    user_ids = list(
+        RoulettePendingBet.objects.values_list("user_id", flat=True).distinct()
+    )
+    settled = 0
+    for uid in user_ids:
+        try:
+            from django.contrib.auth import get_user_model
+
+            user = get_user_model().objects.get(pk=uid)
+            settle_user_for_number(user, number, shared_round)
+            settled += 1
+        except Exception as exc:
+            logger.exception("roulette shared settle failed user=%s: %s", uid, exc)
+    return settled

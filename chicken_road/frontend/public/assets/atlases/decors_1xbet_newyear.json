@@ -1,0 +1,327 @@
+{
+  "frames": {
+    "brick2": {
+      "frame": {
+        "x": 4,
+        "y": 4,
+        "w": 312,
+        "h": 1316
+      },
+      "rotated": false,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 33,
+        "y": 28,
+        "w": 312,
+        "h": 1316
+      },
+      "sourceSize": {
+        "w": 378,
+        "h": 1367
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "decoration_light": {
+      "frame": {
+        "x": 4,
+        "y": 1328,
+        "w": 512,
+        "h": 670
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 512,
+        "h": 670
+      },
+      "sourceSize": {
+        "w": 512,
+        "h": 670
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "brick0": {
+      "frame": {
+        "x": 324,
+        "y": 4,
+        "w": 538,
+        "h": 1289
+      },
+      "rotated": false,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 34,
+        "y": 28,
+        "w": 538,
+        "h": 1289
+      },
+      "sourceSize": {
+        "w": 605,
+        "h": 1340
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "bottomRect0": {
+      "frame": {
+        "x": 524,
+        "y": 1301,
+        "w": 620,
+        "h": 126
+      },
+      "rotated": true,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 620,
+        "h": 126
+      },
+      "sourceSize": {
+        "w": 620,
+        "h": 126
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "chain": {
+      "frame": {
+        "x": 524,
+        "y": 1929,
+        "w": 91,
+        "h": 830
+      },
+      "rotated": true,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 91,
+        "h": 830
+      },
+      "sourceSize": {
+        "w": 91,
+        "h": 830
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "bottomRect1": {
+      "frame": {
+        "x": 658,
+        "y": 1301,
+        "w": 620,
+        "h": 126
+      },
+      "rotated": true,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 620,
+        "h": 126
+      },
+      "sourceSize": {
+        "w": 620,
+        "h": 126
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "whiteRect": {
+      "frame": {
+        "x": 792,
+        "y": 1301,
+        "w": 432,
+        "h": 68
+      },
+      "rotated": true,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 432,
+        "h": 68
+      },
+      "sourceSize": {
+        "w": 432,
+        "h": 68
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "vase": {
+      "frame": {
+        "x": 792,
+        "y": 1741,
+        "w": 282,
+        "h": 158
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 282,
+        "h": 158
+      },
+      "sourceSize": {
+        "w": 282,
+        "h": 158
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "road_decor": {
+      "frame": {
+        "x": 868,
+        "y": 1301,
+        "w": 368,
+        "h": 392
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 368,
+        "h": 392
+      },
+      "sourceSize": {
+        "w": 368,
+        "h": 392
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "brick_dark": {
+      "frame": {
+        "x": 1082,
+        "y": 1701,
+        "w": 196,
+        "h": 122
+      },
+      "rotated": true,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 196,
+        "h": 122
+      },
+      "sourceSize": {
+        "w": 196,
+        "h": 122
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "brick_start": {
+      "frame": {
+        "x": 1212,
+        "y": 1701,
+        "w": 196,
+        "h": 122
+      },
+      "rotated": true,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 196,
+        "h": 122
+      },
+      "sourceSize": {
+        "w": 196,
+        "h": 122
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "brick1": {
+      "frame": {
+        "x": 870,
+        "y": 4,
+        "w": 433,
+        "h": 1255
+      },
+      "rotated": false,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 30,
+        "y": 27,
+        "w": 433,
+        "h": 1255
+      },
+      "sourceSize": {
+        "w": 498,
+        "h": 1304
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "decoration_brick": {
+      "frame": {
+        "x": 1082,
+        "y": 1701,
+        "w": 196,
+        "h": 122
+      },
+      "rotated": true,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 196,
+        "h": 122
+      },
+      "sourceSize": {
+        "w": 196,
+        "h": 122
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    }
+  },
+  "meta": {
+    "app": "http://free-tex-packer.com",
+    "version": "0.6.7",
+    "image": "decors_1xbet_newyear.png",
+    "format": "RGBA8888",
+    "size": {
+      "w": 1358,
+      "h": 2024
+    },
+    "scale": 1
+  }
+}

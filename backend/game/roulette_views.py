@@ -5,7 +5,7 @@ No guest / demo sessions.
 
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 
 from accounts.models import Wallet
@@ -27,10 +27,27 @@ def _key_from_body(data) -> str:
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def roulette_me(request):
-    """GET /api/roulette/me/ — real wallet balance + pending bets."""
+    """GET /api/roulette/me/ — real wallet balance + pending bets + shared clock."""
     if not Wallet.objects.filter(user=request.user).exists():
         return Response({"detail": "wallet not found"}, status=status.HTTP_400_BAD_REQUEST)
-    return Response(services.user_payload(request.user))
+    from game import roulette_engine as engine
+
+    payload = services.user_payload(request.user)
+    payload["game"] = engine.public_state(request.user)
+    return Response(payload)
+
+
+@api_view(["GET"])
+@permission_classes([AllowAny])
+def roulette_state(request):
+    """GET /api/roulette/state/ — shared phase clock (public) + user wallet if authenticated."""
+    from game import roulette_engine as engine
+
+    user = request.user if request.user.is_authenticated else None
+    payload = engine.public_state(user)
+    if user is not None and Wallet.objects.filter(user=user).exists():
+        payload.update(services.user_payload(user))
+    return Response(payload)
 
 
 @api_view(["POST"])
@@ -86,22 +103,24 @@ def roulette_clear(request):
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def roulette_spin(request):
-    """POST /api/roulette/spin/ — server rolls 0–36 and settles against wallet."""
-    try:
-        result = services.spin(request.user)
-    except GameError as exc:
-        return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+    """
+    POST /api/roulette/spin/ — deprecated for clients (shared auto-spin).
+    Returns current shared game state instead of rolling a private number.
+    """
+    from game import roulette_engine as engine
+
+    if not Wallet.objects.filter(user=request.user).exists():
+        return Response({"detail": "wallet not found"}, status=status.HTTP_400_BAD_REQUEST)
+    st = engine.public_state(request.user)
+    payload = services.user_payload(request.user)
     return Response(
         {
-            "number": result.number,
-            "win": result.win,
-            "balance": result.balance,
-            "stake": result.total_stake,
-            "round_id": result.round_id,
-            "winning_keys": result.winning_keys,
-            "pending_bets": [],
-            "total_bet": 0,
-            "history": services.history(request.user, limit=10),
+            **payload,
+            "game": st,
+            "number": st.get("number") if st.get("phase") in ("spinning", "result") else st.get("last_number"),
+            "win": st.get("win") or 0,
+            "auto": True,
+            "detail": "spins are automatic — shared round for all users",
         }
     )
 

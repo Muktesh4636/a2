@@ -1,0 +1,15 @@
+# Python / Django
+backend/venv/
+backend/**/__pycache__/
+backend/**/*.pyc
+backend/db.sqlite3
+
+# Generated frame sequences (rebuild locally if needed)
+frontend/photos/seq*/
+
+# Screenshots & personal photos
+Screenshot*.png
+PHOTO-*.jpg
+
+# macOS
+.DS_Store

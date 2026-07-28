@@ -1,0 +1,111 @@
+{
+  "frames": {
+    "1xbetEntry": {
+      "frame": {
+        "x": 4,
+        "y": 4,
+        "w": 492,
+        "h": 631
+      },
+      "rotated": false,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 492,
+        "h": 631
+      },
+      "sourceSize": {
+        "w": 493,
+        "h": 631
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "1xbetRoadFlag": {
+      "frame": {
+        "x": 4,
+        "y": 643,
+        "w": 306,
+        "h": 509
+      },
+      "rotated": false,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 306,
+        "h": 509
+      },
+      "sourceSize": {
+        "w": 306,
+        "h": 526
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "1xbetExit": {
+      "frame": {
+        "x": 4,
+        "y": 1160,
+        "w": 446,
+        "h": 500
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 446,
+        "h": 500
+      },
+      "sourceSize": {
+        "w": 446,
+        "h": 500
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "1xbetText": {
+      "frame": {
+        "x": 4,
+        "y": 1668,
+        "w": 248,
+        "h": 60
+      },
+      "rotated": false,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 1,
+        "w": 248,
+        "h": 60
+      },
+      "sourceSize": {
+        "w": 249,
+        "h": 61
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    }
+  },
+  "meta": {
+    "app": "http://free-tex-packer.com",
+    "version": "0.6.7",
+    "image": "1xbet_newyear.png",
+    "format": "RGBA8888",
+    "size": {
+      "w": 500,
+      "h": 1732
+    },
+    "scale": 1
+  }
+}

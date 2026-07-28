@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en" translate="no">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"
+    />
+    <title>ChickenRoadTwoClient</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@700&family=Montserrat:wght@500;600;700;900&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div id="root">
+      <div class="ThemeBackground">
+        <header class="HeaderContainer">
+          <div class="HeaderLogo">
+            <img src="./static/image/logo.png" alt="" />
+          </div>
+          <div class="HeaderContent">
+            <div class="WrapperAmount" data-testid="menu-balance">
+              <span id="balanceLabel">1&nbsp;000&nbsp;000</span>
+            </div>
+            <div class="WrapperFullscreen" data-testid="menu-fullscreen" title="Fullscreen">
+              <svg width="12" height="13" viewBox="0 0 12 13" fill="none">
+                <path
+                  d="M7.33268 5.1665L11.3327 1.1665M11.3327 1.1665H8.33268M11.3327 1.1665V4.1665M0.666016 1.1665L4.66602 5.1665M0.666016 1.1665V4.1665M0.666016 1.1665H3.66602M7.33268 7.83317L11.3327 11.8332M11.3327 11.8332V8.83317M11.3327 11.8332H8.33268M4.66602 7.83317L0.666016 11.8332M0.666016 11.8332H3.66602M0.666016 11.8332L0.666016 8.83317"
+                  stroke="white"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                />
+              </svg>
+            </div>
+            <div class="HeaderMenuWrapperIcon burger" data-testid="burger-menu" id="menuBtn">
+              <svg width="24" height="25" viewBox="0 0 24 25" fill="none">
+                <path
+                  d="M4.125 18.875H19.875M4.125 12.875H19.875M4.125 6.875H19.875"
+                  stroke="white"
+                  stroke-width="1.5"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                />
+              </svg>
+            </div>
+          </div>
+        </header>
+
+        <div class="ChickenRoadGameUIRoot">
+          <div class="GameBlockContainer game">
+            <div class="GameViewport">
+              <div class="StageContainer">
+                <canvas id="game" width="1250" height="722"></canvas>
+                <div class="LiveOverlay">
+                  <div class="LiveLine">
+                    <span>Live wins:</span>
+                    <span class="dot"></span>
+                    <span id="onlineLabel">Online: 8716</span>
+                  </div>
+                  <div class="WinToast" id="winToast">
+                    <span class="avatar"></span>
+                    <span class="name" id="winName">Rose Defeate...</span>
+                    <span class="amt" id="winAmt">+$350.00</span>
+                  </div>
+                </div>
+                <div class="MultBadge" id="multBadge" hidden>
+                  <span id="multValue">1.01x</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="ResizableBlockOverflow">
+            <div class="ResizableBlockContainer">
+              <div class="BetBarWrapper">
+                <div class="BetInputWrapper">
+                  <section class="Container">
+                    <div class="InputAndControls">
+                      <div class="InputWrapper">
+                        <button type="button" data-testid="min-bet-button" class="InputButton minmax" id="betMin">
+                          MIN
+                        </button>
+                        <input
+                          type="text"
+                          inputmode="decimal"
+                          pattern="[0-9]*"
+                          data-testid="bet-input"
+                          placeholder="Amount"
+                          maxlength="10"
+                          class="BetInput"
+                          id="betInput"
+                          value="50"
+                        />
+                        <button type="button" data-testid="max-bet-button" class="InputButton minmax" id="betMax">
+                          MAX
+                        </button>
+                      </div>
+                    </div>
+                    <div class="InputControls" id="quickBets">
+                      <button type="button" data-testid="fast-bet-1" class="InputButton fast" data-bet="2">
+                        <span>2</span>
+                        <svg width="18" height="18" viewBox="0 0 18 18" style="fill: #fff">
+                          <use href="./static/svg/sprite.svg#USD"></use>
+                        </svg>
+                      </button>
+                      <button type="button" data-testid="fast-bet-2" class="InputButton fast" data-bet="3">
+                        <span>3</span>
+                        <svg width="18" height="18" viewBox="0 0 18 18" style="fill: #fff">
+                          <use href="./static/svg/sprite.svg#USD"></use>
+                        </svg>
+                      </button>
+                      <button type="button" data-testid="fast-bet-3" class="InputButton fast" data-bet="8">
+                        <span>8</span>
+                        <svg width="18" height="18" viewBox="0 0 18 18" style="fill: #fff">
+                          <use href="./static/svg/sprite.svg#USD"></use>
+                        </svg>
+                      </button>
+                      <button type="button" data-testid="fast-bet-4" class="InputButton fast" data-bet="20">
+                        <span>20</span>
+                        <svg width="18" height="18" viewBox="0 0 18 18" style="fill: #fff">
+                          <use href="./static/svg/sprite.svg#USD"></use>
+                        </svg>
+                      </button>
+                    </div>
+                  </section>
+                </div>
+
+                <div class="SelectContainer" id="diffSelect">
+                  <button type="button" class="SelectControl" id="diffBtn" aria-haspopup="listbox" aria-expanded="false">
+                    <span class="DiffCurrent" id="diffCurrent">
+                      <span class="DiffHeat" data-heat="1" aria-hidden="true">
+                        <span class="flame"></span>
+                      </span>
+                      <span class="DiffCurrentText">
+                        <span class="difficulty-value" id="diffLabel">Easy</span>
+                        <span class="DiffHeatTag" id="diffHeatTag">Cool</span>
+                      </span>
+                    </span>
+                    <svg class="DiffChevron" height="20" width="20" viewBox="0 0 20 20" aria-hidden="true">
+                      <path
+                        d="M4.516 7.548c0.436-0.446 1.043-0.481 1.576 0l3.908 3.747 3.908-3.747c0.533-0.481 1.141-0.446 1.574 0 0.436 0.445 0.408 1.197 0 1.615-0.406 0.418-4.695 4.502-4.695 4.502-0.217 0.223-0.502 0.335-0.787 0.335s-0.57-0.112-0.789-0.335c0 0-4.287-4.084-4.695-4.502s-0.436-1.17 0-1.615z"
+                        fill="#fff"
+                      ></path>
+                    </svg>
+                  </button>
+                  <div class="SelectMenu" id="diffMenu" role="listbox" hidden>
+                    <button type="button" class="DiffOption" data-diff="easy" data-heat="1" role="option" aria-selected="true">
+                      <span class="DiffHeat" data-heat="1" aria-hidden="true"><span class="flame"></span></span>
+                      <span class="DiffOptionBody">
+                        <span class="DiffOptionName">Easy</span>
+                        <span class="DiffOptionTag">Cool</span>
+                      </span>
+                      <span class="DiffOptionCheck" aria-hidden="true"></span>
+                    </button>
+                    <button type="button" class="DiffOption" data-diff="medium" data-heat="2" role="option" aria-selected="false">
+                      <span class="DiffHeat" data-heat="2" aria-hidden="true"><span class="flame"></span><span class="flame"></span></span>
+                      <span class="DiffOptionBody">
+                        <span class="DiffOptionName">Medium</span>
+                        <span class="DiffOptionTag hot">Hot</span>
+                      </span>
+                      <span class="DiffOptionCheck" aria-hidden="true"></span>
+                    </button>
+                    <button type="button" class="DiffOption" data-diff="hard" data-heat="3" role="option" aria-selected="false">
+                      <span class="DiffHeat" data-heat="3" aria-hidden="true"><span class="flame"></span><span class="flame"></span><span class="flame"></span></span>
+                      <span class="DiffOptionBody">
+                        <span class="DiffOptionName">Hard</span>
+                        <span class="DiffOptionTag hotter">Hotter</span>
+                      </span>
+                      <span class="DiffOptionCheck" aria-hidden="true"></span>
+                    </button>
+                    <button type="button" class="DiffOption" data-diff="hardcore" data-heat="4" role="option" aria-selected="false">
+                      <span class="DiffHeat" data-heat="4" aria-hidden="true"><span class="flame"></span><span class="flame"></span><span class="flame"></span><span class="flame"></span></span>
+                      <span class="DiffOptionBody">
+                        <span class="DiffOptionName">Hardcore</span>
+                        <span class="DiffOptionTag extreme">Extreme</span>
+                      </span>
+                      <span class="DiffOptionCheck" aria-hidden="true"></span>
+                    </button>
+                  </div>
+                </div>
+
+                <div class="ButtonWrapper" id="actionButtons">
+                  <button type="button" class="Button PlayButton" id="playBtn">Play</button>
+                  <button type="button" class="Button CashOutButton" id="cashBtn" hidden>
+                    <span>CASH OUT</span>
+                    <span id="cashAmount">0 $</span>
+                  </button>
+                  <button type="button" class="Button GoButton" id="goBtn" hidden>GO</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="MenuDrawer" id="menuDrawer" hidden>
+        <div class="MenuPanel">
+          <button type="button" id="closeMenu">Close</button>
+          <p>Sound / Music / Provably Fair (demo)</p>
+          <button type="button" id="resetBalance">Reset balance</button>
+        </div>
+      </div>
+    </div>
+
+    <script type="module" src="./game.js?v=73"></script>
+  </body>
+</html>

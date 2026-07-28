@@ -3,13 +3,13 @@
 # Run from project root: bash tools/deploy_all.sh
 #
 # All servers use root password: Gunduata@123
-# (App: 72.61.254.71, 72.61.254.74, 72.62.226.41 | LB: 187.77.186.84)
+# (App: 72.61.254.71, 72.61.254.74 | LB: 72.62.226.41 | gunduata.tech)
 # Override with: SERVER_PASSWORD=yourpass bash tools/deploy_all.sh
 
 set -e
 PASSWORD="${SERVER_PASSWORD:-Gunduata@123}"
 APP_SERVERS=("72.61.254.71" "72.61.254.74" "72.62.226.41")
-LB_SERVER="187.77.186.84"
+LB_SERVER="72.62.226.41"
 REMOTE_DIR="/root/apk_of_ata"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"

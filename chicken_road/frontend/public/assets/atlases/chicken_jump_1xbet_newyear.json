@@ -1,0 +1,255 @@
+{
+  "frames": {
+    "chicken_jump_9": {
+      "frame": {
+        "x": 4,
+        "y": 4,
+        "w": 246,
+        "h": 277
+      },
+      "rotated": false,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 31,
+        "y": 6,
+        "w": 246,
+        "h": 277
+      },
+      "sourceSize": {
+        "w": 300,
+        "h": 360
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "chicken_jump_8": {
+      "frame": {
+        "x": 4,
+        "y": 289,
+        "w": 245,
+        "h": 273
+      },
+      "rotated": true,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 31,
+        "y": 17,
+        "w": 245,
+        "h": 273
+      },
+      "sourceSize": {
+        "w": 300,
+        "h": 360
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "chicken_jump_7": {
+      "frame": {
+        "x": 258,
+        "y": 4,
+        "w": 242,
+        "h": 268
+      },
+      "rotated": true,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 32,
+        "y": 32,
+        "w": 242,
+        "h": 268
+      },
+      "sourceSize": {
+        "w": 300,
+        "h": 360
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "chicken_jump_6": {
+      "frame": {
+        "x": 285,
+        "y": 254,
+        "w": 239,
+        "h": 262
+      },
+      "rotated": false,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 33,
+        "y": 49,
+        "w": 239,
+        "h": 262
+      },
+      "sourceSize": {
+        "w": 300,
+        "h": 360
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "chicken_jump_5": {
+      "frame": {
+        "x": 285,
+        "y": 524,
+        "w": 235,
+        "h": 256
+      },
+      "rotated": true,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 35,
+        "y": 68,
+        "w": 235,
+        "h": 256
+      },
+      "sourceSize": {
+        "w": 300,
+        "h": 360
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "chicken_jump_4": {
+      "frame": {
+        "x": 4,
+        "y": 542,
+        "w": 231,
+        "h": 249
+      },
+      "rotated": false,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 36,
+        "y": 86,
+        "w": 231,
+        "h": 249
+      },
+      "sourceSize": {
+        "w": 300,
+        "h": 360
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "chicken_jump_3": {
+      "frame": {
+        "x": 534,
+        "y": 4,
+        "w": 228,
+        "h": 242
+      },
+      "rotated": true,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 37,
+        "y": 103,
+        "w": 228,
+        "h": 242
+      },
+      "sourceSize": {
+        "w": 300,
+        "h": 360
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "chicken_jump_2": {
+      "frame": {
+        "x": 534,
+        "y": 240,
+        "w": 225,
+        "h": 242
+      },
+      "rotated": true,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 38,
+        "y": 111,
+        "w": 225,
+        "h": 242
+      },
+      "sourceSize": {
+        "w": 300,
+        "h": 360
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "chicken_jump_1": {
+      "frame": {
+        "x": 549,
+        "y": 473,
+        "w": 222,
+        "h": 242
+      },
+      "rotated": false,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 39,
+        "y": 115,
+        "w": 222,
+        "h": 242
+      },
+      "sourceSize": {
+        "w": 300,
+        "h": 360
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "chicken_jump_0": {
+      "frame": {
+        "x": 549,
+        "y": 723,
+        "w": 222,
+        "h": 240
+      },
+      "rotated": true,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 39,
+        "y": 115,
+        "w": 222,
+        "h": 240
+      },
+      "sourceSize": {
+        "w": 300,
+        "h": 360
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    }
+  },
+  "meta": {
+    "app": "http://free-tex-packer.com",
+    "version": "0.6.7",
+    "image": "chicken_jump_1xbet_newyear.png",
+    "format": "RGBA8888",
+    "size": {
+      "w": 793,
+      "h": 949
+    },
+    "scale": 1
+  }
+}

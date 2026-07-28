@@ -38,6 +38,10 @@
     betDown: $("betDown"),
     stakeDisplay: $("stakeDisplay"),
     chipStack: $("chipStack"),
+    chipSlotUp: $("chipSlotUp"),
+    chipSlotDown: $("chipSlotDown"),
+    totalBet: $("totalBet"),
+    footerBalance: $("footerBalance"),
     cashedOutList: $("cashedOutList"),
     upPctLabel: $("upPctLabel"),
     downPctLabel: $("downPctLabel"),
@@ -155,6 +159,8 @@
     gameRound: null,
     pendingRequest: false,
     lastAnimatedRound: null,
+    holdGraphBlur: false,
+    chipPlacements: [], // [{ side, amount }]
   };
 
   let toastTimer = null;
@@ -238,6 +244,138 @@
     return arr.map((v, i) => ({ t: n <= 1 ? 1 : i / (n - 1), v: Number(v) }));
   }
 
+  function chipColorFor(amount) {
+    const n = Math.max(0, Number(amount) || 0);
+    // Range → chip art: 10–19→10, 20–49→20, 50–99→50, 100–499→100, 500–999→500, 1000+→1000
+    if (n >= 1000) return 1000;
+    if (n >= 500) return 500;
+    if (n >= 100) return 100;
+    if (n >= 50) return 50;
+    if (n >= 20) return 20;
+    if (n >= 10) return 10;
+    return 10;
+  }
+
+  function chipAmountText(amount) {
+    const n = Math.round(Number(amount) || 0);
+    if (n >= 1000 && n % 1000 === 0) return `${n / 1000}K`;
+    return String(n);
+  }
+
+  function chipSlotEl(side) {
+    return side === "up" ? els.chipSlotUp : els.chipSlotDown;
+  }
+
+  function sideStakeTotal(side) {
+    return state.chipPlacements
+      .filter((c) => c.side === side)
+      .reduce((a, c) => a + Number(c.amount || 0), 0);
+  }
+
+  function renderPlacedChips() {
+    for (const side of ["up", "down"]) {
+      const slot = chipSlotEl(side);
+      if (!slot) continue;
+      const total = sideStakeTotal(side);
+      slot.innerHTML = "";
+      slot.classList.toggle("has-chips", total > 0);
+      if (total <= 0) continue;
+      const color = chipColorFor(total);
+      const el = document.createElement("span");
+      el.className = "placed-chip";
+      el.dataset.chip = String(color);
+      el.style.backgroundImage = `url("chips/chip-${color}.png")`;
+      el.title = `₹${total}`;
+      // Opaque center so PNG denomination is hidden; show REAL total (e.g. 30 on 20-color)
+      const cover = document.createElement("span");
+      cover.className = "chip-cover";
+      const label = document.createElement("span");
+      label.className = "chip-amt";
+      const text = chipAmountText(total);
+      label.textContent = text;
+      if (text.length >= 4) label.classList.add("len-4");
+      else if (text.length >= 3) label.classList.add("len-3");
+      cover.appendChild(label);
+      el.appendChild(cover);
+      slot.appendChild(el);
+    }
+    els.betUp?.classList.toggle("selected", sideStakeTotal("up") > 0);
+    els.betDown?.classList.toggle("selected", sideStakeTotal("down") > 0);
+  }
+
+  function clearPlacedChips() {
+    state.chipPlacements = [];
+    renderPlacedChips();
+  }
+
+  function setSideStake(side, total) {
+    const amt = Math.max(0, Number(total) || 0);
+    state.chipPlacements = amt > 0 ? [{ side, amount: amt }] : [];
+  }
+
+  function flyChipToSide(side, addAmount, totalAfter) {
+    const add = Number(addAmount) || state.stake;
+    const total = Number(totalAfter) > 0 ? Number(totalAfter) : sideStakeTotal(side);
+    const slot = chipSlotEl(side);
+    const source = els.chipStack?.querySelector(".chip.active") || els.chipStack;
+    if (!slot || !source) {
+      renderPlacedChips();
+      return;
+    }
+
+    const s = source.getBoundingClientRect();
+    const t = slot.getBoundingClientRect();
+    const fly = document.createElement("div");
+    fly.className = "flying-chip";
+    // Fly with the chip COLOR for the NEW total; label shows REAL total (e.g. 30)
+    const flyTotal = total || add;
+    fly.style.backgroundImage = `url("chips/chip-${chipColorFor(flyTotal)}.png")`;
+    const flyCover = document.createElement("span");
+    flyCover.className = "chip-cover";
+    const flyLabel = document.createElement("span");
+    flyLabel.className = "chip-amt";
+    const flyText = chipAmountText(flyTotal);
+    flyLabel.textContent = flyText;
+    if (flyText.length >= 4) flyLabel.classList.add("len-4");
+    else if (flyText.length >= 3) flyLabel.classList.add("len-3");
+    flyCover.appendChild(flyLabel);
+    fly.appendChild(flyCover);
+    fly.style.left = `${s.left + s.width / 2}px`;
+    fly.style.top = `${s.top + s.height / 2}px`;
+    document.body.appendChild(fly);
+
+    const dx = t.left + t.width / 2 - (s.left + s.width / 2);
+    const dy = t.top + t.height / 2 - (s.top + s.height / 2);
+
+    slot.classList.add("awaiting-chip");
+
+    requestAnimationFrame(() => {
+      fly.style.transform = `translate(${dx}px, ${dy}px) scale(0.62)`;
+      fly.style.opacity = "0.92";
+    });
+
+    setTimeout(() => {
+      fly.remove();
+      slot.classList.remove("awaiting-chip");
+      renderPlacedChips();
+    }, 430);
+  }
+
+  function syncChipsFromPending(pending) {
+    if (!pending || !pending.side || !(pending.stake > 0)) {
+      clearPlacedChips();
+      return;
+    }
+    const current = sideStakeTotal(pending.side);
+    const sameSideOnly = state.chipPlacements.length > 0
+      && state.chipPlacements.every((c) => c.side === pending.side);
+    if (sameSideOnly && current === pending.stake) {
+      return;
+    }
+    setSideStake(pending.side, pending.stake);
+    renderPlacedChips();
+  }
+
   function applyUserPayload(data) {
     if (typeof data.balance === "number") state.balance = data.balance;
     if (typeof data.portfolio === "number") state.portfolio = data.portfolio;
@@ -246,10 +384,12 @@
       state.side = pending.side;
       state._roundStake = pending.stake;
       if (state.phase === "betting") state.portfolio = pending.stake;
+      syncChipsFromPending(pending);
     } else if (data.pending === null) {
       state.side = null;
       state._roundStake = 0;
       if (state.phase !== "trading") state.portfolio = 0;
+      clearPlacedChips();
     }
     const crowd = data.crowd || null;
     if (crowd) {
@@ -326,6 +466,7 @@
         state.livePct = 0;
         state._roundStake = 0;
         if (!state.side) state.portfolio = 0;
+        clearPlacedChips();
         els.liveBadge.hidden = true;
         els.resultFlash.hidden = true;
         setPhase("betting", Math.max(0.2, secondsLeft) * 1000);
@@ -379,6 +520,11 @@
     els.balance.textContent = money(state.balance);
     els.portfolioValue.textContent = money(state.portfolio);
     els.stakeDisplay.textContent = state.stake >= 1000 ? (state.stake / 1000) + "K" : String(state.stake);
+    if (els.totalBet) {
+      const tb = state._roundStake || 0;
+      els.totalBet.textContent = "₹" + (tb % 1 === 0 ? String(tb) : money(tb));
+    }
+    if (els.footerBalance) els.footerBalance.textContent = inr(state.balance);
     syncChipActive();
 
     const canBet = state.phase === "betting" && state.apiReady;
@@ -404,6 +550,15 @@
   function setPhase(phase, durationMs) {
     state.phase = phase;
     state.phaseEndsAt = performance.now() + durationMs;
+
+    const chartArea = els.chart?.closest(".chart-area");
+    const miniWrap = els.miniChart?.closest(".mini-wrap");
+    if (phase === "settled") state.holdGraphBlur = true;
+    if (phase === "trading") state.holdGraphBlur = false;
+    // Blur finished graph until the next trading line opens
+    const blur = state.holdGraphBlur && phase !== "trading";
+    chartArea?.classList.toggle("is-finished", blur);
+    miniWrap?.classList.toggle("is-finished", blur);
 
     if (phase === "betting") {
       els.betsBanner.hidden = false;
@@ -443,16 +598,29 @@
     if (state.pendingRequest) return;
     state.pendingRequest = true;
     try {
+      const stakeAmt = state.stake;
       const data = await api("/bets/", {
         method: "POST",
         requireAuth: true,
-        body: JSON.stringify({ side, amount: state.stake }),
+        body: JSON.stringify({ side, amount: stakeAmt }),
       });
       state.lastSide = side;
-      state.lastStake = state.stake;
+      state.lastStake = stakeAmt;
+      // One chip per side — color follows TOTAL stake ranges (10→20→50…)
+      const prevSame = state.chipPlacements.every((c) => c.side === side)
+        ? sideStakeTotal(side)
+        : 0;
+      const serverTotal = data.pending && typeof data.pending.stake === "number"
+        ? data.pending.stake
+        : null;
+      const totalAfter = serverTotal != null && serverTotal > 0
+        ? serverTotal
+        : prevSame + stakeAmt;
+      setSideStake(side, totalAfter);
+      flyChipToSide(side, stakeAmt, totalAfter);
       applyUserPayload(data);
       if (data.game) applyGameClock(data.game);
-      showToast(side.toUpperCase() + " ₹" + state.stake);
+      showToast(side.toUpperCase() + " ₹" + stakeAmt);
     } catch (e) {
       showToast(e.message || "Bet failed");
     } finally {
@@ -479,6 +647,27 @@
     if (state.phase !== "betting" || !state.lastSide) return;
     state.stake = state.lastStake;
     placeBet(state.lastSide);
+  }
+
+  async function doubleBet() {
+    if (state.phase !== "betting" || !state.apiReady) {
+      return showToast(state.apiReady ? "Wait for betting" : "Login required");
+    }
+    // If a bet is pending, place the same amount again (doubles total stake).
+    if (state._roundStake > 0 && state.side) {
+      const prev = state.stake;
+      state.stake = state._roundStake;
+      await placeBet(state.side);
+      state.stake = prev;
+      syncHud();
+      return;
+    }
+    // Otherwise double the selected chip (snap to next chip value).
+    const doubled = Math.min(state.stake * 2, CHIP_AMOUNTS[CHIP_AMOUNTS.length - 1]);
+    const snapped = CHIP_AMOUNTS.find((a) => a >= doubled) || CHIP_AMOUNTS[CHIP_AMOUNTS.length - 1];
+    state.stake = snapped;
+    syncHud();
+    showToast("Chip ×2 → ₹" + state.stake);
   }
 
   async function cashOut() {
@@ -728,6 +917,38 @@
     });
   }
 
+  function drawPctAxis(yAt, w, h, amp, centerY) {
+    const step = 20;
+    const padY = 12;
+    const pctTop = state.viewCenter + (centerY / amp) * 100;
+    const pctBot = state.viewCenter - ((h - centerY) / amp) * 100;
+    const start = Math.ceil(pctBot / step) * step;
+    const end = Math.floor(pctTop / step) * step;
+
+    ctx.save();
+    ctx.font = "500 11px Inter, system-ui, sans-serif";
+    ctx.textAlign = "right";
+    ctx.textBaseline = "middle";
+    ctx.fillStyle = "rgba(180, 195, 215, 0.72)";
+    ctx.strokeStyle = "rgba(140, 160, 185, 0.22)";
+    ctx.lineWidth = 1;
+
+    for (let pct = start; pct <= end; pct += step) {
+      const y = yAt(pct);
+      if (y < padY || y > h - padY) continue;
+
+      const label = pct > 0 ? `+${pct}%` : `${pct}%`;
+
+      ctx.beginPath();
+      ctx.moveTo(w - 46, y);
+      ctx.lineTo(w - 32, y);
+      ctx.stroke();
+
+      ctx.fillText(label, w - 8, y);
+    }
+    ctx.restore();
+  }
+
   function drawChart(progress) {
     const rect = els.chart.getBoundingClientRect();
     const w = rect.width;
@@ -740,7 +961,8 @@
     // Dynamic viewport: price-space center tracks livePct smoothly
     // yAt maps any price value to a canvas Y pixel
     const yAt = (v) => centerY - ((v - state.viewCenter) / 100) * amp;
-    const xAt = (t) => t * w;
+    const plotW = Math.max(40, w - 48);
+    const xAt = (t) => t * plotW;
 
     // Light grid (fixed pixel rows)
     ctx.strokeStyle = "rgba(120, 140, 170, 0.13)";
@@ -750,7 +972,7 @@
       const y = (h / 6) * i;
       ctx.beginPath();
       ctx.moveTo(0, y);
-      ctx.lineTo(w, y);
+      ctx.lineTo(plotW, y);
       ctx.stroke();
     }
     ctx.setLineDash([]);
@@ -763,7 +985,7 @@
       ctx.setLineDash([5, 5]);
       ctx.beginPath();
       ctx.moveTo(0, zeroY);
-      ctx.lineTo(w, zeroY);
+      ctx.lineTo(plotW, zeroY);
       ctx.stroke();
       ctx.setLineDash([]);
     }
@@ -776,6 +998,7 @@
       ctx.moveTo(0, startY);
       ctx.lineTo(16, startY);
       ctx.stroke();
+      drawPctAxis(yAt, w, h, amp, centerY);
       return;
     }
 
@@ -788,7 +1011,10 @@
     if (!visible.length || visible[visible.length - 1].t < progress) {
       visible.push({ t: progress, v: tipV });
     }
-    if (visible.length < 2) return;
+    if (visible.length < 2) {
+      drawPctAxis(yAt, w, h, amp, centerY);
+      return;
+    }
 
     const up = tipV >= 0;
     // Evolution-style: bright neon green / vivid red
@@ -873,10 +1099,13 @@
 
     if (state.phase === "trading" || state.phase === "settled") {
       const badge = els.liveBadge;
-      badge.style.left = clamp(tx, 48, w - 48) + "px";
+      badge.style.left = clamp(tx, 48, plotW - 8) + "px";
       badge.style.top = clamp(ty, 28, h - 28) + "px";
       badge.style.transform = "translate(-50%, -130%)";
     }
+
+    // Percentage scale on the right (drawn last so it stays readable)
+    drawPctAxis(yAt, w, h, amp, centerY);
   }
 
   function drawMini() {
@@ -1012,6 +1241,8 @@
   els.betUp.addEventListener("click", () => placeBet("up"));
   els.betDown.addEventListener("click", () => placeBet("down"));
   els.cashOutBtn.addEventListener("click", cashOut);
+  document.getElementById("undoBtn")?.addEventListener("click", undoBet);
+  document.getElementById("doubleBtn")?.addEventListener("click", doubleBet);
 
   els.chipStack?.querySelectorAll(".chip").forEach((btn) => {
     btn.addEventListener("click", (e) => {
@@ -1042,39 +1273,183 @@
     showToast("Grow More · real wallet · 3% cash-out fee");
   });
 
-  // ── Live host video (speaks continuously while graph/trading runs) ───────
-  function getHostVideo() {
-    const vid = document.getElementById("hostFace");
-    if (!vid || typeof vid.play !== "function") return null;
-    vid.muted = true;
-    vid.playsInline = true;
-    vid.loop = true;
-    return vid;
+  // ── Live host: useful frames only, locked crop (no zoom in/out) ──
+  const HOST_BASE = "photos/host-upright/live/";
+  const HOST_VER = "63";
+  const HOST_REST = "00-rest.png";
+  // Skip frames that needed big scale correction (caused zoom)
+  const HOST_IDLE = [HOST_REST, HOST_REST, "08-smile.png", HOST_REST];
+  const HOST_SPEAK = [
+    HOST_REST,
+    "01-near.png",
+    "11-talk.png",
+    "01-near.png",
+  ];
+  const HOST_BLINK = ["09-blink-half.png", "10-blink-closed.png", "09-blink-half.png"];
+  const HOST_CROSSFADE_MS = 180;
+  // Identical inset on EVERY frame so size can't drift between swaps
+  const HOST_INSET = 0.06;
+
+  let hostSpeakingOn = false;
+  let hostFrameI = 0;
+  let hostTimer = null;
+  let hostNextBlinkAt = 0;
+  let hostBusyBlink = false;
+  let hostCtx = null;
+  let hostReady = false;
+  let hostFadeRaf = null;
+  let hostCurrentFile = HOST_REST;
+  const hostBitmaps = Object.create(null);
+
+  function ensureHostCtx() {
+    const c = document.getElementById("hostFace");
+    if (!c) return null;
+    if (!hostCtx) {
+      c.width = 360;
+      c.height = 440;
+      hostCtx = c.getContext("2d");
+    }
+    return hostCtx;
   }
 
-  function setHostSpeaking(on) {
-    const vid = getHostVideo();
-    if (!vid) return;
-    if (on) {
-      // Skip short closed-mouth hold at start of the continuous clip
-      try { vid.currentTime = 0.35; } catch (_) {}
-      vid.play().catch(() => {});
-    } else {
-      vid.pause();
-      try { vid.currentTime = 0; } catch (_) {}
+  function drawHostLocked(ctx, bmp, alpha) {
+    if (!ctx || !bmp) return;
+    const iw = bmp.width;
+    const ih = bmp.height;
+    const sx = iw * HOST_INSET;
+    const sy = ih * HOST_INSET;
+    const sw = iw * (1 - 2 * HOST_INSET);
+    const sh = ih * (1 - 2 * HOST_INSET);
+    ctx.globalAlpha = alpha;
+    ctx.drawImage(bmp, sx, sy, sw, sh, 0, 0, 360, 440);
+    ctx.globalAlpha = 1;
+  }
+
+  function paintHostHard(file) {
+    const ctx = ensureHostCtx();
+    const bmp = hostBitmaps[file];
+    if (!ctx || !bmp) return;
+    drawHostLocked(ctx, bmp, 1);
+    hostCurrentFile = file;
+  }
+
+  function crossfadeHost(toFile) {
+    const fromFile = hostCurrentFile;
+    const fromBmp = hostBitmaps[fromFile];
+    const toBmp = hostBitmaps[toFile];
+    if (!toBmp) return;
+    if (!fromBmp || fromFile === toFile) {
+      paintHostHard(toFile);
+      return;
+    }
+    if (hostFadeRaf) cancelAnimationFrame(hostFadeRaf);
+    const start = performance.now();
+    const step = (now) => {
+      const t = Math.min(1, (now - start) / HOST_CROSSFADE_MS);
+      const e = t * t * (3 - 2 * t);
+      const ctx = ensureHostCtx();
+      if (!ctx) return;
+      drawHostLocked(ctx, fromBmp, 1);
+      drawHostLocked(ctx, toBmp, e);
+      if (t < 1) {
+        hostFadeRaf = requestAnimationFrame(step);
+      } else {
+        hostCurrentFile = toFile;
+        hostFadeRaf = null;
+      }
+    };
+    hostFadeRaf = requestAnimationFrame(step);
+  }
+
+  function setHostFrame(file) {
+    crossfadeHost(file);
+  }
+
+  function preloadHostFrames() {
+    const names = [...new Set([...HOST_IDLE, ...HOST_SPEAK, ...HOST_BLINK])];
+    return Promise.all(
+      names.map(
+        (f) =>
+          new Promise((resolve) => {
+            const im = new Image();
+            im.decoding = "async";
+            im.onload = () => {
+              hostBitmaps[f] = im;
+              resolve();
+            };
+            im.onerror = () => resolve();
+            im.src = HOST_BASE + f + "?v=" + HOST_VER;
+          })
+      )
+    ).then(() => {
+      hostReady = !!hostBitmaps[HOST_REST];
+      paintHostHard(HOST_REST);
+    });
+  }
+
+  function scheduleHostBlink(now) {
+    hostNextBlinkAt = now + 3200 + Math.random() * 4200;
+  }
+
+  function clearHostTimer() {
+    if (hostTimer) {
+      clearTimeout(hostTimer);
+      hostTimer = null;
     }
   }
 
-  function startHostTalking() {
-    const vid = getHostVideo();
-    if (!vid) return;
-    // Only speak while the graph is running; resume after first gesture if blocked
-    const resumeIfTrading = () => {
-      if (state.phase === "trading") setHostSpeaking(true);
+  function playHostBlink() {
+    hostBusyBlink = true;
+    let i = 0;
+    const step = () => {
+      if (i < HOST_BLINK.length) {
+        setHostFrame(HOST_BLINK[i]);
+        const hold = i === 1 ? 90 : 55;
+        i += 1;
+        hostTimer = setTimeout(step, hold);
+        return;
+      }
+      hostBusyBlink = false;
+      scheduleHostBlink(performance.now());
+      const frames = hostSpeakingOn ? HOST_SPEAK : HOST_IDLE;
+      setHostFrame(frames[hostFrameI % frames.length]);
+      hostTimer = setTimeout(tickHostAvatar, hostSpeakingOn ? 140 : 480);
     };
-    document.addEventListener("click", resumeIfTrading, { once: true });
-    document.addEventListener("touchstart", resumeIfTrading, { once: true });
-    setHostSpeaking(state.phase === "trading");
+    step();
+  }
+
+  function tickHostAvatar() {
+    const now = performance.now();
+    if (!hostBusyBlink && now >= hostNextBlinkAt) {
+      playHostBlink();
+      return;
+    }
+    const frames = hostSpeakingOn ? HOST_SPEAK : HOST_IDLE;
+    hostFrameI = (hostFrameI + 1) % frames.length;
+    setHostFrame(frames[hostFrameI]);
+    const delay = hostSpeakingOn
+      ? 170 + Math.floor(Math.random() * 90)
+      : 750 + Math.floor(Math.random() * 500);
+    hostTimer = setTimeout(tickHostAvatar, delay);
+  }
+
+  function setHostSpeaking(on) {
+    hostSpeakingOn = !!on;
+    if (!hostReady) return;
+    clearHostTimer();
+    hostBusyBlink = false;
+    hostFrameI = 0;
+    setHostFrame(hostSpeakingOn ? HOST_SPEAK[0] : HOST_IDLE[0]);
+    if (!hostNextBlinkAt) scheduleHostBlink(performance.now());
+    hostTimer = setTimeout(tickHostAvatar, hostSpeakingOn ? 120 : 520);
+  }
+
+  function startHostTalking() {
+    ensureHostCtx();
+    preloadHostFrames().then(() => {
+      scheduleHostBlink(performance.now());
+      setHostSpeaking(state.phase === "trading");
+    });
   }
 
   window.addEventListener("resize", () => {

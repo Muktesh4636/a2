@@ -364,19 +364,30 @@ const trackGlow = new THREE.Mesh(
 );
 wheel.add(trackGlow);
 
-// Diamond deflectors on the upper part of the slope
+// Diamond deflectors — each gets its own material so we can flash them on hit
+const deflectorMeshes = [];
 for (let i = 0; i < 8; i++) {
   const a = (i / 8) * Math.PI * 2 + 0.2;
-  const diamond = new THREE.Mesh(
-    new THREE.OctahedronGeometry(0.035, 0),
-    blackGloss
-  );
+  const mat = new THREE.MeshStandardMaterial({
+    color: 0x0a0a0a,
+    roughness: 0.18,
+    metalness: 0.35,
+    emissive: 0xffffff,
+    emissiveIntensity: 0,
+  });
+  const diamond = new THREE.Mesh(new THREE.OctahedronGeometry(0.035, 0), mat);
   diamond.position.set(Math.cos(a) * 0.97, 0.175, Math.sin(a) * 0.97);
   diamond.scale.set(1, 0.45, 0.7);
   diamond.rotation.y = -a;
   diamond.castShadow = true;
   wheel.add(diamond);
+  deflectorMeshes.push(diamond);
 }
+
+// Reusable point-light for hit flash (pooled — single light moved per hit)
+const hitLight = new THREE.PointLight(0xffffff, 0, 0.55, 2);
+hitLight.visible = false;
+wheel.add(hitLight);
 
 /* ——— Number wheel sits lower (downside / recessed in the bowl) ——— */
 rotor.position.y = -0.02;
@@ -585,6 +596,7 @@ const ballAnim = {
   raceT: 0,
   landT: 0,
   lockT: 0,
+  landExtends: 0,
   announced: false,
 };
 
@@ -779,44 +791,24 @@ function nearestPipe(localA) {
   return { idx, pipeA, dist, absDist: Math.abs(dist) };
 }
 
-async function launchBall() {
-  if (isBallBusy() || betState.pendingRequest) return;
-  if (betState.bets.size === 0) {
-    if (resultEl) resultEl.textContent = "Place a bet first";
-    return;
-  }
-  if (!betState.apiReady) {
-    if (resultEl) resultEl.textContent = "Connecting to server…";
-    try {
-      await restoreOrCreateSession();
-    } catch (e) {
-      if (resultEl) resultEl.textContent = `API error: ${e.message}`;
-      return;
-    }
-  }
-  if (!betState.accessToken) {
-    if (resultEl) resultEl.textContent = "Login required";
-    return;
-  }
+/** Start ball race for the shared server number (same for every user). */
+function startSharedSpin({ number, win = 0, balance, round }) {
+  if (number == null || number === undefined) return;
+  if (round != null && round === betState.lastAnimatedRound) return;
+  if (round != null) betState.lastAnimatedRound = round;
 
-  // Server decides the winning number (real money) BEFORE animation
-  betState.pendingRequest = true;
-  let spinData;
-  try {
-    spinData = await api("/spin/", { method: "POST", body: "{}" });
-  } catch (e) {
-    betState.pendingRequest = false;
-    if (resultEl) resultEl.textContent = e.message || "Spin failed";
-    return;
-  }
-  betState.pendingSpin = spinData;
-  betState.pendingRequest = false;
+  betState.pendingSpin = {
+    number,
+    win: win || 0,
+    balance: typeof balance === "number" ? balance : betState.balance,
+  };
 
   clearResult();
   camZoom.holdLeft = 0;
   camZoom.dir = -1;
+  setBoardCollapsed(true);
   detachBallToWheel();
-  ballAnim.targetIdx = pocketIndexForNumber(spinData.number);
+  ballAnim.targetIdx = pocketIndexForNumber(number);
   ballAnim.phase = "racing";
   ballAnim.radius = TRACK_R;
   ballAnim.y = TRACK_Y;
@@ -829,9 +821,32 @@ async function launchBall() {
   ballAnim.raceT = 0;
   ballAnim.landT = 0;
   ballAnim.lockT = 0;
+  ballAnim.landExtends = 0;
   ballAnim.announced = false;
   rotorSpeed = ROTOR_SPIN_SPEED;
   setSpinUi(true);
+}
+
+/** Late join during result: snap ball into the shared pocket (no full race). */
+function snapSharedResult({ number, win = 0, balance, round }) {
+  if (number == null || number === undefined) return;
+  if (round != null) betState.lastAnimatedRound = round;
+  betState.pendingSpin = {
+    number,
+    win: win || 0,
+    balance: typeof balance === "number" ? balance : betState.balance,
+  };
+  clearResult();
+  setBoardCollapsed(true);
+  ballAnim.targetIdx = pocketIndexForNumber(number);
+  ballAnim.phase = "settled";
+  ballAnim.announced = true;
+  attachBallToPocket(ballAnim.targetIdx);
+  rotorSpeed = 0;
+  setSpinUi(false);
+  camZoom.holdLeft = 0;
+  camZoom.dir = 1;
+  finalizeSpin(number);
 }
 
 /** Apply server settle result after the ball visually locks. */
@@ -864,9 +879,19 @@ function applyDeflectorHits() {
     if (dist < 0.05 && ballAnim.lastDeflector !== i) {
       ballAnim.lastDeflector = i;
       const dir = Math.sign(ballAnim.speed || -1);
-      ballAnim.speed -= dir * (0.25 + Math.random() * 0.35);
-      ballAnim.radius += 0.01 + Math.random() * 0.025;
-      ballAnim.bounce = 0.014 + Math.random() * 0.018;
+      ballAnim.speed -= dir * (0.3 + Math.random() * 0.45);
+      ballAnim.radius += 0.012 + Math.random() * 0.03;
+      // Big visible hop — "eye candy" moment
+      ballAnim.bounce = 0.055 + Math.random() * 0.04;
+
+      // Flash the diamond white
+      if (deflectorMeshes[i]) deflectorMeshes[i].material.emissiveIntensity = 1.8;
+
+      // Move point light to hit position and fire it
+      const da2 = (i / DEFLECTOR_COUNT) * Math.PI * 2 + DEFLECTOR_PHASE;
+      hitLight.position.set(Math.cos(da2) * DEFLECTOR_R, 0.2, Math.sin(da2) * DEFLECTOR_R);
+      hitLight.intensity = 2.2;
+      hitLight.visible = true;
       break;
     }
     const dAng = wrapPi(ballAnim.angle - da);
@@ -877,53 +902,87 @@ function applyDeflectorHits() {
 }
 
 /**
- * Solid frets: ball cannot pass under/through a pipe.
- * Hit one edge → bounce (may land in another pocket).
- * Can ricochet between two pipes in the same pocket.
+ * Fret collisions in ROTOR-LOCAL frame (frets spin with the wheel).
+ * Bounce flips relative speed — this is what makes 4rabet hops look real.
  */
-function collideWithPipes() {
-  // Only collide while over the fret ring
-  if (ballAnim.radius < stopInnerR - 0.01 || ballAnim.radius > stopOuterR + 0.03) {
+function collideWithPipesLocal() {
+  if (ballAnim.radius < stopInnerR - 0.01 || ballAnim.radius > stopOuterR + 0.04) {
     ballAnim.lastPipe = -1;
     return;
   }
 
   const localA = ballLocalAngle();
+  const localSpeed = ballAnim.speed - rotorSpeed;
   const { idx, pipeA, dist, absDist } = nearestPipe(localA);
-  // Angular half-width of pipe + ball (cannot penetrate)
-  const collideAng = (PIPE_RADIUS + BALL_R * 0.72) / Math.max(ballAnim.radius, 0.2);
+  const collideAng = (PIPE_RADIUS + BALL_R * 0.85) / Math.max(ballAnim.radius, 0.2);
 
   if (absDist < collideAng) {
-    // Push ball fully outside the pipe surface (never under/through)
-    const side = dist === 0 ? Math.sign(ballAnim.speed || 1) : Math.sign(dist);
-    const push = collideAng * 1.05;
-    const clearedLocal = pipeA + side * push;
+    const side = dist === 0 ? Math.sign(localSpeed || 1) : Math.sign(dist);
+    const clearedLocal = pipeA + side * collideAng * 1.08;
     ballAnim.angle = rotor.rotation.y + clearedLocal;
 
-    // Bounce when approaching this pipe (or first contact)
-    const approaching = Math.sign(ballAnim.speed) === -side || ballAnim.lastPipe !== idx;
+    const approaching =
+      Math.sign(localSpeed) === -side || ballAnim.lastPipe !== idx;
     if (approaching && ballAnim.lastPipe !== idx) {
-      // Visible fret bounce — enough kick to cross into a neighboring pocket
-      const damp = 0.45 + Math.random() * 0.25;
-      ballAnim.speed = -ballAnim.speed * damp;
-      ballAnim.speed += -side * (0.18 + Math.random() * 0.28);
-      ballAnim.bounce = 0.018 + Math.random() * 0.028;
+      // Lip moment — ball rides up and over the fret separator
+      let newLocal = -localSpeed * (0.55 + Math.random() * 0.32);
+      newLocal += -side * (0.45 + Math.random() * 0.55);
+      ballAnim.speed = rotorSpeed + newLocal;
+      // Push radius outward briefly — ball climbs the lip then drops back
+      ballAnim.radius = Math.min(ballAnim.radius + 0.025 + Math.random() * 0.02, stopOuterR);
+      ballAnim.bounce = 0.065 + Math.random() * 0.055; // big visible arc over fret
       ballAnim.radius = THREE.MathUtils.clamp(
-        ballAnim.radius + (Math.random() - 0.3) * 0.028,
+        ballAnim.radius + (Math.random() - 0.2) * 0.04,
         stopInnerR + BALL_R,
-        stopOuterR - BALL_R * 0.5
+        stopOuterR - BALL_R * 0.35
       );
       ballAnim.lastPipe = idx;
     }
-  } else if (absDist > collideAng * 1.8) {
+  } else if (absDist > collideAng * 1.9) {
     ballAnim.lastPipe = -1;
   }
 
-  // Also keep radius from slipping under the fret length
+  ballAnim.radius = THREE.MathUtils.clamp(
+    ballAnim.radius,
+    stopInnerR + BALL_R * 0.45,
+    stopOuterR + 0.025
+  );
+}
+
+/**
+ * Give the ball a velocity (in the rotor-local frame) so it drifts from its
+ * CURRENT visual position toward the server pocket.
+ * NEVER changes ballAnim.angle — no teleport.
+ */
+function beginLandingChase() {
+  ballAnim.phase = "landing";
+  ballAnim.landT = 0;
+  ballAnim.lastPipe = -1;
+  // landExtends is kept across re-aims (failsafe counter)
+
+  const localA = ballLocalAngle();
+  const targetLocal = pocketLocalAngle(ballAnim.targetIdx);
+  const err = wrapPi(targetLocal - localA);
+
+  // Direction: whichever way is shorter to target
+  const dir = Math.sign(err) || Math.sign(ballAnim.speed - rotorSpeed) || -1;
+
+  const tight = (ballAnim.landExtends || 0) >= 2;
+  // How much relative speed to cover |err| before friction damps it to zero
+  // ∫₀ᵀ rel0·e^{-f·t} dt = rel0/f·(1-e^{-fT}) ≈ |err|
+  const fric = 2.15;
+  const T = tight ? 0.65 : 0.95;
+  const errAbs = Math.abs(err);
+  const needed = (errAbs * fric) / (1 - Math.exp(-fric * T));
+  const rel0 = THREE.MathUtils.clamp(needed, 0.7, tight ? 1.4 : 2.0);
+
+  ballAnim.speed = rotorSpeed + dir * rel0;
+  ballAnim.bounce = 0.025 + Math.random() * 0.02;
+  // Clamp radius to fret zone — don't change angle
   ballAnim.radius = THREE.MathUtils.clamp(
     ballAnim.radius,
     stopInnerR + BALL_R * 0.5,
-    stopOuterR + 0.02
+    stopOuterR - 0.01
   );
 }
 
@@ -966,22 +1025,35 @@ function updateBall(dt) {
     ballAnim.bounce = Math.max(0, ballAnim.bounce - dt * 0.045);
   }
 
-  if (ballAnim.phase === "racing" || ballAnim.phase === "spiraling") {
+    if (ballAnim.phase === "racing" || ballAnim.phase === "spiraling") {
     ballAnim.raceT += dt;
 
-    const friction = ballAnim.phase === "racing" ? 0.34 : 0.42;
+    const friction = ballAnim.phase === "racing" ? 0.42 : 0.55;
     ballAnim.speed += Math.sign(ballAnim.speed) * -friction * dt;
-    const minSpin = ballAnim.phase === "racing" ? 1.35 : 0.45;
+    const minSpin = ballAnim.phase === "racing" ? 1.45 : 0.55;
     if (Math.abs(ballAnim.speed) < minSpin) {
       ballAnim.speed = Math.sign(ballAnim.speed || -1) * minSpin;
     }
+
+    // During spiraling: gently steer world speed so ball enters the pocket zone
+    // near the server target. This is invisible at rim speed but lands the ball
+    // 0-3 pockets from the target instead of up to 18 pockets away.
+    if (ballAnim.phase === "spiraling" && ballAnim.targetIdx != null) {
+      const localA = ballLocalAngle();
+      const targetLocal = pocketLocalAngle(ballAnim.targetIdx);
+      const err = wrapPi(targetLocal - localA);
+      // Nudge: ±8% of current speed, applied very gently (sub-visual)
+      const nudge = Math.sign(err) * Math.abs(ballAnim.speed) * 0.08 * dt;
+      ballAnim.speed += nudge;
+    }
+
     ballAnim.angle += ballAnim.speed * dt;
 
     const absSpeed = Math.abs(ballAnim.speed);
 
     if (
       ballAnim.phase === "racing" &&
-      (absSpeed < HOLD_SPEED || ballAnim.raceT > 7.5)
+      (absSpeed < HOLD_SPEED || ballAnim.raceT > 5.2)
     ) {
       ballAnim.phase = "spiraling";
     }
@@ -990,79 +1062,122 @@ function updateBall(dt) {
     if (ballAnim.phase === "racing") {
       desiredR = TRACK_R + Math.sin(performance.now() * 0.009) * 0.004;
     } else {
-      const spiralT = Math.max(0, ballAnim.raceT - 6.5);
-      const speedFall = Math.pow(1 - THREE.MathUtils.clamp(absSpeed / HOLD_SPEED, 0, 1), 1.2);
-      const timeFall = THREE.MathUtils.clamp(spiralT / 3.8, 0, 1);
-      const fall = Math.max(speedFall * 0.55, timeFall);
+      // Speed Auto: quicker fall off the rim (snappy drop, not a long spiral)
+      const spiralT = Math.max(0, ballAnim.raceT - 4.2);
+      const speedFall = Math.pow(1 - THREE.MathUtils.clamp(absSpeed / HOLD_SPEED, 0, 1), 1.05);
+      const timeFall = THREE.MathUtils.clamp(spiralT / 2.4, 0, 1);
+      const fall = Math.max(speedFall * 0.5, timeFall);
       const ease = fall * fall * (3 - 2 * fall);
       desiredR = THREE.MathUtils.lerp(TRACK_R, POCKET_ENTRY_R - 0.02, ease);
     }
 
-    const maxInward = (ballAnim.phase === "racing" ? 0.05 : 0.18) * dt;
-    const nextR = THREE.MathUtils.lerp(ballAnim.radius, desiredR, Math.min(1, dt * 1.4));
-    ballAnim.radius += THREE.MathUtils.clamp(nextR - ballAnim.radius, -maxInward, 0.18 * dt);
+    const maxInward = (ballAnim.phase === "racing" ? 0.06 : 0.28) * dt;
+    const nextR = THREE.MathUtils.lerp(ballAnim.radius, desiredR, Math.min(1, dt * 1.85));
+    ballAnim.radius += THREE.MathUtils.clamp(nextR - ballAnim.radius, -maxInward, 0.28 * dt);
     ballAnim.radius = THREE.MathUtils.clamp(ballAnim.radius, POCKET_ENTRY_R - 0.02, TRACK_R + 0.02);
 
     applyDeflectorHits();
     ballAnim.y = ballHeightAt(ballAnim.radius) + ballAnim.bounce;
 
     if (ballAnim.radius <= POCKET_ENTRY_R) {
-      // Enter continuous landing chase — no free rattle, no late teleport
-      ballAnim.phase = "landing";
-      ballAnim.landT = 0;
-      ballAnim.lastPipe = -1;
-      // Keep orbiting in the same direction, slightly faster than rotor so we catch the pocket
-      const dir = Math.sign(ballAnim.speed || -1) || -1;
-      ballAnim.speed = dir * (Math.abs(rotorSpeed) + 1.6 + Math.random() * 0.5);
-      ballAnim.bounce = 0.012;
+      beginLandingChase();
     }
   } else if (ballAnim.phase === "landing") {
     ballAnim.landT += dt;
 
-    // Two time windows, no conditional branching on position/speed at all:
-    //  - EASE_DURATION: pull strength ramps 0 → max (smoothstep)
-    //  - LAND_DURATION: extra buffer held at max pull before we commit
-    // Because the correction below is an *exponential* chase (never overshoots,
-    // never needs a distance/speed check), by the time LAND_DURATION elapses the
-    // ball's angle/radius/height have already converged to the pocket to a
-    // fraction of a millimetre/degree — so the final reparent is imperceptible,
-    // unlike the old distance-gated failsafe which could fire while the ball
-    // was still far from the pocket and produce a visible "teleport".
-    const EASE_DURATION = 1.7;
-    const LAND_DURATION = 2.4;
-    const t = Math.min(ballAnim.landT, EASE_DURATION) / EASE_DURATION;
-    const ease = t * t * (3 - 2 * t); // smoothstep, holds at 1 once t saturates
+    // ——— Speed Auto Roulette stop (4rabet) ———
+    // Rim drop → multiple lip hops across frets → deep nest.
+    const FREE_RATTLE = 1.35;  // longer free hop window = more visible lip moments
+    const MAX_LAND = 3.2;
+    const fretTopR  = stopOuterR - 0.012; // ball rides on top of the fret lip here
+    const fretMidR  = (stopInnerR + stopOuterR) * 0.5 + 0.01;
 
-    // Free spin ("phase A" natural circling) fades out completely as ease → 1
-    ballAnim.angle += ballAnim.speed * dt * (1 - ease);
-    ballAnim.speed *= Math.exp(-(1.0 + ease * 6) * dt);
+    let localSpeed = ballAnim.speed - rotorSpeed;
 
-    // Chase the pocket (it keeps moving with the rotor) with an exponential
-    // pull — the correction is always a fraction of the remaining error, so
-    // it can never overshoot or oscillate, unlike a clamped angular step.
-    const target = targetPocketWorldAngle();
-    const err = wrapPi(target - ballAnim.angle);
-    const angleRate = 1.0 + ease * 8.5;
-    ballAnim.angle += err * (1 - Math.exp(-angleRate * dt));
+    // Three zones of friction: early hops fast, mid hops slow, settle
+    let fric;
+    if      (ballAnim.landT < FREE_RATTLE * 0.45) fric = 0.9;  // fast hops — many pockets
+    else if (ballAnim.landT < FREE_RATTLE)         fric = 2.2;  // slowing — 1-2 more hops
+    else                                            fric = 4.5;  // stick
 
-    // Sink into the pocket bowl the same way — exponential convergence onto a
-    // (mostly static, once ease≈1) target radius/height.
-    const desiredR = THREE.MathUtils.lerp(POCKET_ENTRY_R, POCKET_R, ease);
-    const radiusRate = 1.5 + ease * 8;
-    ballAnim.radius += (desiredR - ballAnim.radius) * (1 - Math.exp(-radiusRate * dt));
-    const desiredY = ballHeightAt(ballAnim.radius) + ballAnim.bounce;
-    ballAnim.y += (desiredY - ballAnim.y) * (1 - Math.exp(-radiusRate * dt));
-    ballAnim.bounce = Math.max(0, ballAnim.bounce - dt * 0.05);
+    localSpeed *= Math.exp(-fric * dt);
 
-    rotorSpeed = Math.max(0.08, rotorSpeed - dt * 0.12);
+    // Keep minimum relative speed during free rattle so ball keeps hopping
+    const minLip = ballAnim.landT < FREE_RATTLE * 0.45 ? 1.05 : 0.55;
+    if (ballAnim.landT < FREE_RATTLE && Math.abs(localSpeed) < minLip) {
+      localSpeed = Math.sign(localSpeed || -1) * (minLip + Math.random() * 0.22);
+    }
+    ballAnim.speed = rotorSpeed + localSpeed;
+    ballAnim.angle += ballAnim.speed * dt;
 
-    if (ballAnim.landT >= LAND_DURATION) {
-      // Angle/radius have already converged onto the server-chosen pocket —
-      // this reparent is a no-op visually, not a snap.
-      ballAnim.angle = target;
+    collideWithPipesLocal();
+    if (ballAnim.radius > 0.74) applyDeflectorHits();
+    localSpeed = ballAnim.speed - rotorSpeed;
+
+    const targetLocal = pocketLocalAngle(ballAnim.targetIdx);
+    const localA = ballLocalAngle();
+    const err = wrapPi(targetLocal - localA);
+    const under = pocketIndexUnderBall(localA);
+    const inTarget = under === ballAnim.targetIdx;
+    const nearCenter = Math.abs(err) < POCKET_SLICE * 0.42;
+
+    // Radius trajectory: ride the fret top early → mid fret → sink to pocket
+    let desiredR;
+    if (ballAnim.landT < FREE_RATTLE * 0.45) {
+      // Ball skips on top of fret lips — most dramatic hop zone
+      desiredR = fretTopR;
+      ballAnim.radius += (desiredR - ballAnim.radius) * Math.min(1, dt * 3.0);
+    } else if (ballAnim.landT < FREE_RATTLE) {
+      // Ball drops off the fret tops into the mid-fret zone
+      const t = (ballAnim.landT - FREE_RATTLE * 0.45) / (FREE_RATTLE * 0.55);
+      desiredR = THREE.MathUtils.lerp(fretTopR, fretMidR, t * t);
+      ballAnim.radius += (desiredR - ballAnim.radius) * Math.min(1, dt * 2.2);
+    } else {
+      const sink = Math.min(1, (ballAnim.landT - FREE_RATTLE) / 0.75);
+      const sinkEase = sink * sink * (3 - 2 * sink);
+      desiredR = THREE.MathUtils.lerp(fretMidR, POCKET_R, sinkEase);
+      ballAnim.radius += (desiredR - ballAnim.radius) * Math.min(1, dt * 4.5);
+      if (inTarget && Math.abs(localSpeed) < 0.9) {
+        localSpeed *= Math.exp(-8 * dt);
+        ballAnim.speed = rotorSpeed + localSpeed;
+      }
+    }
+    ballAnim.radius = THREE.MathUtils.clamp(
+      ballAnim.radius,
+      POCKET_R - 0.006,
+      POCKET_ENTRY_R + 0.03
+    );
+    ballAnim.y = ballHeightAt(ballAnim.radius) + ballAnim.bounce;
+    ballAnim.bounce = Math.max(0, ballAnim.bounce - dt * 0.065);
+
+    rotorSpeed = Math.max(0.14, rotorSpeed - dt * 0.12);
+
+    const relSlow = Math.abs(localSpeed) < 0.18;
+    const deepEnough = ballAnim.radius <= POCKET_R + 0.022;
+    const readyToLock =
+      ballAnim.landT > FREE_RATTLE + 0.5 &&  // must fully complete hop phase first
+      inTarget &&
+      nearCenter &&
+      relSlow &&
+      deepEnough;
+
+    if (readyToLock) {
+      // Already visually in pocket — reparent is invisible
       ballAnim.phase = "locked";
       ballAnim.lockT = 0;
+      ballAnim.speed = 0;
       attachBallToPocket(ballAnim.targetIdx);
+    } else if (ballAnim.landT >= MAX_LAND) {
+      // Re-aim another physical drop — never teleport across pockets mid-hop
+      if ((ballAnim.landExtends || 0) < 3) {
+        ballAnim.landExtends = (ballAnim.landExtends || 0) + 1;
+        beginLandingChase();
+      } else {
+        ballAnim.phase = "locked";
+        ballAnim.lockT = 0;
+        ballAnim.speed = 0;
+        attachBallToPocket(ballAnim.targetIdx);
+      }
     }
   }
 
@@ -1084,18 +1199,18 @@ function updateBall(dt) {
 /* ——— Animate ——— */
 const clock = new THREE.Clock();
 
-window.addEventListener("resize", () => {
+function resizeStageCanvas() {
   const { w, h } = stageSize();
   camera.aspect = w / h;
   camera.updateProjectionMatrix();
   renderer.setSize(w, h, false);
+}
+
+window.addEventListener("resize", () => {
+  resizeStageCanvas();
 });
 
-spinBtn?.addEventListener("click", () => launchBall());
-
-canvas.addEventListener("dblclick", () => {
-  if (ballAnim.phase === "settled" || ballAnim.phase === "idle") launchBall();
-});
+/* Spins are automatic (shared server clock) — no manual spin */
 
 /* ——— Betting board (bottom) ——— */
 const COL1 = [1, 4, 7, 10, 13, 16, 19, 22, 25, 28, 31, 34];
@@ -1112,9 +1227,88 @@ const betState = {
   pendingRequest: false,
   lastServerWin: 0,
   pendingSpin: null,
-  roundHistory: [], // recent settled results for stats / history panel
+  roundHistory: (() => {
+    try {
+      return JSON.parse(localStorage.getItem("roultee_history") || "[]");
+    } catch { return []; }
+  })(), // recent settled results — persisted in localStorage
   soundOn: localStorage.getItem("roultee_sound") !== "0",
+  // Shared round clock (same game for every user)
+  gamePhase: null,
+  canBet: false,
+  gameRound: null,
+  secondsLeft: 0,
+  lastAnimatedRound: null,
+  pollTimer: null,
 };
+
+const betTimerEl = document.getElementById("bet-timer");
+const betTimerProgress = betTimerEl?.querySelector(".bt-progress");
+
+function updateBetTimer(game) {
+  if (!betTimerEl) return;
+  const phase = game?.phase;
+  const left = Number(game?.seconds_left ?? 0);
+  const total = Number(game?.betting_seconds ?? 7) || 7;
+  const show = phase === "betting" && left > 0.05;
+  betTimerEl.hidden = !show;
+  if (!show || !betTimerProgress) return;
+  const pct = Math.max(0, Math.min(100, (left / total) * 100));
+  // Deplete ring as time runs out (pathLength=100)
+  betTimerProgress.style.strokeDashoffset = String(100 - pct);
+}
+
+function applyGameClock(data) {
+  if (!data || !data.phase) return;
+  betState.gamePhase = data.phase;
+  betState.canBet = !!data.can_bet;
+  betState.gameRound = data.round ?? betState.gameRound;
+  betState.secondsLeft = Number(data.seconds_left ?? 0);
+  updateBetTimer(data);
+
+  const round = data.round;
+  const number = data.number;
+  if (round == null || number == null) return;
+  if (round === betState.lastAnimatedRound) return;
+
+  if (data.phase === "spinning") {
+    startSharedSpin({
+      number,
+      win: data.win || 0,
+      balance: data.balance,
+      round,
+    });
+    return;
+  }
+
+  // Joined during result window — show outcome without full race
+  if (data.phase === "result" && !isBallBusy()) {
+    snapSharedResult({
+      number,
+      win: data.win || 0,
+      balance: data.balance,
+      round,
+    });
+  }
+}
+
+async function pollGameState() {
+  if (!betState.accessToken || !betState.apiReady) return;
+  try {
+    const data = await api("/state/");
+    applyServerState(data);
+    applyGameClock(data);
+  } catch (e) {
+    // Keep polling; brief network blips are fine
+    console.warn("game state poll:", e.message || e);
+  }
+}
+
+function startGameClock() {
+  if (betState.pollTimer) return;
+  pollGameState();
+  betState.pollTimer = setInterval(pollGameState, 400);
+}
 
 /** Django API base — production uses Gundu /roulette/api → /api/roulette/ */
 const API_BASE = (
@@ -1211,7 +1405,9 @@ async function restoreAuthSession() {
   }
   const data = await api("/me/");
   applyServerState(data);
+  if (data.game) applyGameClock({ ...data.game, balance: data.balance, win: data.game.win });
   betState.apiReady = true;
+  startGameClock();
 }
 
 // Back-compat aliases (old guest-session names)
@@ -1240,13 +1436,23 @@ function colorClass(num) {
   return RED.has(num) ? "red" : "black";
 }
 
-function pushHistory(num) {
+/** Render the full history strip from betState.roundHistory (used on load + after each push). */
+function renderHistoryStrip() {
   if (!historyEl) return;
-  const chip = document.createElement("div");
-  chip.className = `hist-chip ${colorClass(num)} latest`;
-  chip.textContent = String(num);
-  historyEl.replaceChildren(chip);
+  historyEl.innerHTML = "";
+  if (!betState.roundHistory.length) {
+    historyEl.innerHTML = `<span class="last-round-empty">—</span>`;
+    return;
+  }
+  betState.roundHistory.slice(0, 20).forEach((entry, i) => {
+    const chip = document.createElement("div");
+    chip.className = `hist-chip ${entry.color}${i === 0 ? " latest" : ""}`;
+    chip.textContent = String(entry.number);
+    historyEl.appendChild(chip);
+  });
+}
 
+function pushHistory(num) {
   betState.roundHistory.unshift({
     number: num,
     color: colorClass(num),
@@ -1254,6 +1460,13 @@ function pushHistory(num) {
     at: Date.now(),
   });
   if (betState.roundHistory.length > 50) betState.roundHistory.length = 50;
+
+  // Persist to localStorage so it survives page reloads / app restarts
+  try {
+    localStorage.setItem("roultee_history", JSON.stringify(betState.roundHistory.slice(0, 50)));
+  } catch {}
+
+  renderHistoryStrip();
 }
 
 function totalBetAmount() {
@@ -1303,7 +1516,7 @@ function updateCellStack(btn) {
 }
 
 async function placeBet(key, btn) {
-  if (isBallBusy() || betState.pendingRequest) return;
+  if (betState.pendingRequest) return;
   if (!betState.apiReady) {
     try {
       await restoreOrCreateSession();
@@ -1311,6 +1524,10 @@ async function placeBet(key, btn) {
       if (resultEl) resultEl.textContent = `API error: ${e.message}`;
       return;
     }
+  }
+  if (!betState.canBet) {
+    if (resultEl) resultEl.textContent = "Wait for next betting round";
+    return;
   }
   const chip = betState.chip;
   if (betState.balance < chip) return;
@@ -1331,8 +1548,8 @@ async function placeBet(key, btn) {
 }
 
 async function undoBet() {
-  if (isBallBusy() || betState.pendingRequest) return;
-  if (!betState.apiReady) return;
+  if (betState.pendingRequest) return;
+  if (!betState.apiReady || !betState.canBet) return;
   betState.pendingRequest = true;
   try {
     const data = await api("/bets/undo/", { method: "POST", body: "{}" });
@@ -1346,8 +1563,8 @@ async function undoBet() {
 }
 
 async function doubleBets() {
-  if (isBallBusy() || betState.pendingRequest) return;
-  if (!betState.apiReady) return;
+  if (betState.pendingRequest) return;
+  if (!betState.apiReady || !betState.canBet) return;
   betState.pendingRequest = true;
   try {
     const data = await api("/bets/double/", { method: "POST", body: "{}" });
@@ -1360,7 +1577,7 @@ async function doubleBets() {
 }
 
 async function clearBets(refund = true) {
-  if (isBallBusy() || betState.pendingRequest) return;
+  if (betState.pendingRequest) return;
   if (!betState.apiReady) {
     if (refund) {
       for (const amt of betState.bets.values()) betState.balance += amt;
@@ -1372,6 +1589,7 @@ async function clearBets(refund = true) {
     refreshMoneyUi();
     return;
   }
+  if (!betState.canBet) return;
   betState.pendingRequest = true;
   try {
     const data = await api("/bets/clear/", { method: "POST", body: "{}" });
@@ -1529,6 +1747,7 @@ function initBettingUi() {
   buildBetTableV2();
   refreshMoneyUi();
   initGameMenu();
+  initBoardToggle();
 
   const chipStack = document.getElementById("chip-stack");
   document.querySelectorAll(".chip[data-chip]").forEach((btn) => {
@@ -1551,6 +1770,28 @@ function initBettingUi() {
   });
   document.getElementById("undo-bet")?.addEventListener("click", () => undoBet());
   document.getElementById("double-bet")?.addEventListener("click", () => doubleBets());
+}
+
+function setBoardCollapsed(collapsed) {
+  const shell = document.getElementById("game-shell");
+  const btn = document.getElementById("board-toggle");
+  if (!shell) return;
+  shell.classList.toggle("board-collapsed", collapsed);
+  if (btn) {
+    btn.setAttribute("aria-label", collapsed ? "Expand board" : "Collapse board");
+    btn.title = collapsed ? "Expand board" : "Collapse board";
+  }
+}
+
+function initBoardToggle() {
+  const btn = document.getElementById("board-toggle");
+  // Default: compact board under the wheel (not the large overlay)
+  setBoardCollapsed(true);
+  btn?.addEventListener("click", () => {
+    const shell = document.getElementById("game-shell");
+    const next = !shell?.classList.contains("board-collapsed");
+    setBoardCollapsed(next);
+  });
 }
 
 /* ——— Bottom hamburger menu ——— */
@@ -1756,6 +1997,19 @@ function animate() {
   }
   updateBall(dt);
   updateCamera(dt);
+
+  // Fade deflector flash and hit light
+  const fadeRate = dt * 9;
+  for (const dm of deflectorMeshes) {
+    if (dm.material.emissiveIntensity > 0) {
+      dm.material.emissiveIntensity = Math.max(0, dm.material.emissiveIntensity - fadeRate);
+    }
+  }
+  if (hitLight.visible) {
+    hitLight.intensity = Math.max(0, hitLight.intensity - dt * 14);
+    if (hitLight.intensity <= 0) hitLight.visible = false;
+  }
+
   renderer.render(scene, camera);
 }
 
@@ -1765,6 +2019,7 @@ try {
   if (overlay) overlay.style.display = "none";
 
   initBettingUi();
+  renderHistoryStrip(); // show persisted results immediately on open
   ballAnim.phase = "idle";
   ballAnim.targetIdx = pocketIndexForNumber(0);
   setSpinUi(false);
