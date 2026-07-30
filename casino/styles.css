@@ -1,0 +1,189 @@
+:root {
+  --bg: #000000;
+  --gold: #f0c94a;
+  --ink: #ffffff;
+  --card-radius: 10px;
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --topbar-h: 48px;
+  --gap: 10px;
+  --pad-x: 12px;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body {
+  height: 100%;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: Poppins, system-ui, sans-serif;
+  -webkit-tap-highlight-color: transparent;
+  overflow: hidden;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+
+.app {
+  height: 100dvh;
+  max-height: 100dvh;
+  max-width: 480px;
+  margin: 0 auto;
+  padding:
+    calc(36px + var(--safe-top))
+    var(--pad-x)
+    calc(12px + var(--safe-bottom));
+  background: #000;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.topbar {
+  flex: 0 0 var(--topbar-h);
+  display: grid;
+  grid-template-columns: 40px 1fr 40px;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.topbar h1 {
+  text-align: center;
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+}
+
+.icon-btn {
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  color: var(--gold);
+  border-radius: 8px;
+}
+
+.icon-btn.back:active {
+  opacity: 0.7;
+}
+
+.topbar-spacer {
+  width: 36px;
+  height: 36px;
+}
+
+.grid {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: repeat(4, 1fr);
+  gap: var(--gap);
+  width: 100%;
+}
+
+.card {
+  position: relative;
+  min-height: 0;
+  height: 100%;
+  border-radius: var(--card-radius);
+  border: 1.5px solid var(--gold);
+  overflow: hidden;
+  background: #0a0a0a;
+  box-shadow: 0 0 0 1px rgba(240, 201, 74, 0.12), 0 6px 16px rgba(0, 0, 0, 0.4);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  touch-action: manipulation;
+}
+
+.card:active {
+  transform: scale(0.985);
+}
+
+.card.is-selected {
+  box-shadow:
+    0 0 0 2px var(--gold),
+    0 0 22px rgba(240, 201, 74, 0.35),
+    0 10px 24px rgba(0, 0, 0, 0.5);
+}
+
+.card-art {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  display: block;
+  user-select: none;
+  -webkit-user-drag: none;
+  pointer-events: none;
+}
+
+.card-overlay {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgba(0, 0, 0, 0.55);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.18s ease;
+}
+
+.card.is-selected .card-overlay {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.play-btn {
+  min-width: 108px;
+  height: 42px;
+  padding: 0 20px;
+  border-radius: 999px;
+  font-weight: 800;
+  font-size: 15px;
+  letter-spacing: 0.4px;
+  color: #1a1200;
+  background: linear-gradient(180deg, #ffe07a 0%, #f0c94a 45%, #c8961a 100%);
+  box-shadow:
+    0 2px 0 #8a6508,
+    0 8px 18px rgba(0, 0, 0, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.55);
+}
+
+.play-btn:active {
+  transform: translateY(1px);
+}
+
+@media (min-width: 420px) {
+  :root {
+    --gap: 12px;
+    --pad-x: 16px;
+  }
+}
+
+@media (max-height: 700px) {
+  .app {
+    padding-top: calc(28px + var(--safe-top));
+  }
+  .topbar {
+    flex-basis: 40px;
+    margin-bottom: 8px;
+  }
+  .topbar h1 {
+    font-size: 16px;
+  }
+  .play-btn {
+    min-width: 96px;
+    height: 38px;
+    font-size: 14px;
+  }
+}

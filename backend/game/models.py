@@ -931,3 +931,23 @@ class ChickenRoad2Round(models.Model):
 
     class Meta:
         ordering = ["-created_at"]
+
+
+class VortexSession(models.Model):
+    """Per-user Vortex ring progress — JWT user + Wallet (integer ₹)."""
+
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="vortex_session",
+    )
+    bet = models.PositiveIntegerField(default=10)
+    water = models.PositiveSmallIntegerField(default=0)
+    earth = models.PositiveSmallIntegerField(default=0)
+    fire = models.PositiveSmallIntegerField(default=0)
+    busy = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"vortex:{self.user_id} bet={self.bet}"

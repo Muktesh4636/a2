@@ -186,7 +186,7 @@ export default function App() {
   const activeDiff = DIFF_OPTIONS.find(d => d.id === diff) || DIFF_OPTIONS[0]
 
   function pickDiff(id) {
-    if (state === 'playing') return
+    if (state === 'playing' || state === 'returning') return
     setDiff(id)
     const r = blankRoad(id)
     roadRef.current = r
@@ -215,12 +215,21 @@ export default function App() {
       if (dead) {
         setAnim('dead')
         fieldRef.current?.playDeathFire?.(nextStep)
+        // Keep Go/Cash/Play hidden while fried; only show Play after she gets home
         setTimeout(() => {
-          busy.current = false
           setResult({ won: false, net: -betRef.current, mult: 0, total: 0 })
-          setState('ended')
           roundIdRef.current = null
-        }, 1400)
+          setState('returning')
+          setStep(0)
+          stepRef.current = 0
+          setAnim('go')
+          fieldRef.current?.moveToStep?.(0)
+          setTimeout(() => {
+            setAnim('idle')
+            setState('ended')
+            busy.current = false
+          }, 1000)
+        }, 1600)
         return
       }
 
@@ -340,12 +349,31 @@ export default function App() {
   return (
     <div className="app">
       <header className="header">
+        <button
+          className="gundu-back"
+          type="button"
+          aria-label="Back to Casino"
+          onClick={() => {
+            const token =
+              new URLSearchParams(location.search).get('token') ||
+              localStorage.getItem('gundu_access_token') ||
+              localStorage.getItem('access_token') ||
+              ''
+            const u = new URL('/casino/', location.origin)
+            if (token) u.searchParams.set('token', token)
+            location.href = u.toString()
+          }}
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M15.5 4.5 8 12l7.5 7.5" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+        </button>
         <div className="header__logo">
           <img src={ASSET('assets/logo_mobile.svg')} alt="Chicken Road" />
         </div>
         <div className="header__right">
           <div className="header__balance">
-            {Math.round(balance)}
+            {Math.round(balance).toLocaleString('en-IN')}
           </div>
           <button className="header__icon" type="button" aria-label="Menu">
             <svg width="24" height="25" viewBox="0 0 24 25" fill="none">
@@ -374,7 +402,7 @@ export default function App() {
             </div>
             <img className="live__flag" src={`https://flagcdn.com/w40/${live.flag}.png`} alt="" />
             <span className="live__user">{live.user}</span>
-            <span className="live__amt">+₹{live.amount.toFixed(2)}</span>
+            <span className="live__amt">+₹{Math.round(live.amount).toLocaleString('en-IN')}</span>
           </div>
         </div>
 
@@ -383,7 +411,7 @@ export default function App() {
           road={road}
           step={step}
           anim={anim}
-          playing={state === 'playing'}
+          playing={state === 'playing' || state === 'returning'}
           onReady={() => setFieldReady(true)}
         />
       </div>
@@ -413,11 +441,11 @@ export default function App() {
           ))}
         </div>
 
-        <div className={`diff${diffOpen ? ' diff--open' : ''}${state === 'playing' ? ' diff--disabled' : ''}`} ref={diffRef}>
+        <div className={`diff${diffOpen ? ' diff--open' : ''}${state === 'playing' || state === 'returning' ? ' diff--disabled' : ''}`} ref={diffRef}>
           <button
             type="button"
             className="diff__trigger"
-            disabled={state === 'playing'}
+            disabled={state === 'playing' || state === 'returning'}
             aria-haspopup="listbox"
             aria-expanded={diffOpen}
             onClick={() => setDiffOpen(o => !o)}
@@ -467,18 +495,6 @@ export default function App() {
         </div>
 
         <div className="betbar__actions">
-          <button
-            className={`betbar__auto${auto ? ' betbar__auto--on' : ''}`}
-            onClick={() => setAuto(a => !a)}
-            type="button"
-            aria-label="Auto"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" fill="none" viewBox="0 0 48 48">
-              <path fill="#fff" d="M35.426 21.79h11.823a.75.75 0 0 1 .745.848.75.75 0 0 1-.168.385l-5.912 7.106a.752.752 0 0 1-1.154 0l-5.911-7.106a.753.753 0 0 1 .577-1.234M2.35 27.81h11.823a.75.75 0 0 0 .745-.848.75.75 0 0 0-.168-.386L8.84 19.471a.752.752 0 0 0-1.155 0l-5.91 7.105a.754.754 0 0 0 .576 1.235"/>
-              <path fill="#fff" fillRule="evenodd" d="M38.057 18.028a15.75 15.75 0 0 0-26.657 4.07l-2.63-1.34A18.75 18.75 0 0 1 40.6 15.89l2.35 1.897a1.5 1.5 0 0 1-1.893 2.33l-3-2.09ZM9.943 29.972a15.75 15.75 0 0 0 26.657-4.07l2.63 1.34A18.75 18.75 0 0 1 7.4 32.11l-2.35-1.897a1.5 1.5 0 1 1 1.893-2.33l3 2.09Z" clipRule="evenodd"/>
-            </svg>
-          </button>
-
           {state === 'idle' && (
             <button className="betbar__play" onClick={startGame} disabled={!fieldReady}>
               {fieldReady ? 'Play' : 'Loading...'}
@@ -487,13 +503,16 @@ export default function App() {
           {state === 'playing' && step === 0 && (
             <button className="betbar__play" disabled>Play</button>
           )}
-          {state === 'playing' && step > 0 && (
+          {state === 'playing' && step > 0 && anim !== 'dead' && (
             <div className="betbar__dual">
-              <button className="betbar__go" onClick={goNext}>Go</button>
               <button className="betbar__cash" onClick={cashOut}>
-                Cash Out<br />₹{winAmt.toFixed(2)}
+                Cash Out<br />₹{Math.round(winAmt).toLocaleString('en-IN')}
               </button>
+              <button className="betbar__go" onClick={goNext}>Go</button>
             </div>
+          )}
+          {state === 'returning' && (
+            <button className="betbar__play" disabled>Returning...</button>
           )}
           {state === 'ended' && (
             <button className="betbar__play" onClick={reset}>Play</button>
@@ -507,7 +526,7 @@ export default function App() {
             <div style={{ fontSize: 48 }}>🥚</div>
             <div className="modal__title modal__title--win">You Win!</div>
             <div className="modal__amt modal__amt--win">
-              +₹{result.net.toFixed(2)}
+              +₹{Math.round(result.net).toLocaleString('en-IN')}
             </div>
             <button className="modal__btn" onClick={reset}>Play Again</button>
           </div>

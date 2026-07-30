@@ -41,6 +41,8 @@ input {
   background: var(--bg);
   display: flex;
   flex-direction: column;
+  padding-top: calc(36px + env(safe-area-inset-top, 0px));
+  box-sizing: border-box;
 }
 
 /* ===== Header (45px, #424242, pad 8px 12px) ===== */
@@ -53,6 +55,30 @@ input {
   justify-content: space-between;
   padding: 8px 12px;
   flex-shrink: 0;
+}
+
+.HeaderLeft {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.gundu-back {
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  background: transparent;
+  color: #fff;
+  border-radius: 8px;
+  flex-shrink: 0;
+  cursor: pointer;
+  padding: 0;
+}
+.gundu-back:active {
+  opacity: 0.7;
 }
 
 .HeaderLogo img {

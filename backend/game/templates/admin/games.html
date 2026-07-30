@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Games - Admin Panel</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: #ffffff;
+            min-height: 100vh;
+            display: flex;
+            color: #2d3748;
+        }
+        .sidebar {
+            width: 260px;
+            background: #0f172a;
+            height: 100vh;
+            position: fixed;
+            left: 0;
+            top: 0;
+            display: flex;
+            flex-direction: column;
+            overflow-y: hidden;
+            z-index: 1000;
+        }
+        .sidebar-header {
+            padding: 24px 20px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            flex-shrink: 0;
+            background: #0f172a;
+        }
+        .sidebar-header .logo {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: white;
+            font-size: 20px;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+        .sidebar-header .logo-icon { font-size: 24px; }
+        .sidebar-header .subtitle {
+            color: rgba(255, 255, 255, 0.7);
+            font-size: 13px;
+            margin-top: 4px;
+        }
+        .sidebar-menu-wrapper {
+            flex: 1;
+            overflow-y: auto;
+            padding: 12px 0;
+            scrollbar-width: thin;
+            scrollbar-color: rgba(255,255,255,0.3) transparent;
+        }
+        .menu-section { margin-bottom: 24px; }
+        .menu-section-title {
+            color: rgba(255, 255, 255, 0.5);
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            padding: 8px 20px;
+            margin-bottom: 4px;
+        }
+        .sidebar-menu { list-style: none; padding: 0; }
+        .sidebar-menu a {
+            display: flex;
+            align-items: center;
+            padding: 12px 20px;
+            color: rgba(255, 255, 255, 0.8);
+            text-decoration: none;
+            font-size: 14px;
+            font-weight: 500;
+            position: relative;
+            transition: all 0.2s;
+        }
+        .sidebar-menu a:hover { background: rgba(255,255,255,0.1); color: white; }
+        .sidebar-menu a.active {
+            background: rgba(102, 126, 234, 0.25);
+            color: white;
+        }
+        .sidebar-menu a.active::before {
+            content: '';
+            position: absolute;
+            left: 0; top: 0; bottom: 0;
+            width: 3px;
+            background: #667eea;
+        }
+        .sidebar-menu .menu-icon { margin-right: 10px; font-size: 16px; }
+        .main-content {
+            margin-left: 260px;
+            flex: 1;
+            padding: 28px 32px;
+            width: calc(100% - 260px);
+            background: #f7fafc;
+            min-height: 100vh;
+        }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 24px;
+            gap: 16px;
+            flex-wrap: wrap;
+        }
+        .header h1 { font-size: 28px; font-weight: 800; color: #1a202c; }
+        .header p { color: #718096; margin-top: 6px; font-size: 14px; }
+        .logout-btn {
+            background: #dc3545 !important;
+            color: white !important;
+            padding: 10px 20px;
+            text-decoration: none;
+            border-radius: 8px;
+            font-weight: 500;
+            font-size: 14px;
+            display: inline-block;
+        }
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 16px;
+            margin-bottom: 28px;
+        }
+        .stat-card {
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            border: 1px solid #e2e8f0;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+        }
+        .stat-card h3 {
+            font-size: 11px;
+            color: #718096;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 8px;
+            font-weight: 600;
+        }
+        .stat-card p {
+            font-size: 24px;
+            font-weight: 800;
+            color: #1a202c;
+        }
+        .stat-card p.profit-pos { color: #059669; }
+        .stat-card p.profit-neg { color: #dc2626; }
+        .games-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 18px;
+        }
+        .game-card {
+            background: white;
+            border: 1px solid #e2e8f0;
+            border-radius: 14px;
+            padding: 22px;
+            text-decoration: none;
+            color: inherit;
+            display: block;
+            transition: all 0.2s;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+            position: relative;
+            overflow: hidden;
+        }
+        .game-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 10px 28px rgba(15, 23, 42, 0.12);
+            border-color: #cbd5e1;
+        }
+        .game-card::before {
+            content: '';
+            position: absolute;
+            left: 0; top: 0; bottom: 0;
+            width: 4px;
+            background: var(--accent, #667eea);
+        }
+        .game-top {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 10px;
+        }
+        .game-icon {
+            width: 44px;
+            height: 44px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 22px;
+            background: color-mix(in srgb, var(--accent, #667eea) 14%, white);
+        }
+        .game-name { font-size: 18px; font-weight: 800; color: #0f172a; }
+        .game-blurb { font-size: 13px; color: #718096; margin-bottom: 16px; }
+        .game-metrics {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+        .metric {
+            background: #f8fafc;
+            border-radius: 10px;
+            padding: 10px 12px;
+        }
+        .metric label {
+            display: block;
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.4px;
+            color: #94a3b8;
+            font-weight: 700;
+            margin-bottom: 4px;
+        }
+        .metric span {
+            font-size: 15px;
+            font-weight: 700;
+            color: #1e293b;
+        }
+        .metric span.pos { color: #059669; }
+        .metric span.neg { color: #dc2626; }
+        .game-footer {
+            margin-top: 14px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 13px;
+            color: #64748b;
+        }
+        .active-pill {
+            background: #ecfdf5;
+            color: #047857;
+            font-weight: 700;
+            padding: 4px 10px;
+            border-radius: 999px;
+            font-size: 12px;
+        }
+        .open-link { color: #667eea; font-weight: 700; }
+        .sidebar-toggle {
+            display: none;
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            z-index: 1001;
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 12px 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 20px;
+        }
+        @media (max-width: 768px) {
+            .sidebar { transform: translateX(-100%); transition: transform 0.3s; }
+            .sidebar.open { transform: translateX(0); }
+            .sidebar-toggle { display: block; }
+            .main-content { margin-left: 0; width: 100%; padding: 16px; }
+        }
+    </style>
+</head>
+<body>
+    <button class="sidebar-toggle" onclick="document.querySelector('.sidebar').classList.toggle('open')">☰</button>
+    <div class="sidebar">
+        <div class="sidebar-header">
+            <div class="logo">
+                <span class="logo-icon">🎲🎲</span>
+                <span>Gundu ata</span>
+            </div>
+            <div class="subtitle">Game control</div>
+        </div>
+        {% include 'admin/_sidebar_menu.html' %}
+    </div>
+
+    <div class="main-content">
+        <div class="header">
+            <div>
+                <h1>Games{% if scope_label %} — {{ scope_label }}{% endif %}</h1>
+                <p>Today (IST {{ ist_date|date:"d M Y" }}) — click a game for detailed stats</p>
+            </div>
+            <a href="{% url 'admin_logout' %}" class="logout-btn">🚪 Logout</a>
+        </div>
+
+        <div class="stats-grid">
+            <div class="stat-card">
+                <h3>Total Bets Today</h3>
+                <p>{{ totals.bets }}</p>
+            </div>
+            <div class="stat-card">
+                <h3>Total Wagered</h3>
+                <p>₹{{ totals.wagered|floatformat:0 }}</p>
+            </div>
+            <div class="stat-card">
+                <h3>Total Payout</h3>
+                <p>₹{{ totals.payout|floatformat:0 }}</p>
+            </div>
+            <div class="stat-card">
+                <h3>Profit Today</h3>
+                <p class="{% if totals.profit >= 0 %}profit-pos{% else %}profit-neg{% endif %}">₹{{ totals.profit|floatformat:0 }}</p>
+            </div>
+            <div class="stat-card">
+                <h3>Active Now</h3>
+                <p>{{ totals.active }}</p>
+            </div>
+        </div>
+
+        <div class="games-grid">
+            {% for g in games %}
+            <a class="game-card" href="{% url 'admin_game_detail' g.slug %}" style="--accent: {{ g.color }}">
+                <div class="game-top">
+                    <div class="game-icon">{{ g.icon }}</div>
+                    <div class="game-name">{{ g.name }}</div>
+                </div>
+                <div class="game-blurb">{{ g.blurb }}</div>
+                <div class="game-metrics">
+                    <div class="metric">
+                        <label>Bets today</label>
+                        <span>{{ g.today.bets }}</span>
+                    </div>
+                    <div class="metric">
+                        <label>Players</label>
+                        <span>{{ g.today.players }}</span>
+                    </div>
+                    <div class="metric">
+                        <label>Wagered</label>
+                        <span>₹{{ g.today.wagered|floatformat:0 }}</span>
+                    </div>
+                    <div class="metric">
+                        <label>Profit</label>
+                        <span class="{% if g.today.profit >= 0 %}pos{% else %}neg{% endif %}">₹{{ g.today.profit|floatformat:0 }}</span>
+                    </div>
+                </div>
+                <div class="game-footer">
+                    <span class="active-pill">{{ g.active }} active</span>
+                    <span class="open-link">View details →</span>
+                </div>
+            </a>
+            {% endfor %}
+        </div>
+    </div>
+</body>
+</html>

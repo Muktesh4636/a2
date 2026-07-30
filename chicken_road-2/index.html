@@ -19,8 +19,15 @@
     <div id="root">
       <div class="ThemeBackground">
         <header class="HeaderContainer">
-          <div class="HeaderLogo">
-            <img src="./static/image/logo.png" alt="" />
+          <div class="HeaderLeft">
+            <button type="button" class="gundu-back" id="gunduBackBtn" aria-label="Back to Casino">
+              <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+                <path d="M15.5 4.5 8 12l7.5 7.5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </button>
+            <div class="HeaderLogo">
+              <img src="./static/image/logo.png" alt="" />
+            </div>
           </div>
           <div class="HeaderContent">
             <div class="WrapperAmount" data-testid="menu-balance">
@@ -64,7 +71,7 @@
                   <div class="WinToast" id="winToast">
                     <span class="avatar"></span>
                     <span class="name" id="winName">Rose Defeate...</span>
-                    <span class="amt" id="winAmt">+$350.00</span>
+                    <span class="amt" id="winAmt">+₹350</span>
                   </div>
                 </div>
                 <div class="MultBadge" id="multBadge" hidden>
@@ -93,7 +100,7 @@
                           maxlength="10"
                           class="BetInput"
                           id="betInput"
-                          value="50"
+                          value="10"
                         />
                         <button type="button" data-testid="max-bet-button" class="InputButton minmax" id="betMax">
                           MAX
@@ -101,28 +108,28 @@
                       </div>
                     </div>
                     <div class="InputControls" id="quickBets">
-                      <button type="button" data-testid="fast-bet-1" class="InputButton fast" data-bet="2">
-                        <span>2</span>
+                      <button type="button" data-testid="fast-bet-1" class="InputButton fast" data-bet="10">
+                        <span>10</span>
                         <svg width="18" height="18" viewBox="0 0 18 18" style="fill: #fff">
-                          <use href="./static/svg/sprite.svg#USD"></use>
+                          <use href="./static/svg/sprite.svg#INR"></use>
                         </svg>
                       </button>
-                      <button type="button" data-testid="fast-bet-2" class="InputButton fast" data-bet="3">
-                        <span>3</span>
-                        <svg width="18" height="18" viewBox="0 0 18 18" style="fill: #fff">
-                          <use href="./static/svg/sprite.svg#USD"></use>
-                        </svg>
-                      </button>
-                      <button type="button" data-testid="fast-bet-3" class="InputButton fast" data-bet="8">
-                        <span>8</span>
-                        <svg width="18" height="18" viewBox="0 0 18 18" style="fill: #fff">
-                          <use href="./static/svg/sprite.svg#USD"></use>
-                        </svg>
-                      </button>
-                      <button type="button" data-testid="fast-bet-4" class="InputButton fast" data-bet="20">
+                      <button type="button" data-testid="fast-bet-2" class="InputButton fast" data-bet="20">
                         <span>20</span>
                         <svg width="18" height="18" viewBox="0 0 18 18" style="fill: #fff">
-                          <use href="./static/svg/sprite.svg#USD"></use>
+                          <use href="./static/svg/sprite.svg#INR"></use>
+                        </svg>
+                      </button>
+                      <button type="button" data-testid="fast-bet-3" class="InputButton fast" data-bet="30">
+                        <span>30</span>
+                        <svg width="18" height="18" viewBox="0 0 18 18" style="fill: #fff">
+                          <use href="./static/svg/sprite.svg#INR"></use>
+                        </svg>
+                      </button>
+                      <button type="button" data-testid="fast-bet-4" class="InputButton fast" data-bet="50">
+                        <span>50</span>
+                        <svg width="18" height="18" viewBox="0 0 18 18" style="fill: #fff">
+                          <use href="./static/svg/sprite.svg#INR"></use>
                         </svg>
                       </button>
                     </div>
@@ -187,7 +194,7 @@
                   <button type="button" class="Button PlayButton" id="playBtn">Play</button>
                   <button type="button" class="Button CashOutButton" id="cashBtn" hidden>
                     <span>CASH OUT</span>
-                    <span id="cashAmount">0 $</span>
+                    <span id="cashAmount">₹0</span>
                   </button>
                   <button type="button" class="Button GoButton" id="goBtn" hidden>GO</button>
                 </div>
@@ -206,6 +213,6 @@
       </div>
     </div>
 
-    <script type="module" src="./game.js?v=73"></script>
+    <script type="module" src="./game.js?v=83"></script>
   </body>
 </html>

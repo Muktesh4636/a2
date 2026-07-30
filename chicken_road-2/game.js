@@ -118,6 +118,8 @@ const OBJ = {
 };
 
 const CAR_KEYS = ["car1", "car2", "car3", "car4", "car5", "car6"];
+/** Company pride nameplate painted on every truck. */
+const TRUCK_BRAND = "PRIDE";
 /** Minimum center-to-center gap so cars never stack on each other. */
 const MIN_CAR_GAP = 200;
 /** Tighter gap when cars queue at a barricade (keeps them on-screen). */
@@ -150,7 +152,7 @@ const state = {
   roundId: null,
   authError: "",
   pendingRequest: false,
-  bet: 50,
+  bet: 10,
   difficulty: "easy",
   phase: "idle",
   step: 0,
@@ -235,9 +237,7 @@ function save() {
 }
 
 function fmtMoney(n) {
-  return Math.floor(n)
-    .toString()
-    .replace(/\B(?=(\d{3})+(?!\d))/g, "\u00a0");
+  return Math.floor(Number(n) || 0).toLocaleString("en-IN");
 }
 
 function fmtMult(m) {
@@ -347,25 +347,85 @@ function advanceCarY(car, dy, hardCap, gap = MIN_CAR_GAP) {
   if (cap >= car.y) car.y = cap;
 }
 
+/** Natural traffic speed — mix of slow / normal / quicker cars so it feels real. */
+function naturalSpeed(lane = 0) {
+  const roll = Math.random();
+  let base;
+  if (roll < 0.22) {
+    // Slow crawler
+    base = 42 + Math.random() * 28;
+  } else if (roll < 0.78) {
+    // Normal traffic
+    base = 70 + Math.random() * 55;
+  } else {
+    // Quicker truck (still capped so it doesn't look fake-rushed)
+    base = 125 + Math.random() * 55;
+  }
+  // Tiny lane bias so neighboring columns don't look cloned
+  return base + (lane % 3) * 4 + (Math.random() - 0.5) * 10;
+}
+
 function spawnCars(count) {
   const cars = [];
-  // One-way traffic only: spawn above the road, drive top → bottom
+  // Spawn mostly above the road so the first hop doesn't clear a full lane of mid-screen traffic
   for (let i = 0; i < count; i++) {
-    const speed = 55 + (i % 5) * 22 + Math.random() * 35;
     const n = 1 + (i % 3 === 0 ? 1 : 0);
-    const base = -160 - ((i * 53) % 180) - Math.random() * 40;
+    const base = -220 - ((i * 71) % 260) - Math.random() * 80;
     for (let c = 0; c < n; c++) {
       cars.push({
         lane: i,
         y: base - c * MIN_CAR_GAP,
         dir: 1,
-        speed, // same speed per lane so gaps stay stable
+        speed: naturalSpeed(i),
+        // Gentle cruise wobble so speeds don't look robotic
+        cruise: 0.92 + Math.random() * 0.16,
         key: CAR_KEYS[(i + c) % CAR_KEYS.length],
         scale: 0.14 + (i % 3) * 0.01,
       });
     }
   }
   return cars;
+}
+
+/**
+ * Keep the cars the player already sees. Play used to call spawnCars() and
+ * wipe lane-1 traffic the moment the button was pressed.
+ */
+function softResetTraffic() {
+  const lanes = mults().length;
+  for (const car of state.cars) {
+    car.rush = false;
+    car.hitCue = false;
+    car.approaching = false;
+    car.exiting = false;
+    car.stopped = false;
+    car.parking = false;
+    car.safePass = false;
+    car.gone = false;
+    if (!car.speed || car.speed < 40) {
+      car.speed = naturalSpeed(car.lane);
+      car.cruise = 0.92 + Math.random() * 0.16;
+    }
+  }
+  // Drop death-only cue trucks; keep normal traffic
+  state.cars = state.cars.filter((c) => !c.hitCue);
+  if (!state.cars.length) {
+    state.cars = spawnCars(lanes);
+    return;
+  }
+  const present = new Set(state.cars.map((c) => c.lane));
+  for (let i = 0; i < lanes; i++) {
+    if (present.has(i)) continue;
+    state.cars.push({
+      lane: i,
+      y: -200 - Math.random() * 140,
+      dir: 1,
+      speed: naturalSpeed(i),
+      cruise: 0.92 + Math.random() * 0.16,
+      key: CAR_KEYS[i % CAR_KEYS.length],
+      scale: 0.14 + (i % 3) * 0.01,
+    });
+  }
 }
 
 function resize() {
@@ -402,7 +462,7 @@ function setPlayingUI(playing) {
     const m = mults()[state.step - 1];
     els.multBadge.hidden = false;
     els.multValue.textContent = fmtMult(m);
-    els.cashAmount.textContent = `${potential()} $`;
+    els.cashAmount.textContent = `₹${fmtMoney(Math.round(potential()))}`;
   } else {
     els.multBadge.hidden = true;
   }
@@ -495,7 +555,8 @@ async function onPlay() {
   state.chickenX = state.sidewalk * 0.58;
   state.cameraX = 0;
   state.hopT = 1;
-  state.cars = spawnCars(mults().length);
+  // Keep cars already on the road (especially lane 1) — do not respawn/wipe them
+  softResetTraffic();
   setPlayingUI(false);
 
   state.bet = clampBet(Number(els.betInput.value) || state.bet);
@@ -513,7 +574,7 @@ async function onPlay() {
     state.chickenX = state.sidewalk * 0.58;
     state.cameraX = 0;
     state.hopT = 1;
-    state.cars = spawnCars(mults().length);
+    softResetTraffic();
     state.barriers = [];
     setPlayingUI(true);
     await new Promise((resolve) => {
@@ -537,7 +598,7 @@ async function onPlay() {
     state.chickenX = state.sidewalk * 0.58;
     state.cameraX = 0;
     state.hopT = 1;
-    state.cars = spawnCars(mults().length);
+    softResetTraffic();
     state.barriers = [];
     setPlayingUI(true);
     await serverStep();
@@ -695,6 +756,15 @@ function killFromCollision(car) {
   if (state.hitAnim > 0) return;
   if (state.phase === "idle") return;
   if (!car) return;
+  // Live wallet round: only the dedicated crash truck may kill.
+  // Random traffic must not zoom in and flatten the hen mid-round.
+  if (
+    state.roundId &&
+    !state.pendingDeath &&
+    !(car.rush || car.hitCue)
+  ) {
+    return;
+  }
 
   forfeitServerRound();
   state.pendingDeath = false;
@@ -705,12 +775,13 @@ function killFromCollision(car) {
   state.particles = [];
   car.approaching = false;
   car.exiting = false;
-  car.stopped = false;
   car.parking = false;
   car.safePass = false;
   car.gone = false;
-  car.rush = true;
-  car.speed = Math.max(car.speed, 520);
+  // Freeze at the impact — do not rocket the truck off-screen
+  car.rush = false;
+  car.stopped = true;
+  car.speed = 0;
   setPlayingUI(false);
   els.playBtn.hidden = false;
   disablePlayFor(3000);
@@ -724,6 +795,16 @@ function checkHenCarHits() {
   if (state.phase === "animating" && state.hopT < 0.98) return;
   for (const car of state.cars) {
     if (!carOverlapsHen(car)) continue;
+    if (
+      state.roundId &&
+      !state.pendingDeath &&
+      !car.hitCue &&
+      !car.rush
+    ) {
+      car.exiting = true;
+      car.speed = Math.max(car.speed, 160);
+      continue;
+    }
     killFromCollision(car);
     return;
   }
@@ -733,9 +814,9 @@ function checkHenCarHits() {
 function cueHitCar(lane) {
   const car = {
     lane,
-    y: -180 - Math.random() * 40,
+    y: -160 - Math.random() * 30,
     dir: 1,
-    speed: 460,
+    speed: 260,
     key: CAR_KEYS[(lane + 2) % CAR_KEYS.length],
     scale: 0.18,
     approaching: true,
@@ -839,27 +920,44 @@ function survive(step) {
   for (const car of carsOnLane(lane)) {
     if (car.rush || car.hitCue) continue;
     if (carUnderLandingPad(car) || carOverlapsHen(car)) {
+      // Live round: server already said survive — clear the pad, don't turbo-kill
+      if (state.roundId) {
+        car.exiting = true;
+        car.stopped = false;
+        car.speed = Math.max(car.speed, 160);
+        continue;
+      }
       killFromCollision(car);
       return;
     }
   }
 
-  // Safe land — park cars still above the gate; never teleport cars backward to the barricade
+  // Safe land — close the lane. Keep approaching cars visible at/above the gate.
+  // Never wipe the car the player was watching on lane 1 when Play starts.
+  const henY = padY(state.viewH);
   for (const car of carsOnLane(lane)) {
     if (car.rush || car.hitCue || car.gone) continue;
     car.approaching = false;
-    car.exiting = false;
     car.parking = false;
     car.safePass = false;
 
-    if (car.y <= parkAt) {
-      car.stopY = parkAt;
+    if (car.y < henY - 36) {
+      // Still above the hen — stop / queue (stay on screen)
+      car.exiting = false;
       car.stopped = true;
+      if (car.y <= parkAt + 28) {
+        car.stopY = parkAt;
+        if (car.y > parkAt) car.y = parkAt;
+      } else {
+        // Slightly past the gate line but still above the hen — freeze in place
+        car.stopY = car.y;
+      }
       continue;
     }
-    // Already past the gate line: keep driving down (do not snap back up to the barricade)
+    // Already at/past the hen — finish leaving the bottom of the screen
     car.stopped = false;
     car.exiting = true;
+    car.speed = Math.max(car.speed, 180);
   }
 
   state.barriers.push({ lane, life: 0 });
@@ -926,9 +1024,9 @@ function kill() {
   if (!car) {
     car = {
       lane: state.hitLane,
-      y: henY - 160,
+      y: henY - 140,
       dir: 1,
-      speed: 700,
+      speed: 280,
       key: CAR_KEYS[state.hitLane % CAR_KEYS.length],
       scale: 0.2,
       hitCue: true,
@@ -941,10 +1039,10 @@ function kill() {
   car.exiting = false;
   car.gone = false;
   car.safePass = false;
-  // Always start just above the hen so the pass is visible and unavoidable
-  car.y = henY - 150;
+  // Start just above the hen — controlled pass, not a rocket
+  car.y = henY - 120;
   car._prevY = car.y;
-  car.speed = 700;
+  car.speed = 280;
   car.rush = true;
   car.hitCue = true;
   state.hitCar = car;
@@ -1117,6 +1215,38 @@ function drawOneCar(car, roadTop) {
     ctx.fillStyle = "#3b82f6";
     ctx.fillRect(-dw / 2, -dh / 2, dw, dh);
   }
+  drawTruckBrand(dw, dh);
+  ctx.restore();
+}
+
+/** Pride nameplate — company name on every truck body. */
+function drawTruckBrand(dw, dh) {
+  const plateW = Math.max(30, dw * 0.82);
+  const plateH = Math.max(11, Math.min(dw * 0.32, dh * 0.15));
+  const py = dh * 0.04;
+  const rx = -plateW / 2;
+  const ry = py - plateH / 2;
+  const radius = Math.min(3.5, plateH * 0.3);
+
+  ctx.save();
+  ctx.fillStyle = "rgba(8, 12, 28, 0.9)";
+  ctx.strokeStyle = "rgba(255, 196, 64, 0.95)";
+  ctx.lineWidth = 1.2;
+  ctx.beginPath();
+  if (typeof ctx.roundRect === "function") {
+    ctx.roundRect(rx, ry, plateW, plateH, radius);
+  } else {
+    ctx.rect(rx, ry, plateW, plateH);
+  }
+  ctx.fill();
+  ctx.stroke();
+
+  const fontPx = Math.max(7, Math.floor(plateH * 0.58));
+  ctx.fillStyle = "#ffffff";
+  ctx.font = `800 ${fontPx}px Montserrat, system-ui, sans-serif`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(TRUCK_BRAND, 0, py + 0.5);
   ctx.restore();
 }
 
@@ -1144,8 +1274,41 @@ function drawCars(roadTop, roadBot, dt) {
       continue;
     }
 
+    const barred = hasBarrier(car.lane);
+
+    // Closed barricade: never let traffic drive through the gate
+    if (barred) {
+      const gate = carParkY(state.viewH);
+      // Still on the approach side — cancel any exit and hard-stop at the gate
+      if (car.y <= gate + 28) {
+        car.exiting = false;
+        car.stopped = true;
+        car.parking = false;
+        const target = maxYBeforeCarAhead(car, gate, PARK_CAR_GAP);
+        car.stopY = target;
+        if (car.y < target - 0.5) {
+          advanceCarY(car, Math.max(car.speed, 160) * dt, gate, PARK_CAR_GAP);
+        }
+        // Hard clamp — cannot cross a closed barricade
+        if (car.y > target) car.y = target;
+        if (car.y > gate) car.y = gate;
+        drawOneCar(car, roadTop);
+        continue;
+      }
+      // Already past the gate when it closed — finish leaving, do not recycle back onto this lane
+      car.exiting = true;
+      car.stopped = false;
+      advanceCarY(car, Math.max(car.speed, 200) * dt, Infinity);
+      if (car.y > span + 160) {
+        car.gone = true;
+        continue;
+      }
+      drawOneCar(car, roadTop);
+      continue;
+    }
+
     // Barricaded / stopped cars: queue at the gate (never stack on the same spot)
-    if ((hasBarrier(car.lane) || car.stopped || car.parking) && !car.exiting) {
+    if ((car.stopped || car.parking) && !car.exiting) {
       const gate = carParkY(state.viewH);
       const target = maxYBeforeCarAhead(car, gate, PARK_CAR_GAP);
       car.stopY = target;
@@ -1182,16 +1345,35 @@ function drawCars(roadTop, roadBot, dt) {
     }
 
     // Open-lane traffic: top → bottom only — keep spacing, never yank backward
-    advanceCarY(car, car.speed * dt, Infinity);
+    if (car.cruise == null) car.cruise = 0.92 + Math.random() * 0.16;
+    // Slow pulse so cruise speed drifts a little (natural, not robotic)
+    car.cruise += (Math.random() - 0.5) * 0.01;
+    car.cruise = Math.max(0.85, Math.min(1.12, car.cruise));
+    const drive = car.speed * car.cruise;
+    advanceCarY(car, drive * dt, Infinity);
     if (car.y > span + 140) {
       car.y = safeRecycleY(car.lane, car);
       car._prevY = car.y;
+      // New pass down the road → pick a fresh natural speed
+      car.speed = naturalSpeed(car.lane);
+      car.cruise = 0.92 + Math.random() * 0.16;
     }
     drawOneCar(car, roadTop);
 
     const canCollide =
       state.phase !== "animating" || state.hopT >= 0.98;
     if (canCollide && carOverlapsHen(car)) {
+      // During a live round, random cars must clear past the hen — not turbo-kill
+      if (
+        state.roundId &&
+        !state.pendingDeath &&
+        !car.hitCue &&
+        !car.rush
+      ) {
+        car.exiting = true;
+        car.speed = Math.max(car.speed, 160);
+        continue;
+      }
       killFromCollision(car);
       if (state.hitAnim > 0) break;
     }
@@ -1229,6 +1411,7 @@ function drawRushCarOverlay(h) {
   ctx.save();
   ctx.translate(x, y);
   drawObj(car.key, -dw / 2, -dh / 2, dw, dh);
+  drawTruckBrand(dw, dh);
   ctx.restore();
 }
 
@@ -1349,7 +1532,7 @@ function wire() {
   els.quickBets.querySelectorAll("[data-bet]").forEach((b) => {
     b.onclick = () => {
       if (state.phase !== "idle") return;
-      state.bet = Number(b.dataset.bet);
+      state.bet = clampBet(Number(b.dataset.bet));
       els.betInput.value = String(state.bet);
     };
   });
@@ -1471,7 +1654,7 @@ function wire() {
     const name = NAMES[Math.floor(Math.random() * NAMES.length)];
     const amt = (Math.random() * 800 + 20).toFixed(2);
     els.winName.textContent = name.slice(0, 12) + "...";
-    els.winAmt.textContent = `+$${amt}`;
+    els.winAmt.textContent = `+₹${fmtMoney(Math.round(Number(amt)))}`;
   }, 3500);
 
   // Load Gundu wallet balance via JWT (?token=)
@@ -1532,3 +1715,22 @@ resize();
 resetWorld();
 updateBalance();
 requestAnimationFrame(loop);
+
+(function wireCasinoBack() {
+  function casinoUrl() {
+    const token = readAccessToken() || "";
+    const u = new URL("/casino/", location.origin);
+    if (token) u.searchParams.set("token", token);
+    return u.toString();
+  }
+  function goCasino() {
+    location.href = casinoUrl();
+  }
+  document.getElementById("gunduBackBtn")?.addEventListener("click", goCasino);
+  try {
+    history.pushState({ gundu_game: "chicken-road-2" }, "", location.href);
+    window.addEventListener("popstate", () => {
+      location.replace(casinoUrl());
+    });
+  } catch (_) {}
+})();

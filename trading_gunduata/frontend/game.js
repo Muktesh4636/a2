@@ -1472,4 +1472,21 @@
   // Always start the loop — do not gate setInterval on first poll success
   pollState();
   setInterval(pollState, 350);
+
+  function casinoUrl() {
+    const token = readAccessToken() || "";
+    const u = new URL("/casino/", location.origin);
+    if (token) u.searchParams.set("token", token);
+    return u.toString();
+  }
+  function goCasino() {
+    location.href = casinoUrl();
+  }
+  document.getElementById("gunduBackBtn")?.addEventListener("click", goCasino);
+  try {
+    history.pushState({ gundu_game: "trading" }, "", location.href);
+    window.addEventListener("popstate", () => {
+      location.replace(casinoUrl());
+    });
+  } catch (_) {}
 })();

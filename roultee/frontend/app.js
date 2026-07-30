@@ -1759,30 +1759,14 @@ function initBoardToggle() {
 
 /* ——— Bottom hamburger menu ——— */
 function goLobby() {
-  try {
-    if (window.AndroidBridge?.goHome) {
-      window.AndroidBridge.goHome();
-      return;
-    }
-    if (window.Android?.goHome) {
-      window.Android.goHome();
-      return;
-    }
-    if (window.ReactNativeWebView?.postMessage) {
-      window.ReactNativeWebView.postMessage(JSON.stringify({ type: "lobby", action: "home" }));
-      return;
-    }
-    if (window.parent && window.parent !== window) {
-      window.parent.postMessage({ type: "roultee-lobby", action: "home" }, "*");
-    }
-  } catch (_) {
-    /* fall through */
-  }
-  const home =
-    new URLSearchParams(location.search).get("home") ||
-    localStorage.getItem("roultee_home") ||
-    `${location.origin}/`;
-  location.href = home;
+  const token =
+    new URLSearchParams(location.search).get("token") ||
+    localStorage.getItem("gundu_access_token") ||
+    localStorage.getItem("access_token") ||
+    "";
+  const u = new URL("/casino/", location.origin);
+  if (token) u.searchParams.set("token", token);
+  location.href = u.toString();
 }
 
 function setMenuOpen(open) {
@@ -1947,6 +1931,24 @@ function initGameMenu() {
 
   lobbyBtn?.addEventListener("click", () => goLobby());
   supportHome?.addEventListener("click", () => goLobby());
+  document.getElementById("gunduBackBtn")?.addEventListener("click", () => goLobby());
+  try {
+    history.pushState({ gundu_game: "roulette" }, "", location.href);
+    window.addEventListener("popstate", () => {
+      location.replace(
+        (() => {
+          const token =
+            new URLSearchParams(location.search).get("token") ||
+            localStorage.getItem("gundu_access_token") ||
+            localStorage.getItem("access_token") ||
+            "";
+          const u = new URL("/casino/", location.origin);
+          if (token) u.searchParams.set("token", token);
+          return u.toString();
+        })()
+      );
+    });
+  } catch (_) {}
 }
 
 function animate() {

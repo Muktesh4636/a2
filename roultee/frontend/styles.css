@@ -35,6 +35,8 @@ body {
   height: 100%;
   height: 100dvh;
   background: #120408;
+  padding-top: calc(36px + env(safe-area-inset-top, 0px));
+  box-sizing: border-box;
 }
 
 /* Wheel + board: one continuous surface */
@@ -98,6 +100,23 @@ body {
   align-items: center;
   gap: 10px;
   pointer-events: none;
+}
+
+.gundu-back {
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  background: rgba(0, 0, 0, 0.35);
+  color: #fff;
+  border-radius: 8px;
+  pointer-events: auto;
+  cursor: pointer;
+  padding: 0;
+}
+.gundu-back:active {
+  opacity: 0.75;
 }
 
 /* Yellow betting countdown (matches reference clock ring) */

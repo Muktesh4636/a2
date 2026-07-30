@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{ game.name }} — Admin</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: #f7fafc;
+            min-height: 100vh;
+            display: flex;
+            color: #2d3748;
+        }
+        .sidebar {
+            width: 260px; background: #0f172a; height: 100vh; position: fixed;
+            left: 0; top: 0; display: flex; flex-direction: column; overflow: hidden; z-index: 1000;
+        }
+        .sidebar-header {
+            padding: 24px 20px; border-bottom: 1px solid rgba(255,255,255,0.1); flex-shrink: 0;
+        }
+        .sidebar-header .logo {
+            display: flex; align-items: center; gap: 8px; color: white;
+            font-size: 20px; font-weight: 700; margin-bottom: 8px;
+        }
+        .sidebar-header .logo-icon { font-size: 24px; }
+        .sidebar-header .subtitle { color: rgba(255,255,255,0.7); font-size: 13px; }
+        .sidebar-menu-wrapper { flex: 1; overflow-y: auto; padding: 12px 0; }
+        .menu-section { margin-bottom: 24px; }
+        .menu-section-title {
+            color: rgba(255,255,255,0.5); font-size: 11px; font-weight: 600;
+            text-transform: uppercase; letter-spacing: 1px; padding: 8px 20px;
+        }
+        .sidebar-menu { list-style: none; }
+        .sidebar-menu a {
+            display: flex; align-items: center; padding: 12px 20px;
+            color: rgba(255,255,255,0.8); text-decoration: none; font-size: 14px;
+            font-weight: 500; position: relative;
+        }
+        .sidebar-menu a:hover { background: rgba(255,255,255,0.1); color: #fff; }
+        .sidebar-menu a.active { background: rgba(102,126,234,0.25); color: #fff; }
+        .sidebar-menu a.active::before {
+            content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: #667eea;
+        }
+        .sidebar-menu .menu-icon { margin-right: 10px; }
+        .main-content { margin-left: 260px; flex: 1; padding: 24px 28px; width: calc(100% - 260px); }
+        .back-link { color: #667eea; text-decoration: none; font-weight: 600; font-size: 13px; }
+        .header {
+            display: flex; justify-content: space-between; align-items: flex-start;
+            gap: 16px; flex-wrap: wrap; margin: 10px 0 20px;
+        }
+        .title-row { display: flex; align-items: center; gap: 12px; }
+        .title-icon {
+            width: 48px; height: 48px; border-radius: 14px; display: flex;
+            align-items: center; justify-content: center; font-size: 24px;
+            background: color-mix(in srgb, var(--accent,#667eea) 16%, white);
+        }
+        .header h1 { font-size: 26px; font-weight: 800; color: #0f172a; }
+        .header p { color: #64748b; font-size: 13px; margin-top: 4px; }
+        .header-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+        .btn {
+            padding: 10px 14px; border-radius: 8px; text-decoration: none;
+            font-weight: 600; font-size: 13px; border: none; cursor: pointer; display: inline-block;
+        }
+        .btn-primary { background: #667eea; color: #fff; }
+        .btn-secondary { background: #e2e8f0; color: #334155; }
+        .btn-danger { background: #dc3545; color: #fff; }
+        .section {
+            background: #fff; border: 1px solid #e2e8f0; border-radius: 14px;
+            padding: 18px 20px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+        }
+        .section h2 { font-size: 15px; font-weight: 800; color: #0f172a; margin-bottom: 14px; }
+        .stats-grid {
+            display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px;
+        }
+        .stat-card {
+            background: #f8fafc; border: 1px solid #eef2f7; border-radius: 12px; padding: 12px 14px;
+        }
+        .stat-card h3 {
+            font-size: 10px; color: #94a3b8; text-transform: uppercase;
+            letter-spacing: 0.4px; font-weight: 700; margin-bottom: 4px;
+        }
+        .stat-card p { font-size: 18px; font-weight: 800; color: #1e293b; }
+        .pos { color: #059669 !important; }
+        .neg { color: #dc2626 !important; }
+        .filters {
+            display: grid;
+            grid-template-columns: 1.4fr 1fr 1fr 1fr 140px auto;
+            gap: 10px;
+            align-items: end;
+        }
+        .filter-group label {
+            display: block; font-size: 11px; font-weight: 700; color: #64748b;
+            text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 6px;
+        }
+        .filter-group input, .filter-group select {
+            width: 100%; padding: 10px 12px; border: 1px solid #e2e8f0; border-radius: 8px;
+            font-size: 14px; background: #fff; color: #1e293b;
+        }
+        .filter-group input:focus, .filter-group select:focus {
+            outline: none; border-color: #667eea; box-shadow: 0 0 0 3px rgba(102,126,234,0.15);
+        }
+        .hint { font-size: 12px; color: #94a3b8; margin-top: 10px; }
+        .table-wrapper { overflow-x: auto; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 11px 12px; text-align: left; border-bottom: 1px solid #e2e8f0; font-size: 13px; }
+        th {
+            background: #f8fafc; font-size: 11px; text-transform: uppercase;
+            letter-spacing: 0.4px; color: #64748b; font-weight: 700; white-space: nowrap;
+        }
+        tr:hover { background: #f8fafc; }
+        .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; color: #475569; }
+        .badge {
+            display: inline-block; padding: 3px 8px; border-radius: 999px;
+            font-size: 11px; font-weight: 700;
+        }
+        .badge.win { background: #ecfdf5; color: #047857; }
+        .badge.lose { background: #fef2f2; color: #b91c1c; }
+        .badge.neutral { background: #f1f5f9; color: #475569; }
+        .link { color: #667eea; text-decoration: none; font-weight: 700; }
+        .link:hover { text-decoration: underline; }
+        .empty { text-align: center; padding: 36px 12px; color: #94a3b8; }
+        .pagination {
+            display: flex; justify-content: center; gap: 8px; margin-top: 16px; flex-wrap: wrap;
+        }
+        .pagination a, .pagination span {
+            padding: 8px 12px; border: 1px solid #e2e8f0; border-radius: 8px;
+            text-decoration: none; color: #475569; font-weight: 600; font-size: 13px;
+        }
+        .pagination .current { background: #667eea; color: #fff; border-color: #667eea; }
+        .round-panel { border-left: 4px solid var(--accent, #667eea); }
+        .error-box {
+            background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca;
+            padding: 12px 14px; border-radius: 10px; font-weight: 600;
+        }
+        .periods {
+            display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px;
+        }
+        .sidebar-toggle {
+            display: none; position: fixed; top: 20px; left: 20px; z-index: 1001;
+            background: #667eea; color: #fff; border: none; padding: 12px 16px;
+            border-radius: 8px; cursor: pointer; font-size: 20px;
+        }
+        @media (max-width: 1100px) {
+            .filters { grid-template-columns: 1fr 1fr; }
+        }
+        @media (max-width: 768px) {
+            .sidebar { transform: translateX(-100%); transition: transform .3s; }
+            .sidebar.open { transform: translateX(0); }
+            .sidebar-toggle { display: block; }
+            .main-content { margin-left: 0; width: 100%; padding: 16px; }
+            .filters { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body style="--accent: {{ game.color }}">
+    <button class="sidebar-toggle" onclick="document.querySelector('.sidebar').classList.toggle('open')">☰</button>
+    <div class="sidebar">
+        <div class="sidebar-header">
+            <div class="logo"><span class="logo-icon">🎲🎲</span><span>Gundu ata</span></div>
+            <div class="subtitle">Game control</div>
+        </div>
+        {% include 'admin/_sidebar_menu.html' %}
+    </div>
+
+    <div class="main-content">
+        <a class="back-link" href="{% url 'admin_games' %}">← All Games</a>
+        <div class="header">
+            <div class="title-row">
+                <div class="title-icon">{{ game.icon }}</div>
+                <div>
+                    <h1>{{ game.name }}{% if scope_label %} — {{ scope_label }}{% endif %}</h1>
+                    <p>{{ game.blurb }} · <strong>{{ game.active }}</strong> active now</p>
+                </div>
+            </div>
+            <div class="header-actions">
+                {% if game.control_url_name %}
+                <a class="btn btn-primary" href="{% url game.control_url_name %}">Open control</a>
+                {% endif %}
+                <a class="btn btn-secondary" href="{% url 'admin_game_detail' game.slug %}">Clear filters</a>
+                <a class="btn btn-danger" href="{% url 'admin_logout' %}">Logout</a>
+            </div>
+        </div>
+
+        {% if not round_only %}
+        <div class="periods">
+            <div class="section">
+                <h2>Today (IST {{ ist_date|date:"d M Y" }})</h2>
+                <div class="stats-grid">
+                    <div class="stat-card"><h3>Bets</h3><p>{{ game.today.bets }}</p></div>
+                    <div class="stat-card"><h3>Players</h3><p>{{ game.today.players }}</p></div>
+                    <div class="stat-card"><h3>Wagered</h3><p>₹{{ game.today.wagered|floatformat:0 }}</p></div>
+                    <div class="stat-card"><h3>Profit</h3><p class="{% if game.today.profit >= 0 %}pos{% else %}neg{% endif %}">₹{{ game.today.profit|floatformat:0 }}</p></div>
+                </div>
+            </div>
+            <div class="section">
+                <h2>Yesterday</h2>
+                <div class="stats-grid">
+                    <div class="stat-card"><h3>Bets</h3><p>{{ game.yesterday.bets }}</p></div>
+                    <div class="stat-card"><h3>Wagered</h3><p>₹{{ game.yesterday.wagered|floatformat:0 }}</p></div>
+                    <div class="stat-card"><h3>Profit</h3><p class="{% if game.yesterday.profit >= 0 %}pos{% else %}neg{% endif %}">₹{{ game.yesterday.profit|floatformat:0 }}</p></div>
+                </div>
+            </div>
+            <div class="section">
+                <h2>All time</h2>
+                <div class="stats-grid">
+                    <div class="stat-card"><h3>Bets</h3><p>{{ game.all_time.bets }}</p></div>
+                    <div class="stat-card"><h3>Wagered</h3><p>₹{{ game.all_time.wagered|floatformat:0 }}</p></div>
+                    <div class="stat-card"><h3>Profit</h3><p class="{% if game.all_time.profit >= 0 %}pos{% else %}neg{% endif %}">₹{{ game.all_time.profit|floatformat:0 }}</p></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>Search & filters</h2>
+            <form method="get" class="filters">
+                <div class="filter-group">
+                    <label>Search user</label>
+                    <input type="text" name="q" value="{{ filters.q }}" placeholder="Username / phone / email">
+                </div>
+                <div class="filter-group">
+                    <label>Round / session</label>
+                    <input type="text" name="round" value="{{ filters.round }}" placeholder="Round id">
+                </div>
+                <div class="filter-group">
+                    <label>From (IST)</label>
+                    <input type="date" name="from" value="{{ filters.from }}">
+                </div>
+                <div class="filter-group">
+                    <label>To (IST)</label>
+                    <input type="date" name="to" value="{{ filters.to }}">
+                </div>
+                <div class="filter-group">
+                    <label>Result</label>
+                    <select name="result">
+                        <option value="all" {% if filters.result == 'all' %}selected{% endif %}>All</option>
+                        <option value="win" {% if filters.result == 'win' %}selected{% endif %}>Win only</option>
+                        <option value="lose" {% if filters.result == 'lose' %}selected{% endif %}>Lose only</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label>&nbsp;</label>
+                    <button class="btn btn-primary" type="submit" style="width:100%">Search</button>
+                </div>
+            </form>
+            <p class="hint">{{ game.round_hint }}</p>
+        </div>
+
+        {% if filter_stats %}
+        <div class="section">
+            <h2>Filtered results summary</h2>
+            <div class="stats-grid">
+                <div class="stat-card"><h3>Matches</h3><p>{{ filter_stats.bets }}</p></div>
+                <div class="stat-card"><h3>Players</h3><p>{{ filter_stats.players }}</p></div>
+                <div class="stat-card"><h3>Wagered</h3><p>₹{{ filter_stats.wagered|floatformat:0 }}</p></div>
+                <div class="stat-card"><h3>Payout</h3><p>₹{{ filter_stats.payout|floatformat:0 }}</p></div>
+                <div class="stat-card"><h3>Profit</h3><p class="{% if filter_stats.profit >= 0 %}pos{% else %}neg{% endif %}">₹{{ filter_stats.profit|floatformat:0 }}</p></div>
+            </div>
+        </div>
+        {% endif %}
+        {% endif %}
+
+        {% if round_detail %}
+        <div class="section round-panel">
+            {% if round_detail.error %}
+                <div class="error-box">{{ round_detail.error }}</div>
+            {% else %}
+                <h2>{{ round_detail.title }}</h2>
+                <p class="hint" style="margin-top:0;margin-bottom:12px;">{{ round_detail.subtitle }}</p>
+                <div class="stats-grid" style="margin-bottom:14px;">
+                    <div class="stat-card"><h3>Bets</h3><p>{{ round_detail.stats.bets }}</p></div>
+                    <div class="stat-card"><h3>Players</h3><p>{{ round_detail.stats.players }}</p></div>
+                    <div class="stat-card"><h3>Wagered</h3><p>₹{{ round_detail.stats.wagered }}</p></div>
+                    <div class="stat-card"><h3>Payout</h3><p>₹{{ round_detail.stats.payout }}</p></div>
+                    <div class="stat-card"><h3>Profit</h3><p class="{% if round_detail.stats.profit >= 0 %}pos{% else %}neg{% endif %}">₹{{ round_detail.stats.profit }}</p></div>
+                </div>
+                {% if round_detail.full_url %}
+                <p style="margin-bottom:12px;"><a class="link" href="{{ round_detail.full_url }}">Open full round page →</a></p>
+                {% endif %}
+                <div class="table-wrapper">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Time</th>
+                                <th>User</th>
+                                <th>Phone</th>
+                                <th>Detail</th>
+                                <th>Stake</th>
+                                <th>Payout</th>
+                                <th>Result</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for row in round_detail.rows %}
+                            <tr>
+                                <td class="mono">{{ row.when|date:"d M H:i:s" }}</td>
+                                <td>
+                                    {% if row.user_id %}
+                                    <a class="link" href="{% url 'user_details' row.user_id %}">{{ row.user }}</a>
+                                    {% else %}{{ row.user }}{% endif %}
+                                </td>
+                                <td class="mono">{{ row.phone|default:"—" }}</td>
+                                <td>{{ row.detail }}</td>
+                                <td>₹{{ row.stake }}</td>
+                                <td>₹{{ row.payout }}</td>
+                                <td><span class="badge {{ row.result_class }}">{{ row.result }}</span></td>
+                            </tr>
+                            {% empty %}
+                            <tr><td colspan="7" class="empty">No bets in this round</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% endif %}
+        </div>
+        {% endif %}
+
+        {% if not round_only %}
+        <div class="section">
+            <h2>Activity
+                {% if page_obj %}
+                <span style="font-weight:600;color:#94a3b8;font-size:12px;">
+                    · {{ page_obj.paginator.count }} total · page {{ page_obj.number }}/{{ page_obj.paginator.num_pages }}
+                </span>
+                {% endif %}
+            </h2>
+            {% if rows %}
+            <div class="table-wrapper">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Time</th>
+                            <th>User</th>
+                            <th>Phone</th>
+                            <th>Round</th>
+                            <th>Detail</th>
+                            <th>Stake</th>
+                            <th>Payout</th>
+                            <th>Profit</th>
+                            <th>Result</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for row in rows %}
+                        <tr>
+                            <td class="mono">{{ row.when|date:"d M H:i:s" }}</td>
+                            <td>
+                                {% if row.user_id %}
+                                <a class="link" href="{% url 'user_details' row.user_id %}">{{ row.user }}</a>
+                                {% else %}{{ row.user }}{% endif %}
+                            </td>
+                            <td class="mono">{{ row.phone|default:"—" }}</td>
+                            <td>
+                                {% if row.round_url %}
+                                <a class="link" href="{{ row.round_url }}">{{ row.round_id }}</a>
+                                {% else %}
+                                <span class="mono">{{ row.round_id }}</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ row.detail }}</td>
+                            <td>₹{{ row.stake }}</td>
+                            <td>₹{{ row.payout }}</td>
+                            <td class="{% if row.profit >= 0 %}pos{% else %}neg{% endif %}">₹{{ row.profit }}</td>
+                            <td><span class="badge {{ row.result_class }}">{{ row.result }}</span></td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            {% if page_obj and page_obj.paginator.num_pages > 1 %}
+            <div class="pagination">
+                {% if page_obj.has_previous %}
+                <a href="?q={{ filters.q }}&round={{ filters.round }}&from={{ filters.from }}&to={{ filters.to }}&result={{ filters.result }}&page={{ page_obj.previous_page_number }}">← Prev</a>
+                {% endif %}
+                <span class="current">{{ page_obj.number }}</span>
+                {% if page_obj.has_next %}
+                <a href="?q={{ filters.q }}&round={{ filters.round }}&from={{ filters.from }}&to={{ filters.to }}&result={{ filters.result }}&page={{ page_obj.next_page_number }}">Next →</a>
+                {% endif %}
+            </div>
+            {% endif %}
+            {% else %}
+            <div class="empty">No activity found for these filters.</div>
+            {% endif %}
+            {% if game.slug == 'vortex' %}
+            <p class="hint">Vortex history is from wallet transactions (no dedicated round table yet).</p>
+            {% endif %}
+        </div>
+        {% endif %}
+    </div>
+</body>
+</html>

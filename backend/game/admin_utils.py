@@ -162,6 +162,7 @@ def has_menu_permission(user, permission_name):
     # Map permission names to model fields
     permission_map = {
         'dashboard': 'can_view_dashboard',
+        'games': 'can_view_dashboard',
         'dice_control': 'can_control_dice',
         'recent_rounds': 'can_view_recent_rounds',
         'all_bets': 'can_view_all_bets',

@@ -26,6 +26,7 @@ from game import roulette_views
 from game import trading_views
 from game import chicken_road_views
 from game import chicken_road2_views
+from game import vortex_views
 
 urlpatterns = [
     # APK Download endpoints (MUST come first, before everything else)
@@ -168,6 +169,13 @@ urlpatterns = [
     path('api/chicken-road-2/<uuid:round_id>/cashout/', chicken_road2_views.chicken_road2_cashout, name='chicken_road2_cashout'),
     path('api/chicken-road-2/<uuid:round_id>/forfeit/', chicken_road2_views.chicken_road2_forfeit, name='chicken_road2_forfeit'),
 
+    # Vortex — JWT + wallet
+    path('api/vortex/state/', vortex_views.vortex_state, name='vortex_state'),
+    path('api/vortex/bet/', vortex_views.vortex_bet, name='vortex_bet'),
+    path('api/vortex/spin/', vortex_views.vortex_spin, name='vortex_spin'),
+    path('api/vortex/cashout/', vortex_views.vortex_cashout, name='vortex_cashout'),
+    path('api/vortex/part/', vortex_views.vortex_part, name='vortex_part'),
+
 
     # Game endpoints (api/game/)
     path('api/game/', include('game.urls')),
@@ -180,6 +188,9 @@ urlpatterns = [
     # Redirect game-admin/admin/ -> Django admin (view DB tables)
     path('game-admin/admin/', RedirectView.as_view(url='/admin/', permanent=False), name='game_admin_to_django_admin'),
     path('game-admin/dashboard/', game_admin_views.admin_dashboard, name='admin_dashboard'),
+    path('game-admin/games/', game_admin_views.admin_games, name='admin_games'),
+    path('game-admin/games/<slug:game_slug>/', game_admin_views.admin_game_detail, name='admin_game_detail'),
+    path('game-admin/games/<slug:game_slug>/round/<str:round_id>/', game_admin_views.admin_game_round, name='admin_game_round'),
     path('game-admin/dice-control/', game_admin_views.dice_control, name='dice_control'),
     path('game-admin/dice-controlled-rounds/', game_admin_views.dice_controlled_rounds, name='dice_controlled_rounds'),
     path('game-admin/recent-rounds/', game_admin_views.recent_rounds, name='recent_rounds'),

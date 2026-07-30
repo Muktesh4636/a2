@@ -13,7 +13,7 @@
                 </a></li>
             {% endif %}
 
-            {% if is_super_admin or admin_permissions.can_control_dice %} <li><a href="{% url 'dice_control' %}" {% if page == 'dice-control' %}class="active" {% endif %}> <span class="menu-icon">🎯</span> Dice Control
+            {% if is_super_admin or admin_permissions.can_view_dashboard %} <li><a href="{% url 'admin_games' %}" {% if page == 'games' or page == 'game-detail' or page == 'dice-control' %}class="active" {% endif %}> <span class="menu-icon">🎮</span> Games
                 </a></li>
             {% endif %}
 

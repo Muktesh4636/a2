@@ -3999,3 +3999,160 @@ def admin_profile(request):
         'role_label': role_label,
         'admin_profile': get_admin_profile(user),
     })
+
+
+@admin_required
+def admin_games(request):
+    """Games hub — card overview with today stats for every game."""
+    if not has_menu_permission(request.user, 'games'):
+        messages.error(request, 'You do not have permission to view games.')
+        return redirect('admin_dashboard')
+
+    from .admin_game_stats import build_games_overview
+
+    effective_admin = get_effective_admin(request.user)
+    is_super = is_super_admin(effective_admin)
+    today_start, today_end, ist_date = _ist_day_bounds_utc(0)
+    games = build_games_overview(effective_admin, is_super, today_start, today_end)
+
+    totals = {
+        'bets': sum(g['today']['bets'] for g in games),
+        'wagered': sum((g['today']['wagered'] for g in games), Decimal('0')),
+        'payout': sum((g['today']['payout'] for g in games), Decimal('0')),
+        'active': sum(g['active'] for g in games),
+    }
+    totals['profit'] = totals['wagered'] - totals['payout']
+
+    context = get_admin_context(request, {
+        'page': 'games',
+        'games': games,
+        'totals': totals,
+        'ist_date': ist_date,
+        'is_franchise_scope': not is_super,
+        'scope_label': 'Your franchise' if not is_super else None,
+    })
+    return render(request, 'admin/games.html', context)
+
+
+@admin_required
+def admin_game_detail(request, game_slug):
+    """Detailed stats + searchable activity for a single game."""
+    if not has_menu_permission(request.user, 'games'):
+        messages.error(request, 'You do not have permission to view games.')
+        return redirect('admin_dashboard')
+
+    from .admin_game_stats import (
+        build_game_detail,
+        get_game_meta,
+        activity_queryset,
+        map_activity_rows,
+        filtered_activity_stats,
+        lookup_round_detail,
+        parse_ist_date,
+    )
+
+    if not get_game_meta(game_slug):
+        messages.error(request, 'Unknown game.')
+        return redirect('admin_games')
+
+    effective_admin = get_effective_admin(request.user)
+    is_super = is_super_admin(effective_admin)
+    today_start, today_end, ist_date = _ist_day_bounds_utc(0)
+    yday_start, yday_end, yday_date = _ist_day_bounds_utc(-1)
+    game = build_game_detail(
+        game_slug, effective_admin, is_super,
+        today_start, today_end, yday_start, yday_end,
+    )
+
+    search = request.GET.get('q', '').strip()
+    round_q = request.GET.get('round', '').strip()
+    result = request.GET.get('result', 'all').strip().lower() or 'all'
+    date_from_s = request.GET.get('from', '').strip()
+    date_to_s = request.GET.get('to', '').strip()
+    date_from = parse_ist_date(date_from_s, end_of_day=False)
+    date_to = parse_ist_date(date_to_s, end_of_day=True)
+    try:
+        page_number = max(1, int(request.GET.get('page', 1)))
+    except (TypeError, ValueError):
+        page_number = 1
+
+    qs = activity_queryset(
+        game_slug, effective_admin, is_super,
+        search=search, date_from=date_from, date_to=date_to,
+        result=result, round_q=round_q,
+    )
+    filter_stats = filtered_activity_stats(game_slug, qs)
+    paginator = Paginator(qs, 50)
+    page_obj = paginator.get_page(page_number)
+    rows = map_activity_rows(game_slug, page_obj.object_list)
+
+    round_detail = None
+    if round_q:
+        round_detail = lookup_round_detail(game_slug, round_q, effective_admin, is_super)
+
+    context = get_admin_context(request, {
+        'page': 'game-detail',
+        'game': game,
+        'ist_date': ist_date,
+        'yday_date': yday_date,
+        'is_franchise_scope': not is_super,
+        'scope_label': 'Your franchise' if not is_super else None,
+        'rows': rows,
+        'page_obj': page_obj,
+        'filter_stats': filter_stats,
+        'round_detail': round_detail,
+        'filters': {
+            'q': search,
+            'round': round_q,
+            'result': result,
+            'from': date_from_s,
+            'to': date_to_s,
+        },
+    })
+    return render(request, 'admin/game_detail.html', context)
+
+
+@admin_required
+def admin_game_round(request, game_slug, round_id):
+    """Open a specific round/session for a game (non-dice) with clear bet list."""
+    if not has_menu_permission(request.user, 'games'):
+        messages.error(request, 'You do not have permission to view games.')
+        return redirect('admin_dashboard')
+
+    from .admin_game_stats import get_game_meta, lookup_round_detail, build_game_detail
+
+    meta = get_game_meta(game_slug)
+    if not meta:
+        messages.error(request, 'Unknown game.')
+        return redirect('admin_games')
+
+    # Dice uses the existing full round page
+    if game_slug == 'dice':
+        return redirect('round_details', round_id=round_id)
+
+    effective_admin = get_effective_admin(request.user)
+    is_super = is_super_admin(effective_admin)
+    today_start, today_end, ist_date = _ist_day_bounds_utc(0)
+    yday_start, yday_end, yday_date = _ist_day_bounds_utc(-1)
+    game = build_game_detail(
+        game_slug, effective_admin, is_super,
+        today_start, today_end, yday_start, yday_end,
+    )
+    round_detail = lookup_round_detail(game_slug, round_id, effective_admin, is_super)
+
+    context = get_admin_context(request, {
+        'page': 'game-detail',
+        'game': game,
+        'ist_date': ist_date,
+        'yday_date': yday_date,
+        'round_detail': round_detail,
+        'round_id': round_id,
+        'is_franchise_scope': not is_super,
+        'scope_label': 'Your franchise' if not is_super else None,
+        'rows': [],
+        'page_obj': None,
+        'filter_stats': None,
+        'filters': {'q': '', 'round': round_id, 'result': 'all', 'from': '', 'to': ''},
+        'round_only': True,
+    })
+    return render(request, 'admin/game_detail.html', context)

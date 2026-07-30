@@ -27,6 +27,8 @@ html, body, #root {
   font-family: -apple-system, system-ui, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
   position: relative;
   overflow: hidden;
+  padding-top: calc(36px + env(safe-area-inset-top, 0px));
+  box-sizing: border-box;
 }
 
 /* ===== HEADER — exact original ===== */
@@ -40,6 +42,29 @@ html, body, #root {
   flex-shrink: 0;
   margin-bottom: -1px;
   z-index: 30;
+  gap: 6px;
+}
+
+.gundu-back {
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  background: transparent;
+  color: #fff;
+  border-radius: 8px;
+  flex-shrink: 0;
+  cursor: pointer;
+  padding: 0;
+}
+.gundu-back:active {
+  opacity: 0.7;
+}
+
+.header__logo {
+  flex: 1;
+  min-width: 0;
 }
 
 .header__logo img {
