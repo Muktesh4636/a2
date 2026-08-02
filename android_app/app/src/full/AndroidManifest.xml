@@ -45,6 +45,14 @@
         </activity>
 
         <activity
+            android:name=".ui.GameWebViewActivity"
+            android:exported="false"
+            android:hardwareAccelerated="true"
+            android:configChanges="orientation|screenSize|keyboardHidden|screenLayout|smallestScreenSize|uiMode"
+            android:theme="@style/Theme.GunduAta"
+            android:windowSoftInputMode="adjustResize" />
+
+        <activity
             android:name="com.unity3d.player.UnityPlayerGameActivity"
             android:configChanges="mcc|mnc|locale|touchscreen|keyboard|keyboardHidden|navigation|orientation|screenLayout|uiMode|screenSize|smallestScreenSize|fontScale|layoutDirection|density"
             android:enabled="true"

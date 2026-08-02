@@ -87,10 +87,12 @@ class Command(BaseCommand):
 
         UPCOMING_INTERVAL = 120   # refresh upcoming matches every 2 minutes
         RESULT_INTERVAL   = 60    # refresh results + settle pending bets every 1 minute
+        OPENSOURCE_INTERVAL = 20  # public Cricbuzz score scrape
 
         last_full_time     = 0   # force full refresh on first iteration
         last_upcoming_time = 0   # force upcoming refresh on first iteration
         last_result_time   = 0
+        last_opensource_time = 0
         last_bn            = "-1"
         iteration          = 0
 
@@ -98,6 +100,27 @@ class Command(BaseCommand):
             iteration += 1
             t0   = time.time()
             now  = t0
+
+            # ----------------------------------------------------------------
+            # OPEN-SOURCE SCORES — Cricbuzz scrape every ~20s
+            # ----------------------------------------------------------------
+            if now - last_opensource_time >= OPENSOURCE_INTERVAL:
+                try:
+                    from game.cricket_opensource import fetch_opensource_live_scores
+                    ores = fetch_opensource_live_scores()
+                    last_opensource_time = now
+                    if ores.get("ok"):
+                        self.stdout.write(self.style.SUCCESS(
+                            f"[#{iteration}] OPENSOURCE — "
+                            f"{ores.get('live_count', 0)} live / "
+                            f"{ores.get('match_count', 0)} total"
+                        ))
+                    else:
+                        self.stdout.write(self.style.WARNING(
+                            f"[#{iteration}] OPENSOURCE failed — {ores.get('error')}"
+                        ))
+                except Exception as exc:
+                    logger.exception("Opensource cricket sync error: %s", exc)
 
             # ----------------------------------------------------------------
             # UPCOMING REFRESH — every 2 minutes

@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>Speed Auto Roulette</title>
-  <link rel="stylesheet" href="styles.css?v=179" />
+  <link rel="stylesheet" href="styles.css?v=192" />
   <script type="importmap">
   {
     "imports": {
@@ -19,10 +19,15 @@
 
   <div id="app">
     <!-- Wheel + board share one continuous game surface -->
-    <section class="game-shell board-collapsed" id="game-shell">
+    <section class="game-shell" id="game-shell">
       <div class="stage" id="stage">
         <header class="top-bar">
           <div class="top-left">
+            <button type="button" class="gundu-back" id="gunduBackBtn" aria-label="Back to Casino">
+              <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+                <path d="M15.5 4.5 8 12l7.5 7.5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </button>
             <div class="live-badge" aria-label="Live">
               <span class="live-dot" aria-hidden="true"></span>
               <span class="live-text">LIVE</span>
@@ -45,6 +50,13 @@
           <span class="rb-side" id="rb-left"></span>
           <div class="rb-card" id="rb-card"><span id="rb-num"></span></div>
           <span class="rb-side" id="rb-right"></span>
+        </div>
+      </div>
+
+      <!-- History pinned on game-shell so expanded board cannot cover it -->
+      <div class="history-strip">
+        <div class="history" id="history" aria-label="Recent results">
+          <span class="last-round-empty">—</span>
         </div>
       </div>
 
@@ -79,8 +91,13 @@
         </div>
 
         <footer class="bet-footer">
-          <div class="history" id="history" aria-label="Recent results">
-            <span class="last-round-empty">—</span>
+          <div class="footer-meta">
+            <span class="footer-line">Total Bet <strong id="total-bet">₹0</strong></span>
+            <span class="footer-line">Balance <strong id="balance">₹0</strong></span>
+          </div>
+          <div class="footer-game">
+            <span class="footer-title">Speed Auto Roulette</span>
+            <span class="footer-range">₹10 – 500,000</span>
           </div>
         </footer>
       </div>
@@ -160,6 +177,6 @@
     </div>
   </div>
 
-  <script type="module" src="app.js?v=182"></script>
+  <script type="module" src="app.js?v=192"></script>
 </body>
 </html>

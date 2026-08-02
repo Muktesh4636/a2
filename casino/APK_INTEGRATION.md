@@ -8,6 +8,16 @@ https://gunduata.tech/casino/?token=<JWT_ACCESS_TOKEN>
 
 Same JWT pattern as the other web games.
 
+## Android APK
+
+The Gundu Ata app opens this lobby in `GameWebViewActivity` (not native Unity).
+
+```
+https://gunduata.tech/casino/?token=<JWT>&refresh=<JWT>
+```
+
+See `android_app/APK_WEBVIEW_GAMES.md`.
+
 ## Behaviour
 
 1. 2-column grid of separate game tile images

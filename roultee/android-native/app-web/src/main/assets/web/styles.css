@@ -4,12 +4,29 @@
   box-sizing: border-box;
 }
 
+:root {
+  /* 4rabet / APK Speed Auto Roulette theme (not old brown Gundu) */
+  --bg: #0a1220;
+  --bg-deep: #070e18;
+  --panel: #122033;
+  --panel-2: #1a2b44;
+  --red: #c41e26;
+  --red-deep: #9e151c;
+  --black-cell: #1c1c22;
+  --black-cell-2: #0e0e12;
+  --green: #0f8a4a;
+  --green-deep: #0a6b38;
+  --gold: #f0d060;
+  --gold-soft: #e0b84a;
+  --line: rgba(255, 255, 255, 0.22);
+}
+
 html,
 body {
   margin: 0;
   height: 100%;
   overflow: hidden;
-  background: #1a0508;
+  background: var(--bg);
   font-family: "Avenir Next", "Segoe UI", system-ui, sans-serif;
   color: #fff;
   -webkit-tap-highlight-color: transparent;
@@ -23,7 +40,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #120408;
+  background: var(--bg-deep);
   color: #ddd;
   font-size: 14px;
 }
@@ -34,7 +51,7 @@ body {
   width: 100vw;
   height: 100%;
   height: 100dvh;
-  background: #120408;
+  background: var(--bg);
 }
 
 /* Wheel + board: one continuous surface */
@@ -44,7 +61,7 @@ body {
   min-height: 0;
   display: flex;
   flex-direction: column;
-  background: #0c0406;
+  background: linear-gradient(180deg, #0b1526 0%, #0a1220 40%, #120818 100%);
   overflow: hidden;
 }
 
@@ -76,8 +93,8 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 7px 12px;
-  background: transparent;
+  padding: 8px 12px;
+  background: linear-gradient(180deg, rgba(18, 32, 51, 0.92), rgba(18, 32, 51, 0.35));
   pointer-events: none;
 }
 
@@ -98,6 +115,23 @@ body {
   align-items: center;
   gap: 10px;
   pointer-events: none;
+}
+
+.gundu-back {
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  background: rgba(0, 0, 0, 0.35);
+  color: #fff;
+  border-radius: 8px;
+  pointer-events: auto;
+  cursor: pointer;
+  padding: 0;
+}
+.gundu-back:active {
+  opacity: 0.75;
 }
 
 /* Yellow betting countdown (matches reference clock ring) */
@@ -193,6 +227,25 @@ body {
 .top-balance strong {
   color: #ffe9a0;
   font-weight: 800;
+}
+
+/* History strip on game-shell — sits above stage bottom, above expanded board */
+.history-strip {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(27dvh - 34px);
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  min-height: 34px;
+  padding: 4px 0;
+  background: linear-gradient(180deg, rgba(18, 32, 51, 0.35), rgba(10, 18, 32, 0.95));
+  border-bottom: 1px solid rgba(80, 110, 150, 0.35);
+  pointer-events: auto;
+}
+@media (max-height: 700px) {
+  .history-strip { top: calc(145px - 4px); }
 }
 
 .history {
@@ -410,7 +463,7 @@ body {
   align-self: auto;
   grid-template-columns: 50px 44px 78px 78px 78px;
   grid-template-rows: minmax(32px, 1.15fr) repeat(12, minmax(32px, 1fr)) minmax(26px, 0.9fr);
-  background: rgba(12, 4, 6, 0.55);
+  background: rgba(10, 18, 32, 0.55);
   box-shadow: none;
 }
 
@@ -419,36 +472,24 @@ body {
   padding-left: 4px;
 }
 
-/* Soft transparency — wheel faintly visible on all cell colors */
+/* Solid APK / 4rabet cells — no washed-out glass look */
 .game-shell:not(.board-collapsed) .bet-cell.black {
-  background: linear-gradient(
-    180deg,
-    rgba(58, 58, 58, 0.78),
-    rgba(22, 22, 22, 0.84)
-  );
+  background: linear-gradient(180deg, var(--black-cell), var(--black-cell-2));
 }
 
 .game-shell:not(.board-collapsed) .bet-cell.red {
-  background: linear-gradient(
-    180deg,
-    rgba(165, 26, 27, 0.78),
-    rgba(142, 19, 20, 0.84)
-  );
+  background: linear-gradient(180deg, var(--red), var(--red-deep));
 }
 
 .game-shell:not(.board-collapsed) .bet-cell.outside {
-  background: linear-gradient(
-    180deg,
-    rgba(42, 21, 24, 0.8),
-    rgba(26, 12, 16, 0.86)
-  );
+  background: linear-gradient(180deg, #1a2a3f, #101c2c);
 }
 
 .bet-cell {
   position: relative;
   appearance: none;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  border-radius: 2px;
+  border: 1px solid var(--line);
+  border-radius: 3px;
   color: #fff;
   font-size: 14px;
   font-weight: 800;
@@ -465,22 +506,18 @@ body {
 }
 
 .bet-cell.zero {
-  /* pointed "roof" shape like the reference — light rim + teal green fill */
+  /* pointed roof — solid green like 4rabet, not a ghost overlay */
   position: relative;
-  border: 0;
+  border: 1px solid rgba(255, 255, 255, 0.35);
   border-radius: 0;
-  background: rgba(240, 236, 224, 0.85);
+  background: linear-gradient(180deg, var(--green), var(--green-deep));
   clip-path: polygon(0 100%, 0 42%, 50% 0, 100% 42%, 100% 100%);
   font-size: 16px;
   overflow: visible;
 }
 
 .bet-cell.zero::before {
-  content: "";
-  position: absolute;
-  inset: 1.5px;
-  background: linear-gradient(180deg, rgba(45, 140, 95, 0.9), rgba(30, 110, 72, 0.9));
-  clip-path: polygon(0 100%, 0 42%, 50% 0, 100% 42%, 100% 100%);
+  display: none;
 }
 
 .bet-cell.zero > * {
@@ -488,35 +525,26 @@ body {
   z-index: 1;
 }
 
-/* Expanded: green 0 must be soft-transparent (single layer, no opaque cream rim) */
 .game-shell:not(.board-collapsed) .bet-cell.zero {
-  background: transparent;
-}
-
-.game-shell:not(.board-collapsed) .bet-cell.zero::before {
-  background: linear-gradient(
-    180deg,
-    rgba(45, 140, 95, 0.7),
-    rgba(30, 110, 72, 0.76)
-  );
+  background: linear-gradient(180deg, var(--green), var(--green-deep));
+  opacity: 0.95;
 }
 
 .bet-cell.red {
-  /* brick red sampled from the 4rabet reference */
-  background: linear-gradient(180deg, #a51a1b, #8e1314);
+  background: linear-gradient(180deg, var(--red), var(--red-deep));
 }
 
 .bet-cell.black {
-  background: linear-gradient(180deg, rgba(60, 60, 60, 0.35), rgba(25, 25, 25, 0.35));
+  background: linear-gradient(180deg, var(--black-cell), var(--black-cell-2));
 }
 
 .bet-cell.outside {
-  background: linear-gradient(180deg, #2a1518, #1a0c10);
+  background: linear-gradient(180deg, #1a2a3f, #101c2c);
   font-size: 12px;
   letter-spacing: 0.02em;
   text-transform: uppercase;
   color: #f0f0f0;
-  border-color: rgba(255, 200, 200, 0.12);
+  border-color: rgba(180, 200, 230, 0.18);
 }
 
 /* Even-money column: vertical rotated text like the reference */
@@ -870,13 +898,54 @@ body {
   flex-shrink: 0;
   display: flex;
   align-items: center;
-  gap: 0;
-  padding: 5px 0 calc(5px + env(safe-area-inset-bottom, 0px));
-  background: linear-gradient(180deg, #3a1018, #1a080c);
-  border-top: 1px solid #5a2030;
-  min-height: 40px;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 6px 12px calc(6px + env(safe-area-inset-bottom, 0px));
+  background: linear-gradient(180deg, #1a2b44, #0d1624);
+  border-top: 1px solid rgba(90, 120, 170, 0.45);
+  min-height: 42px;
   position: relative;
   overflow: hidden;
+}
+
+.footer-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.footer-line {
+  font-size: 11px;
+  color: var(--gold-soft);
+  white-space: nowrap;
+}
+
+.footer-line strong {
+  color: var(--gold);
+  font-weight: 800;
+}
+
+.footer-game {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  min-width: 0;
+}
+
+.footer-title {
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--gold);
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.footer-range {
+  font-size: 10px;
+  color: var(--gold-soft);
+  white-space: nowrap;
 }
 
 .menu-btn {

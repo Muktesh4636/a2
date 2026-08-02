@@ -126,5 +126,17 @@ document.addEventListener("click", (e) => {
   if (!e.target.closest(".card")) clearSelection();
 });
 
+try {
+  if (window.AndroidBridge) document.body.classList.add("in-app");
+  if (
+    window.AndroidBridge &&
+    typeof window.AndroidBridge.isSystemBarsInsetApplied === "function" &&
+    window.AndroidBridge.isSystemBarsInsetApplied()
+  ) {
+    document.documentElement.classList.add("android-system-bars");
+    document.body.classList.add("android-system-bars");
+  }
+} catch (_) {}
+
 readAccessToken();
 render();

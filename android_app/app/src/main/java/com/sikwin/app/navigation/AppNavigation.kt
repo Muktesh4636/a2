@@ -39,7 +39,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.res.stringResource
 import com.sikwin.app.utils.Constants
-import com.unity3d.player.UnityTokenHolder
+import com.sikwin.app.ui.GameWebViewActivity
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.ProcessLifecycleOwner
@@ -225,62 +225,22 @@ fun AppNavigation(
         try {
             val authToken = sessionManager.fetchAuthToken()
             val refreshToken = sessionManager.fetchRefreshToken()
-            android.util.Log.d("AppNavigation", "executeGameLaunch: token=${if (authToken.isNullOrBlank()) "EMPTY" else "${authToken.take(8)}..."}, refresh=${if (refreshToken.isNullOrBlank()) "EMPTY" else "${refreshToken.take(8)}..."}")
-            val userId = sessionManager.fetchUserId()
-            val isLoggedIn = !authToken.isNullOrBlank()
-
-            // Launch embedded Unity activity from the same APK (single-app flow).
-            val intent = Intent().setClassName(
-                context.packageName,
-                "com.unity3d.player.UnityPlayerGameActivity"
+            android.util.Log.d(
+                "AppNavigation",
+                "executeGameLaunch(web): token=${if (authToken.isNullOrBlank()) "EMPTY" else "${authToken.take(8)}..."}, refresh=${if (refreshToken.isNullOrBlank()) "EMPTY" else "${refreshToken.take(8)}..."}"
             )
 
-            // Pass auth/session details (if available) for auto-login.
-            intent.putExtra("token", authToken ?: "")
-            intent.putExtra("auth_token", authToken ?: "")
-            intent.putExtra("access_token", authToken ?: "")
-            intent.putExtra("bearer_token", authToken ?: "")
-            intent.putExtra("refresh_token", refreshToken ?: "")
-            intent.putExtra("access", authToken ?: "")
-            intent.putExtra("refresh", refreshToken ?: "")
-            intent.putExtra("user_id", userId)
-            
-            intent.putExtra("base_url", Constants.BASE_URL.removeSuffix("api/"))
-            intent.putExtra("api_url", Constants.BASE_URL)
-            intent.putExtra("is_logged_in", isLoggedIn)
-            intent.putExtra("auto_login", true)
-            intent.putExtra("from_android_app", true)
-            intent.putExtra("guest_mode", !isLoggedIn)
-            intent.putExtra("login_method", "android_app")
-            intent.putExtra("auth_timestamp", System.currentTimeMillis())
-            intent.putExtra("login_timestamp", System.currentTimeMillis())
-            
-            intent.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or Intent.FLAG_ACTIVITY_CLEAR_TOP)
-            
-            // Pass tokens for auto-login in standalone app (duplicate for safety)
-            intent.putExtra("token", authToken ?: "")
-            intent.putExtra("auth_token", authToken ?: "")
-            intent.putExtra("access", authToken ?: "")
-            intent.putExtra("refresh", refreshToken ?: "")
-
-            // CRITICAL: Ensure we pass the ABSOLUTE LATEST timer data available
-            // This prevents the "70 second freeze" which happens if old data is passed
-            viewModel.preLoadedTimer?.let { 
-                intent.putExtra("preloaded_timer", it) 
-                android.util.Log.d("AppNavigation", "Passing FRESH timer to Unity: $it")
+            // Same pattern as roulette / trading / chicken / vortex: WebView + ?token=
+            val casinoUrl = GameWebViewActivity.buildGameUrl(
+                Constants.CASINO_PATH,
+                authToken,
+                refreshToken
+            )
+            val intent = Intent(context, GameWebViewActivity::class.java).apply {
+                putExtra(GameWebViewActivity.EXTRA_URL, casinoUrl)
+                putExtra(GameWebViewActivity.EXTRA_TOKEN, authToken ?: "")
+                putExtra(GameWebViewActivity.EXTRA_REFRESH, refreshToken ?: "")
             }
-            viewModel.preLoadedStatus?.let { intent.putExtra("preloaded_status", it) }
-            viewModel.preLoadedRoundId?.let { intent.putExtra("preloaded_round_id", it) }
-            intent.putExtra("preloaded_timestamp", System.currentTimeMillis())
-            
-            // CRITICAL: Sync auth to Unity PlayerPrefs BEFORE launch so GameManager.Start can read it
-            sessionManager.syncAuthToUnity()
-
-            // Store tokens (+ saved credentials) in static holder so Unity can read even if Intent is lost
-            val savedUser = sessionManager.fetchUsername() ?: ""
-            val savedPass = sessionManager.fetchPassword() ?: ""
-            com.unity3d.player.UnityTokenHolder.setTokens(authToken ?: "", refreshToken ?: "", savedUser, savedPass)
-
             context.startActivity(intent)
         } catch (e: Exception) {
             android.util.Log.e("AppNavigation", "Final launch failed", e)

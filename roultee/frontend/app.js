@@ -34,7 +34,7 @@ renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x0c0406);
+scene.background = new THREE.Color(0x0a1220);
 
 const camera = new THREE.PerspectiveCamera(36, startW / startH, 0.05, 50);
 /* Slight tilt toward the viewer — not a flat top-down */
@@ -806,7 +806,7 @@ function startSharedSpin({ number, win = 0, balance, round }) {
   clearResult();
   camZoom.holdLeft = 0;
   camZoom.dir = -1;
-  setBoardCollapsed(true);
+  // Keep board expanded — matches APK / 4rabet overlay during spin
   detachBallToWheel();
   ballAnim.targetIdx = pocketIndexForNumber(number);
   ballAnim.phase = "racing";
@@ -838,7 +838,6 @@ function snapSharedResult({ number, win = 0, balance, round }) {
     balance: typeof balance === "number" ? balance : betState.balance,
   };
   clearResult();
-  setBoardCollapsed(true);
   ballAnim.targetIdx = pocketIndexForNumber(number);
   ballAnim.phase = "settled";
   ballAnim.announced = true;
@@ -1748,8 +1747,8 @@ function setBoardCollapsed(collapsed) {
 
 function initBoardToggle() {
   const btn = document.getElementById("board-toggle");
-  // Default: compact board under the wheel (not the large overlay)
-  setBoardCollapsed(true);
+  // Default: expanded board overlay — matches APK / 4rabet UI
+  setBoardCollapsed(false);
   btn?.addEventListener("click", () => {
     const shell = document.getElementById("game-shell");
     const next = !shell?.classList.contains("board-collapsed");

@@ -116,6 +116,7 @@ urlpatterns = [
     path('api/cricket/upcoming/',              cricket_views.cricket_upcoming_matches, name='cricket_upcoming_matches'),
     path('api/cricket/live-matches/', cricket_views.cricket_live_matches,   name='cricket_live_matches'),
     path('api/cricket/scores/',       cricket_views.cricket_scores,         name='cricket_scores'),
+    path('api/cricket/opensource-scores/', cricket_views.cricket_opensource_scores, name='cricket_opensource_scores'),
     path('api/cricket/odds/',         cricket_views.cricket_odds,           name='cricket_odds'),
     path('api/cricket/changes/',      cricket_views.cricket_live_changes,   name='cricket_live_changes'),
     path('api/cricket/markets/',      cricket_views.cricket_markets,        name='cricket_markets'),

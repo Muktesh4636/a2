@@ -1393,6 +1393,38 @@ def cricket_scores(request):
 
 @api_view(["GET"])
 @permission_classes([AllowAny])
+def cricket_opensource_scores(request):
+    """
+    GET /api/cricket/opensource-scores/
+
+    Live scores from a public open source (Cricbuzz HTML scrape) — independent
+    of Dafabet. Useful when you want runs/wickets/overs without bookie feed.
+
+    Optional:
+      ?refresh=true  — scrape now instead of Redis cache
+      ?live=true     — return only in-progress / innings-break / toss matches
+    """
+    from game.cricket_opensource import get_cached_opensource_scores
+
+    force = request.GET.get("refresh", "false").lower() == "true"
+    live_only = request.GET.get("live", "false").lower() == "true"
+    data = get_cached_opensource_scores(force_refresh=force)
+    matches = data.get("live_matches") if live_only else data.get("matches")
+    if matches is None:
+        matches = []
+    return Response({
+        "ok": data.get("ok", False),
+        "source": data.get("source", "cricbuzz"),
+        "fetched_at": data.get("fetched_at"),
+        "count": len(matches),
+        "live_count": data.get("live_count", 0),
+        "error": data.get("error"),
+        "matches": matches,
+    })
+
+
+@api_view(["GET"])
+@permission_classes([AllowAny])
 def cricket_odds(request):
     """
     GET /api/cricket/odds/

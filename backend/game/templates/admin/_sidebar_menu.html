@@ -68,7 +68,7 @@
                 </a></li>
             {% endif %}
 
-            {% if is_super_admin or admin_permissions.can_view_game_settings %} <li><a href="{% url 'game_settings' %}" {% if page == 'game_settings' %}class="active" {% endif %}> <span class="menu-icon">⚙️</span> Game Settings
+            {% if is_super_admin or admin_permissions.can_view_game_settings %} <li><a href="{% url 'game_settings' %}" {% if page == 'game_settings' %}class="active" {% endif %}> <span class="menu-icon">⚙️</span> App Settings
                 </a></li>
             {% endif %}
 

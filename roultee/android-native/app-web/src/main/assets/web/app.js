@@ -34,7 +34,7 @@ renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x0c0406);
+scene.background = new THREE.Color(0x0a1220);
 
 const camera = new THREE.PerspectiveCamera(36, startW / startH, 0.05, 50);
 /* Slight tilt toward the viewer — not a flat top-down */
@@ -806,7 +806,7 @@ function startSharedSpin({ number, win = 0, balance, round }) {
   clearResult();
   camZoom.holdLeft = 0;
   camZoom.dir = -1;
-  setBoardCollapsed(true);
+  // Keep board expanded — matches APK / 4rabet overlay during spin
   detachBallToWheel();
   ballAnim.targetIdx = pocketIndexForNumber(number);
   ballAnim.phase = "racing";
@@ -822,6 +822,7 @@ function startSharedSpin({ number, win = 0, balance, round }) {
   ballAnim.landT = 0;
   ballAnim.lockT = 0;
   ballAnim.landExtends = 0;
+  ballAnim.settleSnap = null;
   ballAnim.announced = false;
   rotorSpeed = ROTOR_SPIN_SPEED;
   setSpinUi(true);
@@ -837,7 +838,6 @@ function snapSharedResult({ number, win = 0, balance, round }) {
     balance: typeof balance === "number" ? balance : betState.balance,
   };
   clearResult();
-  setBoardCollapsed(true);
   ballAnim.targetIdx = pocketIndexForNumber(number);
   ballAnim.phase = "settled";
   ballAnim.announced = true;
@@ -958,31 +958,12 @@ function beginLandingChase() {
   ballAnim.phase = "landing";
   ballAnim.landT = 0;
   ballAnim.lastPipe = -1;
-  // landExtends is kept across re-aims (failsafe counter)
-
-  const localA = ballLocalAngle();
-  const targetLocal = pocketLocalAngle(ballAnim.targetIdx);
-  const err = wrapPi(targetLocal - localA);
-
-  // Direction: whichever way is shorter to target
-  const dir = Math.sign(err) || Math.sign(ballAnim.speed - rotorSpeed) || -1;
-
-  const tight = (ballAnim.landExtends || 0) >= 2;
-  // How much relative speed to cover |err| before friction damps it to zero
-  // ∫₀ᵀ rel0·e^{-f·t} dt = rel0/f·(1-e^{-fT}) ≈ |err|
-  const fric = 2.15;
-  const T = tight ? 0.65 : 0.95;
-  const errAbs = Math.abs(err);
-  const needed = (errAbs * fric) / (1 - Math.exp(-fric * T));
-  const rel0 = THREE.MathUtils.clamp(needed, 0.7, tight ? 1.4 : 2.0);
-
-  ballAnim.speed = rotorSpeed + dir * rel0;
-  ballAnim.bounce = 0.025 + Math.random() * 0.02;
-  // Clamp radius to fret zone — don't change angle
+  ballAnim.settleSnap = null;
+  ballAnim.bounce = 0.03 + Math.random() * 0.02;
   ballAnim.radius = THREE.MathUtils.clamp(
     ballAnim.radius,
-    stopInnerR + BALL_R * 0.5,
-    stopOuterR - 0.01
+    stopInnerR,
+    stopOuterR
   );
 }
 
@@ -1085,99 +1066,45 @@ function updateBall(dt) {
   } else if (ballAnim.phase === "landing") {
     ballAnim.landT += dt;
 
-    // ——— Speed Auto Roulette stop (4rabet) ———
-    // Rim drop → multiple lip hops across frets → deep nest.
-    const FREE_RATTLE = 1.35;  // longer free hop window = more visible lip moments
-    const MAX_LAND = 3.2;
-    const fretTopR  = stopOuterR - 0.012; // ball rides on top of the fret lip here
-    const fretMidR  = (stopInnerR + stopOuterR) * 0.5 + 0.01;
+    // ═══════════════════════════════════════════════════════════════
+    // Two-stage deterministic landing:
+    //   Stage 1 – RATTLE  (0 → RATTLE_TIME): physics hops on fret lips
+    //   Stage 2 – SETTLE  (RATTLE_TIME → +SETTLE_TIME): smooth ease
+    //             to EXACT target pocket, no conditions, always works
+    // ═══════════════════════════════════════════════════════════════
+    const SETTLE_TIME = 1.2;
 
-    let localSpeed = ballAnim.speed - rotorSpeed;
-
-    // Three zones of friction: early hops fast, mid hops slow, settle
-    let fric;
-    if      (ballAnim.landT < FREE_RATTLE * 0.45) fric = 0.9;  // fast hops — many pockets
-    else if (ballAnim.landT < FREE_RATTLE)         fric = 2.2;  // slowing — 1-2 more hops
-    else                                            fric = 4.5;  // stick
-
-    localSpeed *= Math.exp(-fric * dt);
-
-    // Keep minimum relative speed during free rattle so ball keeps hopping
-    const minLip = ballAnim.landT < FREE_RATTLE * 0.45 ? 1.05 : 0.55;
-    if (ballAnim.landT < FREE_RATTLE && Math.abs(localSpeed) < minLip) {
-      localSpeed = Math.sign(localSpeed || -1) * (minLip + Math.random() * 0.22);
+    // ── Deterministic settle: smooth ease directly into exact target pocket ──
+    // No rattle on pipes — ball glides straight from current position into pocket.
+    if (!ballAnim.settleSnap) {
+      ballAnim.settleSnap = {
+        localA: wrapPi(ballAnim.angle - rotor.rotation.y),
+        radius: THREE.MathUtils.clamp(ballAnim.radius, POCKET_R, stopOuterR),
+      };
     }
-    ballAnim.speed = rotorSpeed + localSpeed;
-    ballAnim.angle += ballAnim.speed * dt;
 
-    collideWithPipesLocal();
-    if (ballAnim.radius > 0.74) applyDeflectorHits();
-    localSpeed = ballAnim.speed - rotorSpeed;
+    const t = Math.min(1, ballAnim.landT / SETTLE_TIME);
+    // Smooth ease-in-out cubic
+    const ease = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
 
-    const targetLocal = pocketLocalAngle(ballAnim.targetIdx);
-    const localA = ballLocalAngle();
-    const err = wrapPi(targetLocal - localA);
-    const under = pocketIndexUnderBall(localA);
-    const inTarget = under === ballAnim.targetIdx;
-    const nearCenter = Math.abs(err) < POCKET_SLICE * 0.42;
+    // Angle: lerp in rotor-local space so ball tracks the spinning pocket perfectly
+    const targetLocal  = pocketLocalAngle(ballAnim.targetIdx);
+    const localDiff    = wrapPi(targetLocal - ballAnim.settleSnap.localA);
+    const currentLocal = ballAnim.settleSnap.localA + localDiff * ease;
+    ballAnim.angle = rotor.rotation.y + currentLocal;
 
-    // Radius trajectory: ride the fret top early → mid fret → sink to pocket
-    let desiredR;
-    if (ballAnim.landT < FREE_RATTLE * 0.45) {
-      // Ball skips on top of fret lips — most dramatic hop zone
-      desiredR = fretTopR;
-      ballAnim.radius += (desiredR - ballAnim.radius) * Math.min(1, dt * 3.0);
-    } else if (ballAnim.landT < FREE_RATTLE) {
-      // Ball drops off the fret tops into the mid-fret zone
-      const t = (ballAnim.landT - FREE_RATTLE * 0.45) / (FREE_RATTLE * 0.55);
-      desiredR = THREE.MathUtils.lerp(fretTopR, fretMidR, t * t);
-      ballAnim.radius += (desiredR - ballAnim.radius) * Math.min(1, dt * 2.2);
-    } else {
-      const sink = Math.min(1, (ballAnim.landT - FREE_RATTLE) / 0.75);
-      const sinkEase = sink * sink * (3 - 2 * sink);
-      desiredR = THREE.MathUtils.lerp(fretMidR, POCKET_R, sinkEase);
-      ballAnim.radius += (desiredR - ballAnim.radius) * Math.min(1, dt * 4.5);
-      if (inTarget && Math.abs(localSpeed) < 0.9) {
-        localSpeed *= Math.exp(-8 * dt);
-        ballAnim.speed = rotorSpeed + localSpeed;
-      }
-    }
-    ballAnim.radius = THREE.MathUtils.clamp(
-      ballAnim.radius,
-      POCKET_R - 0.006,
-      POCKET_ENTRY_R + 0.03
-    );
-    ballAnim.y = ballHeightAt(ballAnim.radius) + ballAnim.bounce;
-    ballAnim.bounce = Math.max(0, ballAnim.bounce - dt * 0.065);
+    // Radius: sink from current rim position down to pocket floor
+    ballAnim.radius = THREE.MathUtils.lerp(ballAnim.settleSnap.radius, POCKET_R, ease);
+    ballAnim.y = ballHeightAt(ballAnim.radius);
+    ballAnim.bounce = 0;
+    rotorSpeed = Math.max(0, rotorSpeed - dt * 0.28);
 
-    rotorSpeed = Math.max(0.14, rotorSpeed - dt * 0.12);
-
-    const relSlow = Math.abs(localSpeed) < 0.18;
-    const deepEnough = ballAnim.radius <= POCKET_R + 0.022;
-    const readyToLock =
-      ballAnim.landT > FREE_RATTLE + 0.5 &&  // must fully complete hop phase first
-      inTarget &&
-      nearCenter &&
-      relSlow &&
-      deepEnough;
-
-    if (readyToLock) {
-      // Already visually in pocket — reparent is invisible
+    // Lock guaranteed when animation completes — no conditions, always fires
+    if (t >= 1) {
       ballAnim.phase = "locked";
       ballAnim.lockT = 0;
       ballAnim.speed = 0;
       attachBallToPocket(ballAnim.targetIdx);
-    } else if (ballAnim.landT >= MAX_LAND) {
-      // Re-aim another physical drop — never teleport across pockets mid-hop
-      if ((ballAnim.landExtends || 0) < 3) {
-        ballAnim.landExtends = (ballAnim.landExtends || 0) + 1;
-        beginLandingChase();
-      } else {
-        ballAnim.phase = "locked";
-        ballAnim.lockT = 0;
-        ballAnim.speed = 0;
-        attachBallToPocket(ballAnim.targetIdx);
-      }
     }
   }
 
@@ -1750,19 +1677,54 @@ function initBettingUi() {
   initBoardToggle();
 
   const chipStack = document.getElementById("chip-stack");
-  document.querySelectorAll(".chip[data-chip]").forEach((btn) => {
-    btn.addEventListener("click", () => {
+  let chipFanCloseTimer = null;
+
+  function closeChipFan() {
+    if (!chipStack) return;
+    chipStack.classList.remove("open");
+    chipStack.setAttribute("aria-expanded", "false");
+    clearTimeout(chipFanCloseTimer);
+    chipFanCloseTimer = setTimeout(() => {
+      chipStack.querySelectorAll(".chip").forEach((c) => {
+        c.classList.remove("fan-0", "fan-1", "fan-2", "fan-3", "fan-4");
+      });
+    }, 480);
+  }
+
+  function openChipFan() {
+    if (!chipStack) return;
+    clearTimeout(chipFanCloseTimer);
+    const others = [...chipStack.querySelectorAll(".chip")].filter((c) => !c.classList.contains("active"));
+    others.forEach((c, i) => {
+      c.classList.remove("fan-0", "fan-1", "fan-2", "fan-3", "fan-4");
+      c.classList.add(`fan-${Math.min(i, 4)}`);
+    });
+    void chipStack.offsetWidth;
+    requestAnimationFrame(() => {
+      chipStack.classList.add("open");
+      chipStack.setAttribute("aria-expanded", "true");
+    });
+  }
+
+  chipStack?.querySelectorAll(".chip[data-chip]").forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
       if (btn.classList.contains("active")) {
-        const isOpen = chipStack?.classList.toggle("open") ?? false;
-        chipStack?.setAttribute("aria-expanded", String(isOpen));
+        if (chipStack.classList.contains("open")) closeChipFan();
+        else openChipFan();
         return;
       }
-      document.querySelectorAll(".chip").forEach((c) => c.classList.remove("active"));
+      chipStack.querySelectorAll(".chip").forEach((c) => c.classList.remove("active"));
       btn.classList.add("active");
       betState.chip = Number(btn.dataset.chip);
-      chipStack?.classList.remove("open");
-      chipStack?.setAttribute("aria-expanded", "false");
+      closeChipFan();
     });
+  });
+
+  document.addEventListener("click", (e) => {
+    if (!chipStack?.classList.contains("open")) return;
+    if (chipStack.contains(e.target)) return;
+    closeChipFan();
   });
 
   document.getElementById("clear-bets")?.addEventListener("click", () => {
@@ -1785,8 +1747,8 @@ function setBoardCollapsed(collapsed) {
 
 function initBoardToggle() {
   const btn = document.getElementById("board-toggle");
-  // Default: compact board under the wheel (not the large overlay)
-  setBoardCollapsed(true);
+  // Default: expanded board overlay — matches APK / 4rabet UI
+  setBoardCollapsed(false);
   btn?.addEventListener("click", () => {
     const shell = document.getElementById("game-shell");
     const next = !shell?.classList.contains("board-collapsed");
@@ -1796,30 +1758,14 @@ function initBoardToggle() {
 
 /* ——— Bottom hamburger menu ——— */
 function goLobby() {
-  try {
-    if (window.AndroidBridge?.goHome) {
-      window.AndroidBridge.goHome();
-      return;
-    }
-    if (window.Android?.goHome) {
-      window.Android.goHome();
-      return;
-    }
-    if (window.ReactNativeWebView?.postMessage) {
-      window.ReactNativeWebView.postMessage(JSON.stringify({ type: "lobby", action: "home" }));
-      return;
-    }
-    if (window.parent && window.parent !== window) {
-      window.parent.postMessage({ type: "roultee-lobby", action: "home" }, "*");
-    }
-  } catch (_) {
-    /* fall through */
-  }
-  const home =
-    new URLSearchParams(location.search).get("home") ||
-    localStorage.getItem("roultee_home") ||
-    `${location.origin}/`;
-  location.href = home;
+  const token =
+    new URLSearchParams(location.search).get("token") ||
+    localStorage.getItem("gundu_access_token") ||
+    localStorage.getItem("access_token") ||
+    "";
+  const u = new URL("/casino/", location.origin);
+  if (token) u.searchParams.set("token", token);
+  location.href = u.toString();
 }
 
 function setMenuOpen(open) {
@@ -1984,6 +1930,24 @@ function initGameMenu() {
 
   lobbyBtn?.addEventListener("click", () => goLobby());
   supportHome?.addEventListener("click", () => goLobby());
+  document.getElementById("gunduBackBtn")?.addEventListener("click", () => goLobby());
+  try {
+    history.pushState({ gundu_game: "roulette" }, "", location.href);
+    window.addEventListener("popstate", () => {
+      location.replace(
+        (() => {
+          const token =
+            new URLSearchParams(location.search).get("token") ||
+            localStorage.getItem("gundu_access_token") ||
+            localStorage.getItem("access_token") ||
+            "";
+          const u = new URL("/casino/", location.origin);
+          if (token) u.searchParams.set("token", token);
+          return u.toString();
+        })()
+      );
+    });
+  } catch (_) {}
 }
 
 function animate() {

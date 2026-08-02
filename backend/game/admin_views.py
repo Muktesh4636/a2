@@ -3262,47 +3262,128 @@ def assign_worker(request):
     return redirect('manage_players')
 
 
-@login_required(login_url='/game-admin/login/')
-@admin_required
-def game_settings(request):
-    """Game settings management page"""
-    if not has_menu_permission(request.user, 'game_settings'):
-        messages.error(request, 'You do not have permission to access Game Settings.')
-        return redirect('admin_dashboard')
-    
+def _gundu_ata_timing_defs():
     from django.conf import settings as django_settings
-    
-    # Get or create default settings if they don't exist
     default_settings = getattr(django_settings, 'GAME_SETTINGS', {})
-    
-    settings_to_manage = [
+    return [
         {
             'key': 'BETTING_CLOSE_TIME',
             'default': default_settings.get('BETTING_CLOSE_TIME', 30),
-            'description': 'Time in seconds when betting closes (default: 30)'
+            'description': 'Time in seconds when betting closes (default: 30)',
+            'label': 'Betting Close Time (When betting closes)',
         },
         {
             'key': 'DICE_ROLL_TIME',
             'default': default_settings.get('DICE_ROLL_TIME', 7),
-            'description': 'Time in seconds before dice result when dice roll warning is sent (default: 7)'
+            'description': 'Time in seconds before dice result when dice roll warning is sent (default: 7)',
+            'label': 'Dice Rolling Time (Seconds before dice result when warning is sent)',
         },
         {
             'key': 'DICE_RESULT_TIME',
             'default': default_settings.get('DICE_RESULT_TIME', 51),
-            'description': 'Time in seconds when dice result is announced (default: 51)'
+            'description': 'Time in seconds when dice result is announced (default: 51)',
+            'label': 'Dice Result Time (When dice result is announced)',
         },
         {
             'key': 'ROUND_END_TIME',
             'default': default_settings.get('ROUND_END_TIME', 80),
-            'description': 'Total round duration in seconds (default: 80)'
+            'description': 'Total round duration in seconds (default: 80)',
+            'label': 'Round End Time (Total round duration)',
         },
         {
             'key': 'MAX_BET',
             'default': default_settings.get('MAX_BET', 50000),
-            'description': 'Maximum bet amount per number (default: 50000)'
+            'description': 'Maximum bet amount per number (default: 50000)',
+            'label': 'Maximum Bet Amount (Per number)',
         },
     ]
 
+
+def _load_gundu_ata_timing_settings():
+    settings_list = []
+    for setting_info in _gundu_ata_timing_defs():
+        key = setting_info['key']
+        try:
+            setting = GameSettings.objects.get(key=key)
+            value = int(setting.value)
+            description = setting.description or setting_info['description']
+        except (GameSettings.DoesNotExist, ValueError, TypeError):
+            value = setting_info['default']
+            description = setting_info['description']
+        settings_list.append({
+            'key': key,
+            'value': value,
+            'description': description,
+            'default': setting_info['default'],
+            'label': setting_info['label'],
+        })
+    return settings_list
+
+
+def _save_gundu_ata_timing_settings(post_data):
+    """Validate + save Gundu Ata timing/max-bet. Returns (ok, errors)."""
+    settings_to_manage = _gundu_ata_timing_defs()
+    errors = []
+    new_values = {}
+
+    for setting_info in settings_to_manage:
+        key = setting_info['key']
+        new_value = post_data.get(key)
+        if new_value in (None, ''):
+            continue
+        try:
+            int_value = int(new_value)
+            if int_value < 1:
+                errors.append(f"{setting_info['label']} must be at least 1")
+                continue
+            new_values[key] = int_value
+        except ValueError:
+            errors.append(f"{setting_info['label']} must be a valid number")
+
+    if not errors and len(new_values) >= 3:
+        betting_close = new_values.get('BETTING_CLOSE_TIME')
+        dice_roll = new_values.get('DICE_ROLL_TIME')
+        dice_result = new_values.get('DICE_RESULT_TIME')
+        round_end = new_values.get('ROUND_END_TIME')
+
+        if betting_close and dice_result and round_end:
+            if betting_close >= dice_result:
+                errors.append(
+                    f"Betting close time ({betting_close}s) must be less than dice result time ({dice_result}s)"
+                )
+            if dice_result >= round_end:
+                errors.append(
+                    f"Dice result time ({dice_result}s) must be less than round end time ({round_end}s)"
+                )
+        if dice_roll and dice_result and dice_roll >= dice_result:
+            errors.append(
+                f"Dice roll time ({dice_roll}s) must be less than dice result time ({dice_result}s)"
+            )
+
+    if errors or not new_values:
+        return False, errors or ['No settings to save.']
+
+    for key, int_value in new_values.items():
+        setting_info = next(s for s in settings_to_manage if s['key'] == key)
+        GameSettings.objects.update_or_create(
+            key=key,
+            defaults={
+                'value': str(int_value),
+                'description': setting_info['description'],
+            },
+        )
+    clear_game_setting_cache([s['key'] for s in settings_to_manage])
+    return True, []
+
+
+@login_required(login_url='/game-admin/login/')
+@admin_required
+def game_settings(request):
+    """App / system settings (APK update, maintenance). Gundu Ata timing lives under Games → Gundu Ata."""
+    if not has_menu_permission(request.user, 'game_settings'):
+        messages.error(request, 'You do not have permission to access Game Settings.')
+        return redirect('admin_dashboard')
+    
     # App version settings (for APK update prompts)
     app_version_settings = [
         {
@@ -3331,23 +3412,6 @@ def game_settings(request):
         },
     ]
     
-    # Get current settings from database
-    current_settings = {}
-    for setting_info in settings_to_manage:
-        try:
-            setting = GameSettings.objects.get(key=setting_info['key'])
-            current_settings[setting_info['key']] = {
-                'value': int(setting.value),
-                'description': setting.description or setting_info['description'],
-                'exists': True
-            }
-        except GameSettings.DoesNotExist:
-            current_settings[setting_info['key']] = {
-                'value': setting_info['default'],
-                'description': setting_info['description'],
-                'exists': False
-            }
-
     # Get current app version settings
     app_version_current = {}
     for setting_info in app_version_settings:
@@ -3371,118 +3435,45 @@ def game_settings(request):
                 'exists': False
             }
     
-    # Handle form submission
+    # Handle form submission (app version only — Gundu Ata timing is under Games → Gundu Ata)
     if request.method == 'POST':
-        errors = []
-        new_values = {}
-        
-        # First, collect and validate all values
-        for setting_info in settings_to_manage:
+        for setting_info in app_version_settings:
             key = setting_info['key']
-            new_value = request.POST.get(key)
-            
-            if new_value:
-                try:
-                    int_value = int(new_value)
-                    if int_value < 1:
-                        errors.append(f"{key.replace('_', ' ').title()} must be at least 1 second")
-                        continue
-                    new_values[key] = int_value
-                except ValueError:
-                    errors.append(f"{key.replace('_', ' ').title()} must be a valid number")
-        
-        # Validate relationships if all values are valid
-        if not errors and len(new_values) >= 3:
-            betting_close = new_values.get('BETTING_CLOSE_TIME')
-            dice_roll = new_values.get('DICE_ROLL_TIME')
-            dice_result = new_values.get('DICE_RESULT_TIME')
-            round_end = new_values.get('ROUND_END_TIME')
-            
-            if betting_close and dice_result and round_end:
-                if betting_close >= dice_result:
-                    errors.append(f"Betting close time ({betting_close}s) must be less than dice result time ({dice_result}s)")
-                if dice_result <= betting_close:
-                    errors.append(f"Dice result time ({dice_result}s) must be greater than betting close time ({betting_close}s)")
-                if dice_result >= round_end:
-                    errors.append(f"Dice result time ({dice_result}s) must be less than round end time ({round_end}s)")
-                if round_end <= dice_result:
-                    errors.append(f"Round end time ({round_end}s) must be greater than dice result time ({dice_result}s)")
-            
-            # Validate dice roll time
-            if dice_roll and dice_result:
-                if dice_roll >= dice_result:
-                    errors.append(f"Dice roll time ({dice_roll}s) must be less than dice result time ({dice_result}s)")
-                if dice_roll < 1:
-                    errors.append(f"Dice roll time ({dice_roll}s) must be at least 1 second")
-        
-        # If no errors, save all settings
-        if not errors and new_values:
-            for key, int_value in new_values.items():
-                setting_info = next(s for s in settings_to_manage if s['key'] == key)
-                GameSettings.objects.update_or_create(
-                    key=key,
-                    defaults={
-                        'value': str(int_value),
-                        'description': setting_info['description']
-                    }
-                )
-
-            # Save app version settings
-            for setting_info in app_version_settings:
-                key = setting_info['key']
-                if setting_info['input_type'] == 'number':
-                    val = request.POST.get(key)
-                    if val is not None:
-                        try:
-                            GameSettings.objects.update_or_create(
-                                key=key,
-                                defaults={
-                                    'value': str(int(val)),
-                                    'description': setting_info['description']
-                                }
-                            )
-                        except ValueError:
-                            pass
-                elif setting_info['input_type'] == 'checkbox':
-                    GameSettings.objects.update_or_create(
-                        key=key,
-                        defaults={
-                            'value': 'true' if request.POST.get(key) == 'on' else 'false',
-                            'description': setting_info['description']
-                        }
-                    )
-                else:
-                    val = request.POST.get(key)
-                    if val is not None:
+            if setting_info['input_type'] == 'number':
+                val = request.POST.get(key)
+                if val is not None:
+                    try:
                         GameSettings.objects.update_or_create(
                             key=key,
                             defaults={
-                                'value': val.strip(),
+                                'value': str(int(val)),
                                 'description': setting_info['description']
                             }
                         )
+                    except ValueError:
+                        pass
+            elif setting_info['input_type'] == 'checkbox':
+                GameSettings.objects.update_or_create(
+                    key=key,
+                    defaults={
+                        'value': 'true' if request.POST.get(key) == 'on' else 'false',
+                        'description': setting_info['description']
+                    }
+                )
+            else:
+                val = request.POST.get(key)
+                if val is not None:
+                    GameSettings.objects.update_or_create(
+                        key=key,
+                        defaults={
+                            'value': val.strip(),
+                            'description': setting_info['description']
+                        }
+                    )
 
-            # Clear cache so app_version API returns fresh values immediately
-            all_keys = [s['key'] for s in settings_to_manage] + [s['key'] for s in app_version_settings]
-            clear_game_setting_cache(all_keys)
-
-            messages.success(request, 'Game settings updated successfully! Changes will take effect for the next round only.')
-            return redirect('game_settings')
-        else:
-            for error in errors:
-                messages.error(request, error)
-    
-    # Prepare settings list with current values for template
-    settings_list = []
-    for setting_info in settings_to_manage:
-        key = setting_info['key']
-        setting_data = current_settings[key]
-        settings_list.append({
-            'key': key,
-            'value': setting_data['value'],
-            'description': setting_data['description'],
-            'default': setting_info['default']
-        })
+        clear_game_setting_cache([s['key'] for s in app_version_settings])
+        messages.success(request, 'App settings updated successfully.')
+        return redirect('game_settings')
 
     # Prepare app version settings list for template
     app_version_list = []
@@ -3511,12 +3502,12 @@ def game_settings(request):
             pass
 
     context = get_admin_context(request, {
-        'settings_list': settings_list,
         'app_version_list': app_version_list,
         'maintenance_enabled': maintenance_enabled,
         'maintenance_until': maintenance_until,
         'page': 'game_settings',
         'admin_profile': get_admin_profile(request.user),
+        'gundu_ata_settings_url': '/game-admin/games/dice/',
     })
 
     return render(request, 'admin/game_settings.html', context)
@@ -4055,6 +4046,22 @@ def admin_game_detail(request, game_slug):
         messages.error(request, 'Unknown game.')
         return redirect('admin_games')
 
+    # Gundu Ata (dice) timing / max-bet config lives on this page
+    if game_slug == 'dice' and request.method == 'POST' and request.POST.get('form_type') == 'gundu_timing':
+        if not has_menu_permission(request.user, 'game_settings'):
+            messages.error(request, 'You do not have permission to change Gundu Ata settings.')
+            return redirect('admin_game_detail', game_slug='dice')
+        ok, errors = _save_gundu_ata_timing_settings(request.POST)
+        if ok:
+            messages.success(
+                request,
+                'Gundu Ata settings updated. Changes apply from the next round.',
+            )
+        else:
+            for error in errors:
+                messages.error(request, error)
+        return redirect('admin_game_detail', game_slug='dice')
+
     effective_admin = get_effective_admin(request.user)
     is_super = is_super_admin(effective_admin)
     today_start, today_end, ist_date = _ist_day_bounds_utc(0)
@@ -4090,6 +4097,14 @@ def admin_game_detail(request, game_slug):
     if round_q:
         round_detail = lookup_round_detail(game_slug, round_q, effective_admin, is_super)
 
+    gundu_settings_list = None
+    can_edit_gundu_settings = False
+    if game_slug == 'dice':
+        can_edit_gundu_settings = has_menu_permission(request.user, 'game_settings')
+        if can_edit_gundu_settings or is_super:
+            gundu_settings_list = _load_gundu_ata_timing_settings()
+            can_edit_gundu_settings = True
+
     context = get_admin_context(request, {
         'page': 'game-detail',
         'game': game,
@@ -4101,6 +4116,8 @@ def admin_game_detail(request, game_slug):
         'page_obj': page_obj,
         'filter_stats': filter_stats,
         'round_detail': round_detail,
+        'gundu_settings_list': gundu_settings_list,
+        'can_edit_gundu_settings': can_edit_gundu_settings,
         'filters': {
             'q': search,
             'round': round_q,
