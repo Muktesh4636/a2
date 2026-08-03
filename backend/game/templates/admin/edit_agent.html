@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Edit Agent {{ agent_user.username }} - Admin Panel</title>
+    {% include 'admin/_admin_base_styles.html' %}
+    <style>
+        .container { max-width: 800px; margin: 0 auto; }
+        .card { background:#fff; border-radius:12px; padding:24px; box-shadow:0 1px 3px rgba(0,0,0,.08); }
+        label { display:block; font-weight:600; margin:12px 0 6px; font-size:14px; }
+        input[type=password] { width:100%; padding:12px; border:2px solid #e2e8f0; border-radius:8px; }
+        .btn { padding:12px 20px; border-radius:8px; border:none; font-weight:600; cursor:pointer; text-decoration:none; display:inline-block; }
+        .btn-primary { background:#667eea; color:#fff; }
+        .btn-secondary { background:#e2e8f0; color:#1e293b; }
+        .note { background:#fef3c7; color:#92400e; padding:12px; border-radius:8px; font-size:13px; margin:16px 0; }
+    </style>
+</head>
+<body>
+    <button class="sidebar-toggle" onclick="document.querySelector('.sidebar').classList.toggle('open')">☰</button>
+    <div class="sidebar">
+        <div class="sidebar-header">
+            <div class="logo"><span class="logo-icon">🎲🎲</span><span>Gundu ata</span></div>
+        </div>
+        {% include 'admin/_sidebar_menu.html' %}
+    </div>
+    <div class="main-content">
+        <div class="container">
+            <h1>Edit Agent: {{ agent_user.username }}</h1>
+            <p style="color:#64748b;">Under Admin: <strong>{{ parent_admin.username }}</strong></p>
+            {% if messages %}{% for message in messages %}<div style="background:#fee2e2;padding:12px;border-radius:8px;margin:12px 0;">{{ message }}</div>{% endfor %}{% endif %}
+            <div class="card">
+                <form method="post">
+                    {% csrf_token %}
+                    <div class="note">Full privilege list is shown. Options outside your Admin privileges are disabled. App Settings / Admin Management / White Label stay off for Agents.</div>
+                    <h3>Privileges</h3>
+                    {% include 'admin/_permissions_checklist.html' %}
+                    <label style="margin-top:20px;"><input type="checkbox" name="is_active" {% if agent_user.is_active %}checked{% endif %}> Active</label>
+                    <label>New password (optional)</label>
+                    <input type="password" name="new_password" autocomplete="new-password">
+                    <label>Confirm password</label>
+                    <input type="password" name="password2" autocomplete="new-password">
+                    <div style="margin-top:24px;display:flex;gap:12px;">
+                        <button class="btn btn-primary" type="submit">Save</button>
+                        <a class="btn btn-secondary" href="{% url 'agent_management' %}">Cancel</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

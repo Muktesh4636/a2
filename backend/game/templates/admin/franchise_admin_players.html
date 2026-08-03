@@ -45,7 +45,7 @@
             <div class="header" style="margin-bottom: 24px; border-bottom: 1px solid #f1f5f9; padding-bottom: 20px;">
                 <div class="header-left">
                     <h1 style="font-size: 28px; color: #0f172a; margin: 0;">Players under {{ admin_user.username }}</h1>
-                    <p style="color: #64748b; margin-top: 4px;">All players assigned to this franchise admin</p>
+                    <p style="color: #64748b; margin-top: 4px;">All players in this Admin tree (direct + Agents)</p>
                 </div>
                 <div class="header-actions" style="display: flex; gap: 12px; align-items: center;">
                     <a href="{% url 'franchise_admin_details' admin_user.id %}" class="btn btn-secondary">← Back to {{ admin_user.username }}</a>
@@ -61,6 +61,16 @@
                             <option value="all" {% if status_filter == 'all' %}selected{% endif %}>All</option>
                             <option value="active" {% if status_filter == 'active' %}selected{% endif %}>Active</option>
                             <option value="inactive" {% if status_filter == 'inactive' %}selected{% endif %}>Inactive</option>
+                        </select>
+                    </div>
+                    <div class="filter-group">
+                        <label for="owner">Owner</label>
+                        <select name="owner" id="owner" onchange="this.form.submit()">
+                            <option value="all" {% if owner_filter == 'all' %}selected{% endif %}>All (Admin + Agents)</option>
+                            <option value="direct" {% if owner_filter == 'direct' %}selected{% endif %}>Direct under Admin</option>
+                            {% for a in agents_for_filter %}
+                            <option value="{{ a.key }}" {% if owner_filter == a.key %}selected{% endif %}>Agent: {{ a.username }}</option>
+                            {% endfor %}
                         </select>
                     </div>
                     <div class="filter-group">
@@ -80,6 +90,7 @@
                         <tr>
                             <th>Username</th>
                             <th>Phone</th>
+                            <th>Owner</th>
                             <th>Joined</th>
                             <th>Status</th>
                             <th>Actions</th>
@@ -89,9 +100,18 @@
                         {% for player in page_obj %}
                         <tr>
                             <td>
-                                <a href="/game-admin/user/{{ player.id }}/?tab=all" class="user-link">{{ player.username }}</a>
+                                <a href="{% url 'user_details' player.id %}" class="user-link">{{ player.username }}</a>
                             </td>
                             <td>{{ player.phone_number|default:"—" }}</td>
+                            <td>
+                                {% if player.worker_id == admin_user.id %}
+                                    Admin
+                                {% elif player.worker %}
+                                    <a class="user-link" href="{% url 'agent_details' player.worker.id %}">{{ player.worker.username }}</a>
+                                {% else %}
+                                    —
+                                {% endif %}
+                            </td>
                             <td><span class="time-badge">{{ player.date_joined|date:"M d, Y" }}</span></td>
                             <td>
                                 <span class="status-badge {% if player.is_active %}active{% else %}inactive{% endif %}">
@@ -99,12 +119,12 @@
                                 </span>
                             </td>
                             <td>
-                                <a href="/game-admin/user/{{ player.id }}/?tab=all" class="user-link" style="font-size: 13px;">View Details</a>
+                                <a href="{% url 'user_details' player.id %}" class="user-link" style="font-size: 13px;">View Details</a>
                             </td>
                         </tr>
                         {% empty %}
                         <tr>
-                            <td colspan="5">
+                            <td colspan="6">
                                 <div class="empty-state">
                                     <p>No players under this admin.</p>
                                 </div>
@@ -118,16 +138,16 @@
             {% if page_obj.has_other_pages %}
             <div class="pagination">
                 {% if page_obj.has_previous %}
-                    <a href="?status={{ status_filter }}&search={{ search_query }}&pg=1">« First</a>
-                    <a href="?status={{ status_filter }}&search={{ search_query }}&pg={{ page_obj.previous_page_number }}">‹ Prev</a>
+                    <a href="?status={{ status_filter }}&owner={{ owner_filter }}&search={{ search_query }}&pg=1">« First</a>
+                    <a href="?status={{ status_filter }}&owner={{ owner_filter }}&search={{ search_query }}&pg={{ page_obj.previous_page_number }}">‹ Prev</a>
                 {% else %}
                     <span class="disabled">« First</span>
                     <span class="disabled">‹ Prev</span>
                 {% endif %}
                 <span class="current">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
                 {% if page_obj.has_next %}
-                    <a href="?status={{ status_filter }}&search={{ search_query }}&pg={{ page_obj.next_page_number }}">Next ›</a>
-                    <a href="?status={{ status_filter }}&search={{ search_query }}&pg={{ page_obj.paginator.num_pages }}">Last »</a>
+                    <a href="?status={{ status_filter }}&owner={{ owner_filter }}&search={{ search_query }}&pg={{ page_obj.next_page_number }}">Next ›</a>
+                    <a href="?status={{ status_filter }}&owner={{ owner_filter }}&search={{ search_query }}&pg={{ page_obj.paginator.num_pages }}">Last »</a>
                 {% else %}
                     <span class="disabled">Next ›</span>
                     <span class="disabled">Last »</span>

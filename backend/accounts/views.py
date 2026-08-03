@@ -406,12 +406,13 @@ def register(request):
                 if referral_code:
                     referred_by = User.objects.filter(referral_code__iexact=referral_code.strip()).first()
 
-                # Create user
+                # Create player
                 user = User.objects.create_user(
                     username=username,
                     password=password,
                     phone_number=clean_phone,
-                    referred_by=referred_by
+                    referred_by=referred_by,
+                    staff_role=User.ROLE_PLAYER,
                 )
                 
                 # Link to franchise admin by APK package name (optional)
@@ -423,11 +424,13 @@ def register(request):
                         user.save(update_fields=['worker_id'])
                         logger.info(f"User {user.username} linked to franchise admin {fb.user.username} via package {package}")
                 
-                # If referred by a franchise admin (staff, not superuser), put new user under that admin
+                # Referred by Admin or Agent → player ownership under that staff user
                 if referred_by and referred_by.is_staff and not referred_by.is_superuser:
-                    user.worker = referred_by
-                    user.save(update_fields=['worker_id'])
-                    logger.info(f"User {user.username} linked to franchise admin {referred_by.username} via referral")
+                    role = getattr(referred_by, 'staff_role', None)
+                    if role in (User.ROLE_ADMIN, User.ROLE_AGENT) or referred_by.is_franchise_only or referred_by.works_under_id:
+                        user.worker = referred_by
+                        user.save(update_fields=['worker_id'])
+                        logger.info(f"User {user.username} linked to {referred_by.username} ({role}) via referral")
                 
                 # Create wallet
                 wallet = Wallet.objects.create(user=user, balance=Decimal('0.00'))
@@ -464,6 +467,109 @@ def register(request):
 
     except Exception as e:
         logger.exception(f"Error in register: {str(e)}")
+        return Response({'error': 'Internal server error'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['POST'])
+@authentication_classes([])
+@permission_classes([AllowAny])
+@csrf_exempt
+def register_agent(request):
+    """
+    Agent joins under an Admin via that Admin's referral_code.
+    Body: username, password, referral_code, optional phone_number.
+    """
+    try:
+        username = (request.data.get('username') or '').strip()
+        password = (request.data.get('password') or '').strip()
+        referral_code = (request.data.get('referral_code') or '').strip()
+        phone_number = (request.data.get('phone_number') or '').strip()
+
+        if not username or not password or not referral_code:
+            return Response(
+                {'error': 'username, password and referral_code are required'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if len(password) < 4:
+            return Response({'error': 'Password must be at least 4 characters'}, status=status.HTTP_400_BAD_REQUEST)
+        if User.objects.filter(username=username).exists():
+            return Response({'error': 'Username already taken'}, status=status.HTTP_400_BAD_REQUEST)
+
+        parent = User.objects.filter(referral_code__iexact=referral_code).first()
+        if not parent or not parent.is_staff:
+            return Response({'error': 'Invalid Admin referral code'}, status=status.HTTP_400_BAD_REQUEST)
+        is_admin_parent = (
+            getattr(parent, 'staff_role', None) == User.ROLE_ADMIN
+            or parent.is_franchise_only
+        ) and not parent.is_superuser
+        if not is_admin_parent:
+            return Response(
+                {'error': 'Referral code must belong to an Admin (not an Agent or player)'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if not parent.is_active:
+            return Response({'error': 'Parent Admin is inactive'}, status=status.HTTP_400_BAD_REQUEST)
+
+        clean_phone = None
+        if phone_number:
+            from .sms_service import sms_service
+            clean_phone = sms_service._clean_phone_number(phone_number, for_sms=False)
+            if User.objects.filter(phone_number=clean_phone).exists():
+                return Response({'error': 'Phone number already registered'}, status=status.HTTP_400_BAD_REQUEST)
+
+        from game.admin_utils import cap_permissions, apply_permissions_to_user
+
+        default_perms = {
+            'can_view_dashboard': True,
+            'can_control_dice': False,
+            'can_view_recent_rounds': True,
+            'can_view_all_bets': True,
+            'can_view_wallets': True,
+            'can_view_players': True,
+            'can_view_deposit_requests': True,
+            'can_view_withdraw_requests': True,
+            'can_view_transactions': True,
+            'can_view_game_history': True,
+            'can_view_game_settings': False,
+            'can_view_help_center': False,
+            'can_view_white_label': False,
+            'can_view_admin_management': False,
+            'can_manage_payment_methods': False,
+        }
+        capped = cap_permissions(default_perms, parent, for_agent=True)
+
+        with db_transaction.atomic():
+            user = User.objects.create_user(
+                username=username,
+                password=password,
+                email=f'{username}@gundu.ata',
+                phone_number=clean_phone,
+                is_staff=True,
+                is_superuser=False,
+                is_active=True,
+                is_franchise_only=False,
+                staff_role=User.ROLE_AGENT,
+                works_under=parent,
+                referred_by=parent,
+            )
+            if not user.referral_code:
+                user.referral_code = user.generate_unique_referral_code()
+                user.save(update_fields=['referral_code'])
+            apply_permissions_to_user(user, capped)
+
+        refresh = RefreshToken.for_user(user)
+        _set_single_session(user.id, refresh)
+        logger.info(f"Agent {user.username} joined under Admin {parent.username}")
+        return Response({
+            'user': UserSerializer(user).data,
+            'refresh': str(refresh),
+            'access': str(refresh.access_token),
+            'message': f'Agent registered under Admin {parent.username}',
+            'parent_admin': parent.username,
+            'staff_role': user.staff_role,
+        }, status=status.HTTP_201_CREATED)
+    except Exception as e:
+        logger.exception(f"Error in register_agent: {e}")
         return Response({'error': 'Internal server error'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
@@ -1485,14 +1591,17 @@ def approve_deposit_request(request, pk):
                 logger.warning(f"Admin {request.user.username} failed to approve deposit {pk}: Already processed (Status: {deposit.status})")
                 return Response({'error': 'Deposit request already processed'}, status=status.HTTP_400_BAD_REQUEST)
 
-            # Franchise balance: deduct from processing admin's balance (skip for superuser)
+            # Franchise balance: cut from franchise Admin (Agent approvals use parent Admin wallet)
             if not request.user.is_superuser:
-                fb, _ = FranchiseBalance.objects.get_or_create(user=request.user, defaults={'balance': 0})
-                fb = FranchiseBalance.objects.select_for_update().get(pk=fb.pk)
-                if fb.balance < deposit.amount:
-                    logger.warning(f"Admin {request.user.username} insufficient franchise balance: {fb.balance} < {deposit.amount}")
-                    return Response({'error': 'Insufficient franchise balance. Contact super admin for top-up.'}, status=status.HTTP_400_BAD_REQUEST)
-                FranchiseBalance.objects.filter(pk=fb.pk).update(balance=F('balance') - deposit.amount)
+                from game.admin_utils import get_franchise_admin, is_super_admin as _is_sa
+                fa = get_franchise_admin(request.user) or request.user
+                if not _is_sa(fa):
+                    fb, _ = FranchiseBalance.objects.get_or_create(user=fa, defaults={'balance': 0})
+                    fb = FranchiseBalance.objects.select_for_update().get(pk=fb.pk)
+                    if fb.balance < deposit.amount:
+                        logger.warning(f"Admin {fa.username} insufficient franchise balance: {fb.balance} < {deposit.amount}")
+                        return Response({'error': 'Insufficient franchise balance. Contact super admin for top-up.'}, status=status.HTTP_400_BAD_REQUEST)
+                    FranchiseBalance.objects.filter(pk=fb.pk).update(balance=F('balance') - deposit.amount)
 
             wallet, _ = Wallet.objects.get_or_create(user=deposit.user)
             wallet = Wallet.objects.select_for_update().get(pk=wallet.pk)

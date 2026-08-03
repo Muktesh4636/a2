@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Profile - Admin Panel</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: #ffffff;
+            min-height: 100vh;
+            display: flex;
+            color: #2d3748;
+        }
+        .sidebar {
+            width: 260px;
+            background: #0f172a;
+            height: 100vh;
+            position: fixed;
+            left: 0;
+            top: 0;
+            display: flex;
+            flex-direction: column;
+            overflow-y: hidden;
+            z-index: 1000;
+        }
+        .sidebar-header {
+            padding: 24px 20px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            flex-shrink: 0;
+            background: #0f172a;
+        }
+        .sidebar-header .logo {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: white;
+            font-size: 20px;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+        .sidebar-header .logo-icon { font-size: 24px; }
+        .sidebar-header .subtitle {
+            color: rgba(255, 255, 255, 0.7);
+            font-size: 13px;
+            font-weight: 400;
+            margin-top: 4px;
+        }
+        .sidebar-menu-wrapper {
+            flex: 1;
+            overflow-y: auto;
+            overflow-x: hidden;
+            scrollbar-width: thin;
+            scrollbar-color: rgba(255, 255, 255, 0.3) transparent;
+            padding: 12px 0;
+        }
+        .menu-section { margin-bottom: 24px; }
+        .menu-section-title {
+            color: rgba(255, 255, 255, 0.5);
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            padding: 8px 20px;
+            margin-bottom: 4px;
+        }
+        .sidebar-menu { list-style: none; padding: 0; }
+        .sidebar-menu li { margin: 0; }
+        .sidebar-menu a {
+            display: flex;
+            align-items: center;
+            padding: 12px 20px;
+            color: rgba(255, 255, 255, 0.8);
+            text-decoration: none;
+            transition: all 0.2s;
+            font-size: 14px;
+            font-weight: 500;
+            position: relative;
+        }
+        .sidebar-menu a:hover { background: rgba(255, 255, 255, 0.1); color: white; }
+        .sidebar-menu a.active {
+            background: rgba(255, 255, 255, 0.15);
+            color: white;
+            font-weight: 600;
+        }
+        .sidebar-menu a.active::before {
+            content: '';
+            position: absolute;
+            left: 0; top: 0; bottom: 0;
+            width: 3px;
+            background: #00CED1;
+        }
+        .sidebar-menu .menu-icon {
+            margin-right: 12px;
+            font-size: 18px;
+            width: 20px;
+            text-align: center;
+        }
+        .main-content {
+            margin-left: 260px;
+            flex: 1;
+            padding: 32px;
+            min-height: 100vh;
+            width: calc(100% - 260px);
+        }
+        .container { max-width: 900px; margin: 0 auto; }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 28px;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+        .header-left h1 {
+            color: #1a202c;
+            font-size: 28px;
+            font-weight: 700;
+            margin: 0 0 4px 0;
+        }
+        .header-left p { color: #718096; font-size: 14px; margin: 0; }
+        .header-actions { display: flex; gap: 10px; }
+        .action-btn, .logout-btn {
+            padding: 10px 18px;
+            border-radius: 8px;
+            font-weight: 500;
+            font-size: 14px;
+            text-decoration: none;
+            border: none;
+            cursor: pointer;
+        }
+        .action-btn { background: #00CED1; color: white; }
+        .logout-btn { background: #dc3545; color: white; }
+        .control-panel {
+            background: white;
+            padding: 28px;
+            border-radius: 12px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+            border: 1px solid #e2e8f0;
+            margin-bottom: 20px;
+        }
+        .control-panel h2 {
+            margin: 0 0 6px 0;
+            color: #1a202c;
+            font-size: 18px;
+            font-weight: 700;
+        }
+        .control-panel .subtitle {
+            color: #718096;
+            font-size: 13px;
+            margin-bottom: 20px;
+        }
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 14px;
+        }
+        .info-item {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 10px;
+            padding: 14px 16px;
+        }
+        .info-item .label {
+            display: block;
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            color: #94a3b8;
+            margin-bottom: 6px;
+        }
+        .info-item .value {
+            font-size: 15px;
+            font-weight: 600;
+            color: #1e293b;
+            word-break: break-word;
+        }
+        .alert {
+            padding: 14px 18px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-size: 14px;
+        }
+        .alert-success { background: #c6f6d5; color: #22543d; border: 1px solid #9ae6b4; }
+        .alert-error { background: #fed7d7; color: #742a2a; border: 1px solid #fc8181; }
+        .badge {
+            display: inline-block;
+            padding: 6px 12px;
+            border-radius: 999px;
+            font-weight: 700;
+            font-size: 12px;
+        }
+        .btn {
+            padding: 12px 20px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 15px;
+            font-weight: 700;
+            background: #667eea;
+            color: white;
+        }
+        .btn:hover { background: #5568d3; }
+        .btn:disabled { opacity: 0.55; cursor: not-allowed; }
+        .sidebar-toggle {
+            display: none;
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            z-index: 1001;
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 12px 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 20px;
+        }
+        @media (max-width: 768px) {
+            .sidebar {
+                transform: translateX(-100%);
+                transition: transform 0.3s;
+            }
+            .sidebar.open { transform: translateX(0); }
+            .sidebar-toggle { display: block; }
+            .main-content { margin-left: 0; width: 100%; padding: 16px; }
+        }
+    </style>
+</head>
+<body>
+    <button class="sidebar-toggle" onclick="document.querySelector('.sidebar').classList.toggle('open')">☰</button>
+    <div class="sidebar">
+        <div class="sidebar-header">
+            <div class="logo">
+                <span class="logo-icon">🎲🎲</span>
+                <span>Gundu ata</span>
+            </div>
+            <div class="subtitle">Game control</div>
+        </div>
+        {% include 'admin/_sidebar_menu.html' %}
+    </div>
+
+    <div class="main-content">
+        <div class="container">
+            <div class="header">
+                <div class="header-left">
+                    <h1>👤 Profile</h1>
+                    <p>Your account info and deposit profile settings</p>
+                </div>
+                <div class="header-actions">
+                    <a href="{% url 'admin_dashboard' %}" class="action-btn">← Dashboard</a>
+                    <a href="{% url 'admin_logout' %}" class="logout-btn">🚪 Logout</a>
+                </div>
+            </div>
+
+            {% if messages %}
+                {% for message in messages %}
+                    <div class="alert alert-{{ message.tags }}">{{ message }}</div>
+                {% endfor %}
+            {% endif %}
+
+            <div class="control-panel">
+                <h2>My info</h2>
+                <p class="subtitle">Details for the logged-in admin account</p>
+                <div class="info-grid">
+                    <div class="info-item">
+                        <span class="label">Username</span>
+                        <span class="value">{{ user.username }}</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="label">Role</span>
+                        <span class="value">{{ role_label }}</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="label">Phone</span>
+                        <span class="value">{% if user.phone_number %}{{ user.phone_number }}{% else %}—{% endif %}</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="label">Email</span>
+                        <span class="value">{% if user.email %}{{ user.email }}{% else %}—{% endif %}</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="label">Referral code</span>
+                        <span class="value">{% if user.referral_code %}{{ user.referral_code }}{% else %}—{% endif %}</span>
+                    </div>
+                    {% if parent_admin %}
+                    <div class="info-item">
+                        <span class="label">Works under</span>
+                        <span class="value">{{ parent_admin.username }}</span>
+                    </div>
+                    {% endif %}
+                    {% if franchise_name %}
+                    <div class="info-item">
+                        <span class="label">Franchise name</span>
+                        <span class="value">{{ franchise_name }}</span>
+                    </div>
+                    {% endif %}
+                    {% if package_name %}
+                    <div class="info-item">
+                        <span class="label">Package</span>
+                        <span class="value">{{ package_name }}</span>
+                    </div>
+                    {% endif %}
+                    {% if franchise_balance is not None %}
+                    <div class="info-item">
+                        <span class="label">Franchise balance</span>
+                        <span class="value">₹{{ franchise_balance|floatformat:0 }}</span>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="control-panel">
+                <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;">
+                    <div>
+                        <h2 style="margin-bottom:6px;">Password</h2>
+                        <p class="subtitle" style="margin-bottom:0;">Keep your admin login secure</p>
+                    </div>
+                    <button type="button" id="toggle-password-form-btn" class="btn" onclick="togglePasswordForm()" style="background:#0f172a;">
+                        Change password
+                    </button>
+                </div>
+
+                <div id="change-password-panel" style="display:none; margin-top:20px; padding-top:18px; border-top:1px solid #e2e8f0;">
+                    <form method="post" action="{% url 'admin_profile' %}" style="max-width:420px;">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="change_password">
+                        <div class="form-group" style="margin-bottom:16px;">
+                            <label for="current_password" style="display:block; font-weight:700; font-size:13px; margin-bottom:6px; color:#334155;">Current password</label>
+                            <input type="password" id="current_password" name="current_password" required autocomplete="current-password"
+                                   style="width:100%; padding:12px 14px; border:2px solid #e2e8f0; border-radius:8px; font-size:15px;">
+                        </div>
+                        <div class="form-group" style="margin-bottom:16px;">
+                            <label for="new_password" style="display:block; font-weight:700; font-size:13px; margin-bottom:6px; color:#334155;">New password</label>
+                            <input type="password" id="new_password" name="new_password" required minlength="4" autocomplete="new-password"
+                                   style="width:100%; padding:12px 14px; border:2px solid #e2e8f0; border-radius:8px; font-size:15px;">
+                        </div>
+                        <div class="form-group" style="margin-bottom:18px;">
+                            <label for="new_password_confirm" style="display:block; font-weight:700; font-size:13px; margin-bottom:6px; color:#334155;">Confirm new password</label>
+                            <input type="password" id="new_password_confirm" name="new_password_confirm" required minlength="4" autocomplete="new-password"
+                                   style="width:100%; padding:12px 14px; border:2px solid #e2e8f0; border-radius:8px; font-size:15px;">
+                        </div>
+                        <div style="display:flex; gap:10px; flex-wrap:wrap;">
+                            <button type="submit" class="btn">Update password</button>
+                            <button type="button" class="btn" onclick="togglePasswordForm(false)" style="background:#94a3b8;">Cancel</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+            <script>
+            function togglePasswordForm(forceOpen) {
+                var panel = document.getElementById('change-password-panel');
+                var btn = document.getElementById('toggle-password-form-btn');
+                if (!panel) return;
+                var open = (typeof forceOpen === 'boolean') ? forceOpen : (panel.style.display === 'none' || !panel.style.display);
+                panel.style.display = open ? 'block' : 'none';
+                if (btn) btn.style.display = open ? 'none' : 'inline-block';
+                if (open) {
+                    var first = document.getElementById('current_password');
+                    if (first) first.focus();
+                } else {
+                    ['current_password', 'new_password', 'new_password_confirm'].forEach(function(id) {
+                        var el = document.getElementById(id);
+                        if (el) el.value = '';
+                    });
+                }
+            }
+            </script>
+
+            <div class="control-panel" id="deposit-mode-panel">
+                <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:16px; flex-wrap:wrap; margin-bottom:8px;">
+                    <div>
+                        <h2 style="margin-bottom:6px;">Deposit profile</h2>
+                        <p class="subtitle" style="margin-bottom:0;">Select Manual or Automatic, then save. Deposit Requests follows this saved profile.</p>
+                    </div>
+                    <span id="deposit-mode-badge" class="badge" style="background:{% if deposit_mode == 'automatic' %}#ecfdf5; color:#047857{% else %}#eff6ff; color:#1d4ed8{% endif %};">
+                        Active: {% if deposit_mode == 'automatic' %}Automatic{% else %}Manual{% endif %}
+                    </span>
+                </div>
+
+                {% if can_edit_deposit_profile %}
+                <form method="post" action="{% url 'admin_profile' %}" id="deposit-mode-form" style="margin-top:18px;">
+                    {% csrf_token %}
+                    <input type="hidden" name="form_type" value="deposit_mode">
+                    <input type="hidden" name="auto_deposit_apk_url" value="{{ auto_deposit_apk_url }}">
+
+                    <div style="display:flex; gap:12px; flex-wrap:wrap; margin-bottom:16px;">
+                        <label id="mode-manual-label" style="display:flex; align-items:center; gap:8px; padding:14px 18px; border:2px solid {% if deposit_mode != 'automatic' %}#667eea{% else %}#e2e8f0{% endif %}; border-radius:12px; cursor:pointer; background:{% if deposit_mode != 'automatic' %}#eef2ff{% else %}#fff{% endif %}; min-width:180px;">
+                            <input type="radio" name="deposit_mode" value="manual" {% if deposit_mode != 'automatic' %}checked{% endif %} onchange="onDepositProfilePreview()">
+                            <span>
+                                <span style="display:block; font-weight:800;">Manual deposit</span>
+                                <span style="display:block; font-size:12px; color:#64748b; margin-top:2px;">Screenshot + admin approve</span>
+                            </span>
+                        </label>
+                        <label id="mode-auto-label" style="display:flex; align-items:center; gap:8px; padding:14px 18px; border:2px solid {% if deposit_mode == 'automatic' %}#059669{% else %}#e2e8f0{% endif %}; border-radius:12px; cursor:pointer; background:{% if deposit_mode == 'automatic' %}#ecfdf5{% else %}#fff{% endif %}; min-width:180px;">
+                            <input type="radio" name="deposit_mode" value="automatic" {% if deposit_mode == 'automatic' %}checked{% endif %} onchange="onDepositProfilePreview()">
+                            <span>
+                                <span style="display:block; font-weight:800;">Automatic deposit</span>
+                                <span style="display:block; font-size:12px; color:#64748b; margin-top:2px;">Unique amount + PhonePe feed</span>
+                            </span>
+                        </label>
+                    </div>
+
+                    <div id="manual-intro" style="display:{% if deposit_mode == 'automatic' %}none{% else %}block{% endif %}; background:#f8fafc; border:1px solid #e2e8f0; border-radius:12px; padding:16px 18px; margin-bottom:16px;">
+                        <h3 style="margin:0 0 8px; font-size:15px;">Manual deposit</h3>
+                        <p style="margin:0; color:#475569; font-size:14px; line-height:1.55;">
+                            Player pays and uploads a screenshot. Admin verifies and approves or rejects from Deposit Requests.
+                        </p>
+                    </div>
+
+                    <div id="automatic-intro" style="display:{% if deposit_mode == 'automatic' %}block{% else %}none{% endif %}; background:#f0fdf4; border:1px solid #bbf7d0; border-radius:12px; padding:18px 20px; margin-bottom:16px;">
+                        <h3 style="margin:0 0 10px; font-size:16px; color:#065f46;">How automatic deposit works</h3>
+                        <ol style="margin:0 0 14px 18px; color:#14532d; font-size:14px; line-height:1.65; padding:0;">
+                            <li style="margin-bottom:8px;"><strong>Player selects an amount</strong> (example ₹500).</li>
+                            <li style="margin-bottom:8px;">System shows a <strong>unique exact amount</strong> to pay (example ₹499.98), between selected and selected−₹10.</li>
+                            <li style="margin-bottom:8px;">That amount is <strong>locked</strong> until complete, fail, or <strong>1 day</strong> expiry.</li>
+                            <li style="margin-bottom:8px;">PhonePe helper APK sends credits: amount + UTR. Backend matches and credits the wallet.</li>
+                            <li>After success or expiry, the unique amount becomes free again.</li>
+                        </ol>
+                        <div style="display:flex; flex-wrap:wrap; gap:10px; align-items:center;">
+                            {% if auto_deposit_apk_url %}
+                            <a href="{{ auto_deposit_apk_url }}" target="_blank" rel="noopener"
+                               style="display:inline-flex; align-items:center; gap:8px; background:#059669; color:#fff; text-decoration:none; font-weight:800; padding:12px 18px; border-radius:10px;">
+                                📲 Install APK
+                            </a>
+                            {% else %}
+                            <span style="font-size:12px; color:#b45309; font-weight:600;">APK link not set yet — paste URL below and save.</span>
+                            {% endif %}
+                        </div>
+                        {% if not auto_deposit_apk_url %}
+                        <div style="margin-top:14px;">
+                            <label for="auto_deposit_apk_url_input" style="display:block; font-weight:700; font-size:12px; margin-bottom:6px; color:#334155;">APK download URL</label>
+                            <input type="url" id="auto_deposit_apk_url_input" name="auto_deposit_apk_url_override"
+                                   placeholder="https://…/phonepe-helper.apk"
+                                   style="width:100%; max-width:560px; padding:10px 12px; border:1px solid #86efac; border-radius:8px; font-size:14px; background:#fff;"
+                                   oninput="document.querySelector('input[name=auto_deposit_apk_url]').value=this.value">
+                        </div>
+                        {% endif %}
+                    </div>
+
+                    <div id="unsaved-profile-hint" style="display:none; margin-bottom:12px; padding:10px 14px; background:#fff7ed; border:1px solid #fed7aa; border-radius:8px; color:#9a3412; font-size:13px; font-weight:600;">
+                        Profile changed — click Save to apply.
+                    </div>
+
+                    <button type="submit" class="btn">Save deposit profile</button>
+                </form>
+                <script>
+                var ACTIVE_DEPOSIT_PROFILE = "{{ deposit_mode|default:'manual' }}";
+                function onDepositProfilePreview() {
+                    var auto = document.querySelector('input[name="deposit_mode"][value="automatic"]').checked;
+                    var selected = auto ? 'automatic' : 'manual';
+                    var autoIntro = document.getElementById('automatic-intro');
+                    var manIntro = document.getElementById('manual-intro');
+                    if (autoIntro) autoIntro.style.display = auto ? 'block' : 'none';
+                    if (manIntro) manIntro.style.display = auto ? 'none' : 'block';
+                    var hint = document.getElementById('unsaved-profile-hint');
+                    if (hint) hint.style.display = (selected !== ACTIVE_DEPOSIT_PROFILE) ? 'block' : 'none';
+                    var badge = document.getElementById('deposit-mode-badge');
+                    if (badge) {
+                        badge.textContent = (selected === ACTIVE_DEPOSIT_PROFILE ? 'Active: ' : 'Selected (not saved): ') + (auto ? 'Automatic' : 'Manual');
+                        badge.style.background = auto ? '#ecfdf5' : '#eff6ff';
+                        badge.style.color = auto ? '#047857' : '#1d4ed8';
+                    }
+                    var ml = document.getElementById('mode-manual-label');
+                    var al = document.getElementById('mode-auto-label');
+                    if (ml) {
+                        ml.style.borderColor = auto ? '#e2e8f0' : '#667eea';
+                        ml.style.background = auto ? '#fff' : '#eef2ff';
+                    }
+                    if (al) {
+                        al.style.borderColor = auto ? '#059669' : '#e2e8f0';
+                        al.style.background = auto ? '#ecfdf4' : '#fff';
+                    }
+                }
+                </script>
+                {% else %}
+                <p style="margin-top:16px; color:#475569; font-size:14px;">
+                    Active deposit profile:
+                    <strong>{% if deposit_mode == 'automatic' %}Automatic{% else %}Manual{% endif %}</strong>.
+                    Only Super Admin / deposit managers can change this.
+                </p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</body>
+</html>

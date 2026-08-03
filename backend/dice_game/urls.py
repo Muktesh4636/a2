@@ -62,6 +62,7 @@ urlpatterns = [
     
     # Auth endpoints (api/auth/)
     path('api/auth/register/', accounts_views.register, name='register'),
+    path('api/auth/register-agent/', accounts_views.register_agent, name='register_agent'),
     path('api/auth/login/', accounts_views.login, name='login'),
     path('api/auth/otp/send/', accounts_views.send_otp, name='send_otp'),
     path('api/auth/otp/verify-login/', accounts_views.verify_otp_login, name='verify_otp_login'),
@@ -219,6 +220,7 @@ urlpatterns = [
     path('game-admin/set-individual-dice/', game_admin_views.set_individual_dice_view, name='set_individual_dice_view'),
     path('game-admin/toggle-dice-mode/', game_admin_views.toggle_dice_mode, name='toggle_dice_mode'),
     path('game-admin/players-list/', game_admin_views.manage_players, name='manage_players'),
+    path('game-admin/players/create/', game_admin_views.create_player, name='create_player'),
     path('game-admin/players/', game_admin_views.players, name='players'),
     path('game-admin/players/assign-worker/', game_admin_views.assign_worker, name='assign_worker'),
     path('game-admin/game-settings/', game_admin_views.game_settings, name='game_settings'),
@@ -231,6 +233,11 @@ urlpatterns = [
     path('game-admin/worker-management/<int:admin_id>/toggle-active/', game_admin_views.toggle_admin_status, name='toggle_admin_status'),
     path('game-admin/worker-management/edit/<int:admin_id>/', game_admin_views.edit_admin, name='edit_admin'),
     path('game-admin/worker-management/delete/<int:admin_id>/', game_admin_views.delete_admin, name='delete_admin'),
+    path('game-admin/agents/', game_admin_views.agent_management, name='agent_management'),
+    path('game-admin/agents/create/', game_admin_views.create_agent, name='create_agent'),
+    path('game-admin/agents/<int:agent_id>/', game_admin_views.agent_details, name='agent_details'),
+    path('game-admin/agents/<int:agent_id>/edit/', game_admin_views.edit_agent, name='edit_agent'),
+    path('game-admin/agents/<int:agent_id>/toggle-active/', game_admin_views.toggle_agent_status, name='toggle_agent_status'),
     path('game-admin/franchise-balance/', game_admin_views.franchise_balance, name='franchise_balance'),
     path('game-admin/franchise-balance/details/<int:admin_id>/', game_admin_views.franchise_admin_details, name='franchise_admin_details'),
     path('game-admin/franchise-balance/details/<int:admin_id>/players/', game_admin_views.franchise_admin_players, name='franchise_admin_players'),

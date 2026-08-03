@@ -523,6 +523,99 @@
                 <strong>Balance low.</strong> You can get a top-up from Super Admin. They can add balance from the <a href="{% url 'franchise_balance' %}" style="color: #b45309; font-weight: 600;">Franchise Balance</a> page.
             </div>
             {% endif %}
+
+            <div style="margin-bottom: 16px; padding: 12px 16px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; display:flex; flex-wrap:wrap; gap:10px; align-items:center; justify-content:space-between;">
+                <div style="font-size:14px; color:#334155;">
+                    Active deposit profile:
+                    <strong style="color:{% if deposit_mode == 'automatic' %}#047857{% else %}#1d4ed8{% endif %};">
+                        {% if deposit_mode == 'automatic' %}Automatic{% else %}Manual{% endif %}
+                    </strong>
+                    <span style="color:#64748b;"> — change this in Profile</span>
+                </div>
+                <a href="{% url 'admin_profile' %}" style="font-size:13px; font-weight:700; color:#667eea; text-decoration:none;">Open Profile →</a>
+            </div>
+
+            {% if deposit_mode == 'automatic' %}
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <h3>Successful deposits</h3>
+                    <p>{{ auto_total_count }}</p>
+                </div>
+                <div class="stat-card">
+                    <h3>Total credited</h3>
+                    <p>₹{{ auto_total_amount|floatformat:2 }}</p>
+                </div>
+            </div>
+
+            <div class="control-panel">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; flex-wrap: wrap; gap: 16px;">
+                    <h2 style="margin: 0;">✅ Successful automatic deposits</h2>
+                    <form method="get" style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                        <input type="hidden" name="status" value="">
+                        <input
+                            type="text"
+                            name="search"
+                            value="{{ search_query }}"
+                            placeholder="Name, amount, or UTR..."
+                            style="padding: 8px 12px; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 14px; min-width: 200px;"
+                        />
+                        <button type="submit" style="padding: 8px 16px; background: #059669; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 14px;">🔍 Search</button>
+                        {% if search_query %}
+                        <a href="{% url 'deposit_requests' %}" style="padding: 8px 16px; background: #6c757d; color: white; border-radius: 6px; font-weight: 600; font-size: 14px; text-decoration: none;">Clear</a>
+                        {% endif %}
+                    </form>
+                </div>
+                <div class="table-wrapper">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th>Amount</th>
+                                <th>UTR number</th>
+                                <th>Payment time</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for txn in auto_transactions %}
+                            <tr>
+                                <td>
+                                    {% if txn.user_id %}
+                                    <a href="{% url 'user_details' txn.user.id %}" style="color:#059669; font-weight:700; text-decoration:none;">{{ txn.display_name }}</a>
+                                    {% else %}
+                                    <span style="font-weight:600;">{{ txn.display_name }}</span>
+                                    {% endif %}
+                                </td>
+                                <td><span class="amount">₹{{ txn.amount|floatformat:2 }}</span></td>
+                                <td style="font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size:13px;">{{ txn.utr }}</td>
+                                <td>{{ txn.payment_time|date:"d M Y, h:i A" }}</td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="4">
+                                    <div class="empty-state">
+                                        <div class="empty-state-icon">✅</div>
+                                        <p>No successful automatic deposits yet</p>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% if auto_page_obj and auto_page_obj.has_other_pages %}
+                <div class="pagination" style="margin-top: 16px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                    {% if auto_page_obj.has_previous %}
+                        <a href="?search={{ search_query|urlencode }}&page={{ auto_page_obj.previous_page_number }}" style="padding: 8px 12px; background: #edf2f7; border-radius: 6px; text-decoration: none; color: #4a5568;">‹ Prev</a>
+                    {% endif %}
+                    <span style="padding: 8px 12px; color: #4a5568;">Page {{ auto_page_obj.number }} of {{ auto_page_obj.paginator.num_pages }}</span>
+                    {% if auto_page_obj.has_next %}
+                        <a href="?search={{ search_query|urlencode }}&page={{ auto_page_obj.next_page_number }}" style="padding: 8px 12px; background: #edf2f7; border-radius: 6px; text-decoration: none; color: #4a5568;">Next ›</a>
+                    {% endif %}
+                </div>
+                {% endif %}
+            </div>
+
+            {% else %}
             <div class="stats-grid">
                 <div class="stat-card">
                     <h3>Total Requests</h3>
@@ -720,6 +813,7 @@
                 </div>
                 {% endif %}
             </div>
+            {% endif %}
         </div>
     </div>
     

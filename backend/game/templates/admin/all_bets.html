@@ -395,7 +395,7 @@
                         <div class="header">
                 <div class="header-left">
                     <h1>All Bets{% if scope_label %} — {{ scope_label }}{% endif %}</h1>
-                    <p>View all bets placed across all rounds{% if scope_label %} (players under your franchise){% endif %}</p>
+                    <p>Bets from every game — Gundu Ata, Roulette, Trading, Chicken Road, Vortex, and more{% if scope_label %} (players in your scope){% endif %}</p>
                 </div>
                 <div class="header-actions">
                     <a href="{% url 'admin_logout' %}" class="logout-btn">🚪 Logout</a>
@@ -439,8 +439,27 @@
                             name="search" 
                             value="{{ search_query }}" 
                             placeholder="User, Phone, or Round ID..." 
-                            style="padding: 8px 12px; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 14px; min-width: 250px;"
+                            style="padding: 8px 12px; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 14px; min-width: 200px;"
                         />
+                        {% if show_owner_filter %}
+                        <select 
+                            name="owner" 
+                            title="Filter by Admin"
+                            style="padding: 8px 12px; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 14px; background: white; max-width: 280px;"
+                        >
+                            {% for o in owner_options %}
+                            <option value="{{ o.id }}" {% if owner_filter == o.id %}selected{% endif %}>{{ o.label }}</option>
+                            {% endfor %}
+                        </select>
+                        {% endif %}
+                        <select 
+                            name="game" 
+                            style="padding: 8px 12px; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 14px; background: white;"
+                        >
+                            {% for g in game_options %}
+                            <option value="{{ g.slug }}" {% if game_filter == g.slug %}selected{% endif %}>{{ g.icon }} {{ g.name }}</option>
+                            {% endfor %}
+                        </select>
                         <select 
                             name="status" 
                             style="padding: 8px 12px; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 14px; background: white;"
@@ -455,7 +474,7 @@
                         >
                             🔍 Search
                         </button>
-                        {% if search_query or status_filter != 'all' %}
+                        {% if search_query or status_filter != 'all' or game_filter != 'all' or owner_filter %}
                         <a 
                             href="{% url 'all_bets' %}" 
                             style="padding: 8px 16px; background: #f1f5f9; color: #64748b; border: 1px solid #e2e8f0; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 14px; text-decoration: none; display: inline-block;"
@@ -466,14 +485,15 @@
                     </form>
                 </div>
 
-                {% if search_query or status_filter != 'all' %}
+                {% if search_query or status_filter != 'all' or game_filter != 'all' or owner_filter %}
                 <div style="margin-bottom: 16px; padding: 12px; background: #f0fdf4; border-radius: 6px; border-left: 3px solid #a8e6cf;">
                     <p style="margin: 0; color: #166534; font-size: 14px;">
                         <strong>Filtered results:</strong>
-                        {% if search_query %}Search: "{{ search_query }}"{% endif %}
-                        {% if search_query and status_filter != 'all' %} | {% endif %}
-                        {% if status_filter != 'all' %}Status: {{ status_filter|title }}{% endif %}
-                        <span style="color: #1a202c; opacity: 0.6;">({{ all_bets|length }} matches shown)</span>
+                        {% if owner_label %}Admin: {{ owner_label }} · {% endif %}
+                        {% if game_filter != 'all' %}Game: {{ game_filter }} · {% endif %}
+                        {% if search_query %}Search: "{{ search_query }}" · {% endif %}
+                        {% if status_filter != 'all' %}Status: {{ status_filter|title }} · {% endif %}
+                        <span style="color: #1a202c; opacity: 0.6;">{{ all_bets|length }} latest rows shown</span>
                     </p>
                 </div>
                 {% endif %}
@@ -482,11 +502,13 @@
                     <table>
                         <thead>
                             <tr>
+                                <th>Game</th>
                                 <th>User</th>
+                                <th>Assigned to</th>
                                 <th>Round</th>
-                                <th>Number</th>
+                                <th>Detail</th>
                                 <th>Amount</th>
-                                <th>Winner</th>
+                                <th>Result</th>
                                 <th>Payout</th>
                                 <th>Time</th>
                             </tr>
@@ -495,41 +517,58 @@
                             {% for bet in all_bets %}
                             <tr>
                                 <td>
-                                    <a href="{% url 'user_details' bet.user.id %}" style="color: #5a9fd4; text-decoration: none; font-weight: 600;" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">
-                                        {{ bet.user.username }}
+                                    <span style="display:inline-flex;align-items:center;gap:6px;font-weight:700;color:{{ bet.game_color|default:'#334155' }};white-space:nowrap;">
+                                        <span>{{ bet.game_icon }}</span>
+                                        <span>{{ bet.game_name }}</span>
+                                    </span>
+                                </td>
+                                <td>
+                                    {% if bet.user_id %}
+                                    <a href="{% url 'user_details' bet.user_id %}" style="color: #5a9fd4; text-decoration: none; font-weight: 600;" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">
+                                        {{ bet.user }}
                                     </a>
-                                </td>
-                                <td>
-                                    <a href="{% url 'round_details' bet.round.round_id %}" style="color: #5a9fd4; text-decoration: none;" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">
-                                        <span class="round-id">#{{ bet.round.round_id }}</span>
-                                    </a>
-                                </td>
-                                <td>
-                                    <span class="dice-result">{{ bet.number }}</span>
-                                </td>
-                                <td><span class="amount">₹{{ bet.chip_amount|floatformat:2 }}</span></td>
-                                <td>
-                                    {% if bet.is_winner %}
-                                        <span class="winner-badge yes">✅ Winner</span>
                                     {% else %}
-                                        <span class="winner-badge no">❌ Lost</span>
+                                        {{ bet.user }}
+                                    {% endif %}
+                                </td>
+                                <td><span style="color:#64748b;font-size:13px;">{{ bet.owner|default:"—" }}</span></td>
+                                <td>
+                                    {% if bet.round_url %}
+                                    <a href="{{ bet.round_url }}" style="color: #5a9fd4; text-decoration: none;" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">
+                                        <span class="round-id">{{ bet.round_id }}</span>
+                                    </a>
+                                    {% else %}
+                                        <span class="round-id">{{ bet.round_id }}</span>
                                     {% endif %}
                                 </td>
                                 <td>
-                                    {% if bet.payout_amount %}
-                                        <span class="payout">₹{{ bet.payout_amount|floatformat:2 }}</span>
+                                    <span class="dice-result" style="font-size:13px;">{{ bet.detail }}</span>
+                                </td>
+                                <td><span class="amount">₹{{ bet.stake|floatformat:2 }}</span></td>
+                                <td>
+                                    {% if bet.result_class == 'win' %}
+                                        <span class="winner-badge yes">✅ {{ bet.result }}</span>
+                                    {% elif bet.result_class == 'lose' %}
+                                        <span class="winner-badge no">❌ {{ bet.result }}</span>
+                                    {% else %}
+                                        <span class="winner-badge" style="background:#f1f5f9;color:#475569;">{{ bet.result }}</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if bet.payout %}
+                                        <span class="payout">₹{{ bet.payout|floatformat:2 }}</span>
                                     {% else %}
                                         <span style="color: #a0aec0;">-</span>
                                     {% endif %}
                                 </td>
-                                <td><span class="time-badge">{{ bet.created_at|date:"M d, H:i:s" }}</span></td>
+                                <td><span class="time-badge">{{ bet.when|date:"M d, H:i:s" }}</span></td>
                             </tr>
                             {% empty %}
                             <tr>
-                                <td colspan="7">
+                                <td colspan="9">
                                     <div class="empty-state">
                                         <div class="empty-state-icon">🎲</div>
-                                        <p>No bets have been placed yet</p>
+                                        <p>No bets found</p>
                                     </div>
                                 </td>
                             </tr>

@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Players Management - Admin Panel</title>
+    <title>All Users - Admin Panel</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -456,10 +456,20 @@
         <div class="container">
             <div class="header">
                 <div class="header-left">
-                    <h1>👥 Players Management{% if scope_label %} — {{ scope_label }}{% endif %}</h1>
-                    <p>View all players{% if scope_label %} registered under your franchise{% endif %}</p>
+                    {% if show_create_panel %}
+                    <h1>➕ Create User</h1>
+                    <p>Enter account details to create a new user.</p>
+                    {% else %}
+                    <h1>👥 All Users{% if scope_label %} — {{ scope_label }}{% endif %}</h1>
+                    <p>{{ scope_blurb|default:"View all users in your scope." }}</p>
+                    {% endif %}
                 </div>
                 <div class="header-actions">
+                    {% if can_create_user and not show_create_panel %}
+                    <a href="{% url 'manage_players' %}?create=1" class="logout-btn" style="background:#2563eb;color:#fff;text-decoration:none;padding:10px 16px;border-radius:8px;font-weight:600;">➕ Create User</a>
+                    {% elif show_create_panel %}
+                    <a href="{% url 'manage_players' %}" class="logout-btn" style="background:#e2e8f0;color:#1e293b;text-decoration:none;padding:10px 16px;border-radius:8px;font-weight:600;">← Back to All Users</a>
+                    {% endif %}
                     <a href="{% url 'admin_logout' %}" class="logout-btn">🚪 Logout</a>
                 </div>
             </div>
@@ -471,6 +481,63 @@
                     </div>
                 {% endfor %}
             {% endif %}
+
+            {% if can_create_user and show_create_panel %}
+            <div id="create-user-panel" class="control-panel" style="max-width:560px;">
+                <h2 style="margin-bottom:8px;">Account details</h2>
+                <p style="color:#64748b;font-size:14px;margin:0 0 20px;">
+                    {% if is_super_admin %}
+                        Place the user under yourself, any Admin, or any Agent.
+                    {% elif is_franchise_admin %}
+                        Place the user under yourself or one of your Agents.
+                    {% else %}
+                        New users are assigned under you.
+                    {% endif %}
+                </p>
+                <form method="post" action="{% url 'manage_players' %}?create=1">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="create_user">
+                    <div class="filters" style="grid-template-columns:1fr;gap:14px;">
+                        <div class="filter-group">
+                            <label for="cu_username">Username *</label>
+                            <input type="text" id="cu_username" name="username" value="{{ create_form.username }}" required maxlength="150" autocomplete="username">
+                        </div>
+                        <div class="filter-group">
+                            <label for="cu_phone">Phone (optional)</label>
+                            <input type="text" id="cu_phone" name="phone_number" value="{{ create_form.phone_number }}" maxlength="20" placeholder="e.g. 9876543210">
+                        </div>
+                        <div class="filter-group">
+                            <label for="cu_password">Password *</label>
+                            <input type="password" id="cu_password" name="password" required minlength="4" autocomplete="new-password">
+                        </div>
+                        <div class="filter-group">
+                            <label for="cu_password2">Confirm password *</label>
+                            <input type="password" id="cu_password2" name="password2" required minlength="4" autocomplete="new-password">
+                        </div>
+                        {% if owner_choices|length > 1 or is_super_admin or is_franchise_admin %}
+                        <div class="filter-group">
+                            <label for="cu_owner">Assign under *</label>
+                            <select id="cu_owner" name="owner_id" required>
+                                {% for o in owner_choices %}
+                                <option value="{{ o.id }}" {% if create_form.owner_id == o.id|stringformat:"s" %}selected{% endif %}>{{ o.label }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        {% else %}
+                        <input type="hidden" name="owner_id" value="{{ default_owner_id }}">
+                        <div class="filter-group">
+                            <label>Assign under</label>
+                            <input type="text" value="{{ owner_choices.0.label }}" disabled>
+                        </div>
+                        {% endif %}
+                        <div class="filter-group" style="flex-direction:row;gap:10px;align-items:center;margin-top:8px;">
+                            <button type="submit" class="btn" style="background:#2563eb;">Create User</button>
+                            <a href="{% url 'manage_players' %}" class="btn" style="background:#e2e8f0;color:#1e293b;text-decoration:none;">Cancel</a>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            {% else %}
             
             <div class="stats-grid">
                 <div class="stat-card">
@@ -488,7 +555,7 @@
             </div>
             
             <div class="control-panel">
-                <h2>👥 All Players</h2>
+                <h2>👥 All Users</h2>
                 
                 <form method="get" action="{% url 'manage_players' %}" style="margin-bottom: 24px;">
                     <div class="filters">
@@ -539,8 +606,10 @@
                                         {% if player.is_active %}✅ Active{% else %}❌ Inactive{% endif %}
                                     </span>
                                 </td>
-                                <td>
-                                    <a href="/game-admin/user/{{ player.id }}/?tab=all" style="color: #667eea; text-decoration: none; font-size: 12px;">View Details</a>
+                                <td style="white-space:nowrap;">
+                                    <a href="/game-admin/user/{{ player.id }}/?tab=all" style="color: #667eea; text-decoration: none; font-size: 12px;">View</a>
+                                    <span style="color:#cbd5e1;">·</span>
+                                    <a href="/game-admin/user/{{ player.id }}/?tab=all#change-password" style="color: #2563eb; text-decoration: none; font-size: 12px;">Change password</a>
                                 </td>
                             </tr>
                             {% empty %}
@@ -579,6 +648,7 @@
                 </div>
                 {% endif %}
             </div>
+            {% endif %}
         </div>
     </div>
 

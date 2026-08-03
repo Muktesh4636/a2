@@ -630,10 +630,12 @@
                     <div class="info-item">
                         <label>Role</label>
                         <value>
-                            {% if player.is_superuser %}
+                            {% if staff_role_label == 'Super Admin' %}
                                 <span class="status-badge" style="background: #e9d8fd; color: #553c9a; font-size: 14px;">👑 Super Admin</span>
-                            {% elif player.is_staff %}
+                            {% elif staff_role_label == 'Admin' %}
                                 <span class="status-badge" style="background: #bee3f8; color: #2c5282; font-size: 14px;">👔 Admin</span>
+                            {% elif staff_role_label == 'Agent' %}
+                                <span class="status-badge" style="background: #fef3c7; color: #92400e; font-size: 14px;">🤝 Agent</span>
                             {% else %}
                                 <span class="status-badge" style="background: #edf2f7; color: #4a5568; font-size: 14px;">👤 Player</span>
                             {% endif %}
@@ -652,7 +654,13 @@
                         <label>Assigned to</label>
                         <value style="font-size: 14px;">
                             {% if player.worker %}
-                                <a href="{% url 'franchise_admin_details' player.worker.id %}" style="color: #667eea; text-decoration: none; font-weight: 600;">{{ player.worker.username }}</a> (franchise admin)
+                                {% if owner_is_agent %}
+                                    <a href="{% url 'agent_details' player.worker.id %}" style="color: #667eea; text-decoration: none; font-weight: 600;">{{ player.worker.username }}</a> (Agent)
+                                {% elif owner_is_admin %}
+                                    <a href="{% url 'franchise_admin_details' player.worker.id %}" style="color: #667eea; text-decoration: none; font-weight: 600;">{{ player.worker.username }}</a> (Admin)
+                                {% else %}
+                                    {{ player.worker.username }}
+                                {% endif %}
                             {% else %}
                                 Super Admin
                             {% endif %}
@@ -660,8 +668,9 @@
                     </div>
                     {% endif %}
                 </div>
-                {% if can_block_user %}
-                <div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid #e2e8f0;">
+                {% if can_block_user or can_change_password %}
+                <div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid #e2e8f0; display:flex; flex-wrap:wrap; gap:10px; align-items:center;">
+                    {% if can_block_user %}
                     <form method="post" action="" style="display: inline-block;">
                         {% csrf_token %}
                         {% if player.is_active %}
@@ -672,9 +681,33 @@
                         <button type="submit" class="btn" style="background: #059669; color: white;">✅ Unblock user</button>
                         {% endif %}
                     </form>
+                    {% endif %}
+                    {% if can_change_password %}
+                    <a href="#change-password" class="btn" style="background:#2563eb;color:#fff;text-decoration:none;">🔐 Change password</a>
+                    {% endif %}
                 </div>
                 {% endif %}
             </div>
+
+            {% if can_change_password %}
+            <div id="change-password" class="user-info-card" style="border-left: 4px solid #2563eb;">
+                <h2 style="color:#1e40af;margin:0 0 8px;">🔐 Change password</h2>
+                <p style="font-size:14px;color:#64748b;margin:0 0 16px;">Set a new login password for <strong>{{ player.username }}</strong>.</p>
+                <form method="post" style="display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="change_password">
+                    <div>
+                        <label for="new_password" style="display:block;font-size:12px;font-weight:600;color:#475569;margin-bottom:4px;">New password</label>
+                        <input type="password" id="new_password" name="new_password" minlength="4" required placeholder="Min 4 characters" style="padding:10px 14px;border:1px solid #e2e8f0;border-radius:8px;font-size:14px;width:200px;">
+                    </div>
+                    <div>
+                        <label for="new_password_confirm" style="display:block;font-size:12px;font-weight:600;color:#475569;margin-bottom:4px;">Confirm password</label>
+                        <input type="password" id="new_password_confirm" name="new_password_confirm" minlength="4" required placeholder="Same as above" style="padding:10px 14px;border:1px solid #e2e8f0;border-radius:8px;font-size:14px;width:200px;">
+                    </div>
+                    <button type="submit" class="btn" style="background:#2563eb;color:#fff;padding:10px 20px;">Update password</button>
+                </form>
+            </div>
+            {% endif %}
 
             {% if admin_stats %}
             <!-- Admin Statistics & Reports -->

@@ -377,8 +377,13 @@
                     </div>
 
                     <div class="permission-item">
+                        <input type="checkbox" id="can_view_game_history" name="can_view_game_history" {% if permissions.can_view_game_history %}checked{% endif %}>
+                        <label for="can_view_game_history">📜 Game History</label>
+                    </div>
+
+                    <div class="permission-item">
                         <input type="checkbox" id="can_view_game_settings" name="can_view_game_settings" {% if permissions.can_view_game_settings %}checked{% endif %}>
-                        <label for="can_view_game_settings">⏱️ Game Settings</label>
+                        <label for="can_view_game_settings">⚙️ App Settings</label>
                     </div>
 
                     <div class="permission-item">
@@ -393,7 +398,7 @@
 
                     <div class="permission-item">
                         <input type="checkbox" id="can_view_admin_management" name="can_view_admin_management" {% if permissions.can_view_admin_management %}checked{% endif %}>
-                        <label for="can_view_admin_management">👨‍💼 Worker Management</label>
+                        <label for="can_view_admin_management">👨‍💼 Admin Management</label>
                     </div>
 
                     <div class="permission-item">

@@ -3,7 +3,8 @@ from datetime import datetime, time, timedelta, timezone as dt_timezone
 from decimal import Decimal
 
 from django.core.paginator import Paginator
-from django.db.models import Count, Sum, Q
+from django.db.models import Count, Sum, Q, Value
+from django.db.models.functions import Coalesce
 from django.utils import timezone
 from django.urls import reverse
 
@@ -748,3 +749,345 @@ def lookup_round_detail(slug, round_id, effective_admin, is_super):
         }
 
     return {'error': 'Round lookup not available for this game'}
+
+
+def list_recent_games(slug, effective_admin, is_super, limit=30):
+    """
+    Recent rounds/sessions for a game — shown on the game detail page.
+    Returns list of dicts: round_id, label, when, status, result, bets, wagered, url
+    """
+    limit = max(1, min(int(limit or 30), 100))
+    rows = []
+
+    if slug == 'dice':
+        qs = GameRound.objects.annotate(
+            round_bets_count=Count('bets'),
+            round_bets_amount=Coalesce(Sum('bets__chip_amount'), Value(0)),
+        ).order_by('-start_time')[:limit]
+        if not is_super:
+            # Only rounds that have bets from this franchise tree
+            from game.admin_utils import agent_ids_under_admin
+            owner_ids = [effective_admin.id] + list(agent_ids_under_admin(effective_admin))
+            qs = GameRound.objects.filter(
+                bets__user__worker_id__in=owner_ids
+            ).annotate(
+                round_bets_count=Count('bets', filter=Q(bets__user__worker_id__in=owner_ids)),
+                round_bets_amount=Coalesce(
+                    Sum('bets__chip_amount', filter=Q(bets__user__worker_id__in=owner_ids)),
+                    Value(0),
+                ),
+            ).order_by('-start_time')[:limit]
+        for r in qs:
+            rows.append({
+                'round_id': r.round_id,
+                'label': r.round_id,
+                'when': r.start_time,
+                'status': r.status,
+                'result': r.dice_result or '—',
+                'bets': r.round_bets_count or 0,
+                'wagered': r.round_bets_amount or 0,
+                'url': reverse('round_details', kwargs={'round_id': r.round_id}),
+            })
+        return rows
+
+    if slug == 'roulette':
+        qs = _scope_qs(RouletteRound.objects.select_related('user'), effective_admin, is_super)
+        for r in qs.order_by('-created_at')[:limit]:
+            rows.append({
+                'round_id': str(r.pk),
+                'label': f'#{r.pk} · {r.user.username}',
+                'when': r.created_at,
+                'status': 'SETTLED',
+                'result': str(r.winning_number),
+                'bets': 1,
+                'wagered': r.total_stake,
+                'url': reverse('admin_game_round', kwargs={'game_slug': 'roulette', 'round_id': r.pk}),
+            })
+        return rows
+
+    if slug == 'trading':
+        seen = []
+        for sid in (
+            _scope_qs(TradingRound.objects.all(), effective_admin, is_super)
+            .order_by('-created_at')
+            .values_list('shared_round', flat=True)[:limit * 4]
+        ):
+            if sid not in seen:
+                seen.append(sid)
+            if len(seen) >= limit:
+                break
+        for sid in seen:
+            qs = _scope_qs(
+                TradingRound.objects.filter(shared_round=sid), effective_admin, is_super
+            )
+            agg = qs.aggregate(c=Count('id'), w=Sum('stake'))
+            latest = qs.order_by('-created_at').first()
+            rows.append({
+                'round_id': str(sid),
+                'label': f'R{sid}',
+                'when': latest.created_at if latest else None,
+                'status': 'SETTLED',
+                'result': f'{latest.final_pct:.2f}%' if latest else '—',
+                'bets': agg['c'] or 0,
+                'wagered': agg['w'] or 0,
+                'url': reverse('admin_game_round', kwargs={'game_slug': 'trading', 'round_id': sid}),
+            })
+        return rows
+
+    if slug == 'chicken-road':
+        qs = _scope_qs(ChickenRoadRound.objects.select_related('user'), effective_admin, is_super)
+        for r in qs.order_by('-created_at')[:limit]:
+            rows.append({
+                'round_id': str(r.id),
+                'label': f'{r.user.username} · {r.difficulty}',
+                'when': r.created_at,
+                'status': r.status,
+                'result': f'step {r.step}',
+                'bets': 1,
+                'wagered': r.bet,
+                'url': reverse('admin_game_round', kwargs={'game_slug': 'chicken-road', 'round_id': r.id}),
+            })
+        return rows
+
+    if slug == 'chicken-road-2':
+        qs = _scope_qs(ChickenRoad2Round.objects.select_related('user'), effective_admin, is_super)
+        for r in qs.order_by('-created_at')[:limit]:
+            rows.append({
+                'round_id': str(r.id),
+                'label': f'{r.user.username} · {r.difficulty}',
+                'when': r.created_at,
+                'status': r.status,
+                'result': f'crash@{r.crash_at}',
+                'bets': 1,
+                'wagered': r.bet,
+                'url': reverse('admin_game_round', kwargs={'game_slug': 'chicken-road-2', 'round_id': r.id}),
+            })
+        return rows
+
+    if slug == 'vortex':
+        # No round table — show recent vortex wallet txs as "recent games"
+        qs = Transaction.objects.filter(
+            Q(description__icontains='vortex') | Q(transaction_type__icontains='VORTEX')
+        ).select_related('user').order_by('-created_at')
+        if not is_super:
+            qs = qs.filter(user__worker=effective_admin)
+        for t in qs[:limit]:
+            rows.append({
+                'round_id': str(t.id),
+                'label': t.user.username,
+                'when': t.created_at,
+                'status': t.transaction_type,
+                'result': (t.description or '')[:40],
+                'bets': 1,
+                'wagered': abs(t.amount or 0),
+                'url': reverse('user_details', kwargs={'user_id': t.user_id}),
+            })
+        return rows
+
+    return rows
+
+
+def _owner_ids_for_actor(actor):
+    """None = Super Admin (unscoped). Else worker PKs whose players are visible."""
+    from .admin_utils import is_super_admin, is_franchise_admin, is_agent, agent_ids_under_admin
+
+    if not actor:
+        return []
+    if is_super_admin(actor):
+        return None
+    if is_franchise_admin(actor):
+        return [actor.id] + list(agent_ids_under_admin(actor))
+    if is_agent(actor):
+        return [actor.id]
+    return []
+
+
+def _apply_owner_ids(qs, owner_ids):
+    if owner_ids is None:
+        return qs
+    if not owner_ids:
+        return qs.none()
+    return qs.filter(user__worker_id__in=owner_ids)
+
+
+def build_owner_filter_options(actor):
+    """
+    Dropdown choices for filtering All Bets by Admin only (no Agents).
+    Returns list of {id, label} where id '' means all in scope.
+    """
+    from accounts.models import User
+    from .admin_utils import is_super_admin, is_franchise_admin, is_agent
+
+    options = [{'id': '', 'label': 'All Admins'}]
+    if not actor:
+        return options
+
+    if is_super_admin(actor):
+        for a in User.objects.filter(is_staff=True, is_active=True).filter(
+            Q(staff_role=User.ROLE_ADMIN) | Q(is_franchise_only=True)
+        ).exclude(is_superuser=True).exclude(staff_role=User.ROLE_AGENT).order_by('username'):
+            options.append({'id': str(a.id), 'label': f'Admin: {a.username}'})
+        return options
+
+    if is_franchise_admin(actor):
+        # Franchise Admin only sees their own tree; keep a clear self option
+        options.append({'id': str(actor.id), 'label': f'Me (Admin: {actor.username})'})
+        return options
+
+    if is_agent(actor):
+        # Agents no longer filter All Bets by owner — they only see their own scope
+        return [{'id': '', 'label': 'My users'}]
+
+    return options
+
+
+def resolve_owner_filter(actor, owner_param):
+    """
+    Intersect actor's allowed scope with optional Admin filter.
+    owner_param: '' / 'all' / '<admin_pk>'
+    Selecting an Admin → that Admin + Agents under them (full tree).
+    Agents are not offered as filter options.
+    """
+    from accounts.models import User
+    from .admin_utils import is_franchise_admin, agent_ids_under_admin
+
+    allowed = _owner_ids_for_actor(actor)
+    raw = (owner_param or '').strip()
+    if not raw or raw.lower() == 'all':
+        return allowed
+
+    # Legacy prefixes still accepted but treated as admin tree / direct
+    if raw.startswith('direct:'):
+        try:
+            owner_pk = int(raw.split(':', 1)[1])
+        except (TypeError, ValueError):
+            return allowed if allowed is not None else []
+        if allowed is not None and owner_pk not in set(allowed) and owner_pk != getattr(actor, 'id', None):
+            return allowed
+        return [owner_pk]
+
+    if raw.startswith('tree:'):
+        raw = raw.split(':', 1)[1]
+
+    try:
+        owner_pk = int(raw)
+    except (TypeError, ValueError):
+        return allowed if allowed is not None else []
+
+    # Security: only allow owners inside actor scope (Super Admin has allowed=None)
+    if allowed is not None and owner_pk not in set(allowed) and owner_pk != getattr(actor, 'id', None):
+        return allowed
+
+    owner = User.objects.filter(pk=owner_pk).first()
+    if not owner:
+        return allowed if allowed is not None else []
+
+    # Only Admins are valid filter targets — expand to Admin + their Agents
+    if is_franchise_admin(owner) or getattr(owner, 'is_franchise_only', False):
+        tree_ids = [owner.id] + list(agent_ids_under_admin(owner))
+        if allowed is None:
+            return tree_ids
+        allowed_set = set(allowed)
+        return [i for i in tree_ids if i in allowed_set]
+
+    # Non-admin selected (shouldn't appear in UI) — ignore and keep scope
+    return allowed if allowed is not None else []
+
+
+def build_all_games_bets(
+    actor,
+    search='',
+    status='all',
+    game_slug='all',
+    owner_param='',
+    limit=200,
+    per_game_fetch=250,
+):
+    """
+    Unified bet feed across every game in GAME_CATALOG.
+    Returns (rows, totals_dict, game_options, owner_options).
+    """
+    search = (search or '').strip()
+    status = (status or 'all').lower()
+    game_slug = (game_slug or 'all').strip().lower()
+    if status in ('winners', 'win'):
+        result_filter = 'win'
+    elif status in ('losers', 'lose'):
+        result_filter = 'lose'
+    else:
+        result_filter = 'all'
+
+    owner_ids = resolve_owner_filter(actor, owner_param)
+    owner_options = build_owner_filter_options(actor)
+    # Skip activity_queryset's internal franchise-only scope; apply tree scope ourselves.
+    is_super_for_qs = True
+
+    if game_slug and game_slug != 'all':
+        catalogs = [g for g in GAME_CATALOG if g['slug'] == game_slug]
+    else:
+        catalogs = list(GAME_CATALOG)
+
+    game_options = [{'slug': 'all', 'name': 'All games', 'icon': '🎮'}] + [
+        {'slug': g['slug'], 'name': g['name'], 'icon': g['icon']} for g in GAME_CATALOG
+    ]
+
+    rows = []
+    totals = {
+        'total_bets_count': 0,
+        'total_bets_amount': Decimal('0'),
+        'total_payouts': Decimal('0'),
+        'total_winners': 0,
+    }
+
+    for meta in catalogs:
+        slug = meta['slug']
+        try:
+            qs = activity_queryset(
+                slug,
+                actor,
+                is_super_for_qs,
+                search=search,
+                result=result_filter,
+            )
+            qs = _apply_owner_ids(qs, owner_ids)
+            stats = filtered_activity_stats(slug, qs)
+            totals['total_bets_count'] += int(stats.get('bets') or 0)
+            totals['total_bets_amount'] += _money(stats.get('wagered'))
+            totals['total_payouts'] += _money(stats.get('payout'))
+
+            # Winners count (best-effort per game model)
+            if slug == 'dice':
+                totals['total_winners'] += qs.filter(is_winner=True).count()
+            elif slug == 'roulette':
+                totals['total_winners'] += qs.filter(total_payout__gt=0).count()
+            elif slug in ('trading', 'chicken-road', 'chicken-road-2'):
+                totals['total_winners'] += qs.filter(payout__gt=0).count()
+            elif slug == 'vortex':
+                totals['total_winners'] += qs.filter(transaction_type='WIN').count()
+
+            try:
+                page_items = list(qs.select_related('user', 'user__worker')[:per_game_fetch])
+            except Exception:
+                page_items = list(qs[:per_game_fetch])
+            mapped = map_activity_rows(slug, page_items)
+            # Attach owner (assigned Admin/Agent) for display
+            owner_by_user = {}
+            for obj in page_items:
+                u = getattr(obj, 'user', None)
+                if u and u.id not in owner_by_user:
+                    w = getattr(u, 'worker', None)
+                    owner_by_user[u.id] = w.username if w else '—'
+            for row in mapped:
+                row['game_slug'] = slug
+                row['game_name'] = meta['name']
+                row['game_icon'] = meta['icon']
+                row['game_color'] = meta['color']
+                row['owner'] = owner_by_user.get(row.get('user_id'), '—')
+                rows.append(row)
+        except Exception:
+            # One broken game source should not blank the whole All Bets page
+            continue
+
+    rows.sort(key=lambda r: r.get('when') or timezone.now(), reverse=True)
+    rows = rows[:limit]
+    return rows, totals, game_options, owner_options

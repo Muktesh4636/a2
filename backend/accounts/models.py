@@ -11,6 +11,18 @@ import random
 
 class User(AbstractUser):
     """Custom User model with additional fields"""
+
+    ROLE_PLAYER = 'PLAYER'
+    ROLE_SUPER_ADMIN = 'SUPER_ADMIN'
+    ROLE_ADMIN = 'ADMIN'
+    ROLE_AGENT = 'AGENT'
+    STAFF_ROLE_CHOICES = [
+        (ROLE_PLAYER, 'Player'),
+        (ROLE_SUPER_ADMIN, 'Super Admin'),
+        (ROLE_ADMIN, 'Admin'),
+        (ROLE_AGENT, 'Agent'),
+    ]
+
     phone_number = models.CharField(max_length=15, unique=True, null=True, blank=True)
     profile_photo = models.ImageField(upload_to='profile_photos/', null=True, blank=True)
     
@@ -26,6 +38,14 @@ class User(AbstractUser):
     address = models.TextField(null=True, blank=True)
     date_of_birth = models.DateField(null=True, blank=True)
 
+    staff_role = models.CharField(
+        max_length=20,
+        choices=STAFF_ROLE_CHOICES,
+        default=ROLE_PLAYER,
+        db_index=True,
+        help_text='Hierarchy role: PLAYER, SUPER_ADMIN, ADMIN (franchise), or AGENT.',
+    )
+
     worker = models.ForeignKey(
         'self',
         on_delete=models.SET_NULL,
@@ -33,9 +53,9 @@ class User(AbstractUser):
         blank=True,
         related_name='clients',
         limit_choices_to={'is_staff': True},
-        help_text='For players: the franchise admin (or Super Admin) this user is under. Deposit/withdraw requests show to that admin.',
+        help_text='For players: ownership parent (Super Admin, Admin, or Agent) for deposit/withdraw scoping.',
     )
-    # For staff users (workers): the admin whose queue this worker sees. If set, this user sees deposit/withdraw requests of that admin.
+    # For Agents: the franchise Admin they belong under. (Legacy name works_under; alias parent_admin.)
     works_under = models.ForeignKey(
         'self',
         on_delete=models.SET_NULL,
@@ -43,8 +63,17 @@ class User(AbstractUser):
         blank=True,
         related_name='assigned_workers',
         limit_choices_to={'is_staff': True},
-        help_text='For workers: the admin under whom this worker is assigned. This worker will see that admin\'s deposit/withdraw requests.',
+        help_text='For Agents: the Admin under whom this Agent joined.',
     )
+
+    @property
+    def parent_admin(self):
+        """Alias for works_under — Agent → Admin."""
+        return self.works_under
+
+    @parent_admin.setter
+    def parent_admin(self, value):
+        self.works_under = value
     # Referral system
     referred_by = models.ForeignKey(
         'self',
@@ -147,6 +176,11 @@ class Wallet(models.Model):
     unavaliable_balance = models.BigIntegerField(default=0, help_text="Amount currently locked or unavaliable for withdrawal")
     turnover = models.BigIntegerField(default=0, help_text="Total amount wagered. Unavailable = max(0, total_deposits - turnover).")
     total_deposits = models.BigIntegerField(default=0, help_text="Cumulative deposits (and bonuses) credited. Unavailable = max(0, total_deposits - turnover).")
+    # Snapshot / rotation fields (present on production DB; defaults keep creates safe)
+    total_deposits_at_last_withdraw = models.BigIntegerField(default=0)
+    turnover_at_last_withdraw = models.BigIntegerField(default=0)
+    deposit_rotation_lock = models.BigIntegerField(default=0)
+    deposit_rotation_baseline_turnover = models.BigIntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -303,6 +337,45 @@ class DepositRequest(models.Model):
 
     def __str__(self):
         return f"{self.user.username} - ₹{self.amount} - {self.status}"
+
+
+class AutoDepositTransaction(models.Model):
+    """
+    Successful (or unmatched) automatic deposits from PhonePe feed.
+    Admin automatic-mode page lists credited rows: name, amount, UTR, payment time.
+    """
+    STATUS_CHOICES = [
+        ('CREDITED', 'Credited'),
+        ('UNMATCHED', 'Unmatched'),
+    ]
+
+    utr = models.CharField(max_length=64, unique=True, db_index=True)
+    amount = models.DecimalField(max_digits=12, decimal_places=2, help_text='Exact amount received')
+    party_name = models.CharField(max_length=255, blank=True)
+    txn_type = models.CharField(max_length=64, blank=True, default='Received from')
+    user = models.ForeignKey(
+        User,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='auto_deposit_transactions',
+    )
+    status = models.CharField(max_length=16, choices=STATUS_CHOICES, default='CREDITED', db_index=True)
+    payment_time = models.DateTimeField(db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    raw_payload = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ['-payment_time', '-id']
+
+    def __str__(self):
+        return f"{self.utr} - ₹{self.amount} - {self.status}"
+
+    @property
+    def display_name(self):
+        if self.user_id:
+            return self.user.username
+        return self.party_name or '—'
 
 
 class WithdrawRequest(models.Model):
@@ -517,6 +590,24 @@ class FranchiseBalance(models.Model):
         max_length=30,
         blank=True,
         help_text='Help Center Telegram number/username for this franchise\'s APK.',
+    )
+    help_facebook = models.CharField(
+        max_length=500,
+        blank=True,
+        default='',
+        help_text='Help Center Facebook URL/handle for this franchise\'s APK.',
+    )
+    help_instagram = models.CharField(
+        max_length=500,
+        blank=True,
+        default='',
+        help_text='Help Center Instagram URL/handle for this franchise\'s APK.',
+    )
+    help_youtube = models.CharField(
+        max_length=500,
+        blank=True,
+        default='',
+        help_text='Help Center YouTube URL/handle for this franchise\'s APK.',
     )
 
     class Meta:

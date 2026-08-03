@@ -62,7 +62,7 @@
             <div class="header" style="margin-bottom: 24px; border-bottom: 1px solid #f1f5f9; padding-bottom: 20px;">
                 <div class="header-left">
                     <h1 style="font-size: 28px; color: #0f172a; margin: 0;">{{ admin_user.username }}</h1>
-                    <p style="color: #64748b; margin-top: 4px;">User info – balance, stats and history</p>
+                    <p style="color: #64748b; margin-top: 4px;">Admin profile – agents, users, balance and history</p>
                 </div>
                 <div class="header-actions" style="display: flex; gap: 12px; align-items: center;">
                     <a href="{% url 'edit_franchise_admin' admin_user.id %}" class="link-teal" style="padding: 10px 16px; border: 1px solid #0d9488; border-radius: 8px;">Edit privileges</a>
@@ -159,10 +159,14 @@
                 </div>
 
                 <div class="stats-row">
+                    <div class="stat-card">
+                        <strong>Agents</strong>
+                        <div class="value">{{ agents_count }}</div>
+                    </div>
                     <a href="{% url 'franchise_admin_players' admin_user.id %}" class="stat-card" style="text-decoration: none; color: inherit; display: block; transition: box-shadow 0.2s;" onmouseover="this.style.boxShadow='0 4px 12px rgba(0,0,0,0.08)'" onmouseout="this.style.boxShadow='none'">
-                        <strong>Users under this admin</strong>
+                        <strong>Users in tree</strong>
                         <div class="value">{{ clients_count }}</div>
-                        <span style="font-size: 11px; color: #64748b; margin-top: 4px; display: block;">Click to view all →</span>
+                        <span style="font-size: 11px; color: #64748b; margin-top: 4px; display: block;">Direct {{ direct_clients_count }} · Click to view all →</span>
                     </a>
                     <div class="stat-card">
                         <strong>Total deposits</strong>
@@ -176,6 +180,45 @@
                         <strong>Net profit (segment)</strong>
                         <div class="value">₹{{ segment_profit|floatformat:0 }}</div>
                     </div>
+                </div>
+
+                <div class="log-section" style="margin-top: 8px; margin-bottom: 28px;">
+                    <h2>🤝 Agents under {{ admin_user.username }}</h2>
+                    <p style="color: #64748b; font-size: 13px; margin-bottom: 12px;">Click an Agent to see all users under them.</p>
+                    <table class="log-table">
+                        <thead>
+                            <tr>
+                                <th>Agent</th>
+                                <th>Referral</th>
+                                <th>Users</th>
+                                <th>Status</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for row in agent_rows %}
+                            <tr>
+                                <td>
+                                    <a class="link-teal" href="{% url 'agent_details' row.user.id %}">{{ row.user.username }}</a>
+                                </td>
+                                <td>{{ row.referral_code|default:"—" }}</td>
+                                <td>{{ row.player_count }}</td>
+                                <td>
+                                    <span class="status-badge {% if row.user.is_active %}active{% else %}inactive{% endif %}">
+                                        {% if row.user.is_active %}Active{% else %}Inactive{% endif %}
+                                    </span>
+                                </td>
+                                <td>
+                                    <a class="link-teal" href="{% url 'agent_details' row.user.id %}">View users →</a>
+                                    ·
+                                    <a class="link-teal" href="{% url 'edit_agent' row.user.id %}">Privileges</a>
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr><td colspan="5" style="text-align: center; padding: 24px; color: #94a3b8;">No agents under this Admin yet.</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
                 </div>
 
                 <div class="btn-group">

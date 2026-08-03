@@ -13,12 +13,7 @@
                 </a></li>
             {% endif %}
 
-            {% if is_super_admin or admin_permissions.can_view_dashboard %} <li><a href="{% url 'admin_games' %}" {% if page == 'games' or page == 'game-detail' or page == 'dice-control' %}class="active" {% endif %}> <span class="menu-icon">🎮</span> Games
-                </a></li>
-            {% endif %}
-
-            {% if is_super_admin or admin_permissions.can_view_recent_rounds %} <li><a href="{% url 'recent_rounds' %}" {% if page == 'recent-rounds' or page == 'rounds' or page == 'round-details' or page == 'user-details' %}class="active" {% endif %}>
-                    <span class="menu-icon">🔄</span> Recent Rounds
+            {% if is_super_admin or admin_permissions.can_view_dashboard %} <li><a href="{% url 'admin_games' %}" {% if page == 'games' or page == 'game-detail' or page == 'dice-control' or page == 'rounds' or page == 'round-details' %}class="active" {% endif %}> <span class="menu-icon">🎮</span> Games
                 </a></li>
             {% endif %}
 
@@ -52,11 +47,19 @@
     </div>
     {% endif %}
 
+    <div class="menu-section">
+        <div class="menu-section-title">ACCOUNT</div>
+        <ul class="sidebar-menu">
+            <li><a href="{% url 'admin_profile' %}" {% if page == 'profile' %}class="active" {% endif %}> <span class="menu-icon">👤</span> Profile
+                </a></li>
+        </ul>
+    </div>
+
     {% if is_super_admin or admin_permissions.can_view_players or admin_permissions.can_view_admin_management or admin_permissions.can_view_game_settings %}
     <div class="menu-section">
         <div class="menu-section-title">SYSTEM</div>
         <ul class="sidebar-menu">
-            {% if is_super_admin or admin_permissions.can_view_players %} <li><a href="{% url 'manage_players' %}" {% if page == 'manage-players' %}class="active" {% endif %}> <span class="menu-icon">👥</span> Players
+            {% if is_super_admin or is_franchise_admin or is_agent or admin_permissions.can_view_players %} <li><a href="{% url 'manage_players' %}" {% if page == 'manage-players' %}class="active" {% endif %}> <span class="menu-icon">👥</span> All Users
                 </a></li>
             {% endif %}
 

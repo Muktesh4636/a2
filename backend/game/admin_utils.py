@@ -1,23 +1,126 @@
 from functools import wraps
 from django.shortcuts import redirect
 from django.contrib import messages
-from django.contrib.auth.decorators import user_passes_test
 from django.core.cache import cache
-try:
-    from accounts.models import AdminProfile
-except ImportError:
-    AdminProfile = None
+from django.db.models import Q
 
 # Cache TTL for admin permissions (reduces DB hits on every admin page load; helps avoid 504)
 ADMIN_PERMS_CACHE_TTL = 60
 ADMIN_PERMS_CACHE_KEY_PREFIX = 'admin_perms_'
 
+# Flags Agents must never receive (Super Admin only)
+SUPER_ONLY_PERMISSION_FIELDS = (
+    'can_view_game_settings',
+    'can_view_admin_management',
+    'can_view_white_label',
+)
+
+PERMISSION_FIELD_NAMES = (
+    'can_view_dashboard',
+    'can_control_dice',
+    'can_view_recent_rounds',
+    'can_view_all_bets',
+    'can_view_wallets',
+    'can_view_players',
+    'can_view_deposit_requests',
+    'can_view_withdraw_requests',
+    'can_view_transactions',
+    'can_view_game_history',
+    'can_view_game_settings',
+    'can_view_help_center',
+    'can_view_white_label',
+    'can_view_admin_management',
+    'can_manage_payment_methods',
+)
+
+# Labels for privilege checklists (Admin + Agent UI)
+PERMISSION_FIELD_LABELS = {
+    'can_view_dashboard': '📊 Dashboard',
+    'can_control_dice': '🎯 Dice Control',
+    'can_view_recent_rounds': '🔄 Recent games (inside Games)',
+    'can_view_all_bets': '💰 All Bets',
+    'can_view_wallets': '💳 Wallets',
+    'can_view_players': '👥 Players',
+    'can_view_deposit_requests': '📥 Deposit Requests',
+    'can_view_withdraw_requests': '💸 Withdraw Requests',
+    'can_view_transactions': '📋 Reports',
+    'can_view_game_history': '📜 Game History',
+    'can_view_game_settings': '⚙️ App Settings',
+    'can_view_help_center': '🆘 Help Center',
+    'can_view_white_label': '💬 White Label Messages',
+    'can_view_admin_management': '👨‍💼 Admin Management',
+    'can_manage_payment_methods': '🏦 Payment Methods',
+}
+
+
+def build_permission_checklist_items(current_perms=None, granter=None, for_agent=False, actor_is_super=False):
+    """
+    Full privilege checklist for templates.
+    Always returns every AdminPermissions flag so the UI never hides options.
+    Non-grantable items stay visible but disabled.
+    """
+    current = current_perms or {}
+    # Super Admin editing an Admin: uncapped full checklist
+    admin_uncapped = (not for_agent) and (actor_is_super or (granter is not None and is_super_admin(granter)))
+
+    if for_agent:
+        if granter is not None and is_franchise_admin(granter):
+            granter_perms = get_admin_permissions(granter)
+            mode = 'cap_by_admin'
+        elif granter is not None and is_super_admin(granter):
+            granter_perms = None
+            mode = 'all_except_super'
+        elif actor_is_super and granter is None:
+            granter_perms = None
+            mode = 'all_except_super'
+        else:
+            granter_perms = get_admin_permissions(granter) if granter else None
+            mode = 'cap_by_admin'
+    else:
+        granter_perms = None
+        mode = 'uncapped' if admin_uncapped else 'cap_by_admin'
+        if mode == 'cap_by_admin' and granter is not None:
+            granter_perms = get_admin_permissions(granter)
+
+    items = []
+    for name in PERMISSION_FIELD_NAMES:
+        if hasattr(current, name) and not isinstance(current, dict):
+            checked = bool(getattr(current, name, False))
+        elif isinstance(current, dict):
+            checked = bool(current.get(name, False))
+        else:
+            checked = False
+
+        super_only = name in SUPER_ONLY_PERMISSION_FIELDS
+        if for_agent and super_only:
+            grantable, hint = False, 'Agents cannot have this'
+            checked = False
+        elif mode == 'uncapped':
+            grantable, hint = True, ''
+        elif mode == 'all_except_super':
+            grantable, hint = True, ''
+        else:
+            grantable = bool(getattr(granter_perms, name, False)) if granter_perms else False
+            hint = '' if grantable else 'Not in your privileges'
+
+        items.append({
+            'name': name,
+            'label': PERMISSION_FIELD_LABELS.get(name, name),
+            'checked': bool(checked) and grantable,
+            'disabled': not grantable,
+            'show': True,
+            'hint': hint,
+        })
+    return items
+
 
 class _CachedPermissions:
     """Thin wrapper so has_menu_permission can use getattr(perms, field_name)."""
     __slots__ = ('_data',)
+
     def __init__(self, data):
         self._data = data or {}
+
     def __getattr__(self, name):
         return self._data.get(name, False)
 
@@ -28,98 +131,172 @@ def is_staff(user):
 
 
 def is_super_admin(user):
-    """Check if user is superuser"""
-    return user.is_authenticated and user.is_superuser
+    """Check if user is Super Admin"""
+    if not user or not user.is_authenticated:
+        return False
+    if user.is_superuser:
+        return True
+    return getattr(user, 'staff_role', None) == 'SUPER_ADMIN'
+
+
+def is_franchise_admin(user):
+    """Franchise Admin (created by Super Admin)."""
+    if not user or not user.is_authenticated:
+        return False
+    if is_super_admin(user):
+        return False
+    role = getattr(user, 'staff_role', None)
+    if role == 'ADMIN':
+        return True
+    # Legacy: franchise_only staff without migrated role
+    return bool(user.is_staff and getattr(user, 'is_franchise_only', False) and role != 'AGENT')
+
+
+def is_agent(user):
+    """Agent under an Admin."""
+    if not user or not user.is_authenticated:
+        return False
+    if is_super_admin(user) or is_franchise_admin(user):
+        return False
+    role = getattr(user, 'staff_role', None)
+    if role == 'AGENT':
+        return True
+    # Legacy workers: staff with works_under, not franchise
+    return bool(
+        user.is_staff
+        and not getattr(user, 'is_franchise_only', False)
+        and getattr(user, 'works_under_id', None)
+    )
+
+
+def get_franchise_admin(user):
+    """
+    Resolve the franchise Admin for wallet / tree:
+    - Agent → parent Admin (works_under)
+    - Admin → self
+    - Super Admin → self
+    - Player → walk worker → franchise admin
+    """
+    if not user:
+        return None
+    from accounts.models import User as UserModel
+
+    if is_super_admin(user):
+        return user
+    if is_franchise_admin(user):
+        return user
+    if is_agent(user):
+        parent_id = getattr(user, 'works_under_id', None)
+        if parent_id:
+            try:
+                return UserModel.objects.get(pk=parent_id)
+            except UserModel.DoesNotExist:
+                return None
+        return None
+    # Player: ownership parent may be Admin or Agent
+    owner_id = getattr(user, 'worker_id', None)
+    if not owner_id:
+        return None
+    try:
+        owner = UserModel.objects.get(pk=owner_id)
+    except UserModel.DoesNotExist:
+        return None
+    return get_franchise_admin(owner)
 
 
 def get_effective_admin(user):
     """
-    Return the admin whose deposit/withdraw queue this user sees.
-    - If user has works_under set (worker assigned to an admin), return that admin.
-    - Otherwise return user (franchise admin sees own queue; Super Admin sees all).
+    Backward-compatible: for Agents return parent Admin; else self.
+    Prefer get_scoped_player_qs / get_franchise_admin for new code.
     """
     if not user or not user.is_authenticated:
         return user
-    works_under_id = getattr(user, 'works_under_id', None)
-    if works_under_id:
-        from accounts.models import User as UserModel
-        try:
-            return UserModel.objects.get(pk=works_under_id)
-        except UserModel.DoesNotExist:
-            pass
+    if is_agent(user):
+        fa = get_franchise_admin(user)
+        return fa or user
     return user
 
 
+def agent_ids_under_admin(admin_user):
+    """PKs of Agents whose parent_admin is this Admin."""
+    if not admin_user:
+        return []
+    from accounts.models import User as UserModel
+    return list(
+        UserModel.objects.filter(
+            is_staff=True,
+            works_under_id=admin_user.id,
+            is_superuser=False,
+            is_franchise_only=False,
+        ).filter(
+            Q(staff_role='AGENT') | Q(staff_role='') | Q(staff_role='PLAYER')
+        ).values_list('id', flat=True)
+    )
+
+
+def get_scoped_player_qs(actor, base_qs=None):
+    """
+    Players visible to actor:
+    - Super Admin → all non-staff players
+    - Admin → players owned by Admin or any Agent under Admin
+    - Agent → players owned by self
+    """
+    from accounts.models import User as UserModel
+    qs = base_qs if base_qs is not None else UserModel.objects.filter(is_staff=False)
+    if not actor or not actor.is_authenticated:
+        return qs.none()
+    if is_super_admin(actor):
+        return qs
+    if is_franchise_admin(actor):
+        agent_ids = agent_ids_under_admin(actor)
+        owner_ids = [actor.id] + list(agent_ids)
+        return qs.filter(worker_id__in=owner_ids)
+    if is_agent(actor):
+        return qs.filter(worker_id=actor.id)
+    return qs.none()
+
+
+def scope_by_player_owner(actor, qs, user_field='user'):
+    """Filter a queryset of objects that have a FK to player User."""
+    if is_super_admin(actor):
+        return qs
+    players = get_scoped_player_qs(actor)
+    return qs.filter(**{f'{user_field}__in': players})
+
+
 def is_admin(user):
-    """Check if user is admin (staff or has admin profile)"""
-    if not user.is_authenticated:
+    """Any staff who can access the admin panel (Super Admin, Admin, Agent)."""
+    if not user or not user.is_authenticated:
         return False
     if user.is_superuser or user.is_staff:
         return True
-    if AdminProfile:
-        try:
-            admin_profile = AdminProfile.objects.get(user=user)
-            return admin_profile.is_active
-        except AdminProfile.DoesNotExist:
-            return False
-    return False
+    role = getattr(user, 'staff_role', None)
+    return role in ('SUPER_ADMIN', 'ADMIN', 'AGENT')
 
 
 def has_permission(user, permission_name):
-    """Check if user has specific permission"""
+    """Map legacy names onto menu permissions."""
     if not user.is_authenticated:
         return False
-    if user.is_superuser:
+    if is_super_admin(user):
         return True
-    if AdminProfile:
-        try:
-            admin_profile = AdminProfile.objects.get(user=user)
-            if not admin_profile.is_active:
-                return False
-            # Check specific permissions based on permission_name
-            if permission_name == 'view_dashboard':
-                return admin_profile.can_view_dashboard
-            elif permission_name == 'control_dice':
-                return admin_profile.can_control_dice
-            elif permission_name == 'manage_users':
-                return admin_profile.can_manage_users
-            elif permission_name == 'manage_deposits':
-                return admin_profile.can_manage_deposits
-            return False
-        except AdminProfile.DoesNotExist:
-            return user.is_staff
-    return user.is_staff
+    legacy_map = {
+        'view_dashboard': 'dashboard',
+        'control_dice': 'dice_control',
+        'manage_users': 'players',
+        'manage_deposits': 'deposit_requests',
+    }
+    return has_menu_permission(user, legacy_map.get(permission_name, permission_name))
 
 
 def get_admin_profile(user):
-    """Get admin profile for user"""
-    if not user.is_authenticated or not AdminProfile:
-        return None
-    try:
-        return AdminProfile.objects.get(user=user)
-    except AdminProfile.DoesNotExist:
-        return None
+    """Deprecated — AdminProfile removed."""
+    return None
 
 
 def _perms_to_dict(perms):
     """Build a dict of permission flags for caching."""
-    return {
-        'can_view_dashboard': getattr(perms, 'can_view_dashboard', False),
-        'can_control_dice': getattr(perms, 'can_control_dice', False),
-        'can_view_recent_rounds': getattr(perms, 'can_view_recent_rounds', False),
-        'can_view_all_bets': getattr(perms, 'can_view_all_bets', False),
-        'can_view_wallets': getattr(perms, 'can_view_wallets', False),
-        'can_view_players': getattr(perms, 'can_view_players', False),
-        'can_view_deposit_requests': getattr(perms, 'can_view_deposit_requests', False),
-        'can_view_withdraw_requests': getattr(perms, 'can_view_withdraw_requests', False),
-        'can_view_transactions': getattr(perms, 'can_view_transactions', False),
-        'can_view_game_history': getattr(perms, 'can_view_game_history', True),
-        'can_view_game_settings': getattr(perms, 'can_view_game_settings', False),
-        'can_view_help_center': getattr(perms, 'can_view_help_center', False),
-        'can_view_white_label': getattr(perms, 'can_view_white_label', False),
-        'can_view_admin_management': getattr(perms, 'can_view_admin_management', False),
-        'can_manage_payment_methods': getattr(perms, 'can_manage_payment_methods', False),
-    }
+    return {name: getattr(perms, name, False) for name in PERMISSION_FIELD_NAMES}
 
 
 def get_admin_permissions(user):
@@ -148,18 +325,70 @@ def get_admin_permissions(user):
     return perms
 
 
+def permissions_dict_from_post(post_data, defaults=None):
+    """Build permission field dict from checkbox POST (on = True)."""
+    result = {}
+    for name in PERMISSION_FIELD_NAMES:
+        if defaults and name in defaults and name not in post_data:
+            # keep default only when explicitly using defaults for missing keys
+            pass
+        result[name] = post_data.get(name) == 'on'
+    return result
+
+
+def cap_permissions(requested, granter, for_agent=False):
+    """
+    AND each requested flag with granter's AdminPermissions.
+    Super Admin granter → uncapped (except Agent still cannot get SUPER_ONLY flags).
+    """
+    requested = dict(requested or {})
+    if for_agent:
+        for name in SUPER_ONLY_PERMISSION_FIELDS:
+            requested[name] = False
+
+    if granter is None:
+        return {name: False for name in PERMISSION_FIELD_NAMES}
+
+    if is_super_admin(granter) and not for_agent:
+        # Super Admin granting to Admin: use requested as-is
+        return {name: bool(requested.get(name, False)) for name in PERMISSION_FIELD_NAMES}
+
+    if is_super_admin(granter) and for_agent:
+        return {name: bool(requested.get(name, False)) for name in PERMISSION_FIELD_NAMES}
+
+    granter_perms = get_admin_permissions(granter)
+    capped = {}
+    for name in PERMISSION_FIELD_NAMES:
+        want = bool(requested.get(name, False))
+        allowed = bool(getattr(granter_perms, name, False)) if granter_perms else False
+        if for_agent and name in SUPER_ONLY_PERMISSION_FIELDS:
+            capped[name] = False
+        else:
+            capped[name] = want and allowed
+    return capped
+
+
+def apply_permissions_to_user(target_user, perms_dict):
+    """Create/update AdminPermissions from a dict of field→bool."""
+    from .models import AdminPermissions
+    obj, _ = AdminPermissions.objects.get_or_create(user=target_user)
+    for name in PERMISSION_FIELD_NAMES:
+        if name in perms_dict:
+            setattr(obj, name, bool(perms_dict[name]))
+    obj.save()
+    invalidate_admin_permissions_cache(target_user)
+    return obj
+
+
 def has_menu_permission(user, permission_name):
     """Check if user has permission to view a menu item"""
-    # Super admins have all permissions
     if is_super_admin(user):
         return True
-    
-    # Get permissions
+
     perms = get_admin_permissions(user)
     if not perms:
         return False
-    
-    # Map permission names to model fields
+
     permission_map = {
         'dashboard': 'can_view_dashboard',
         'games': 'can_view_dashboard',
@@ -176,13 +405,14 @@ def has_menu_permission(user, permission_name):
         'help_center': 'can_view_help_center',
         'white_label': 'can_view_white_label',
         'admin_management': 'can_view_admin_management',
+        'agent_management': 'can_view_players',  # Agents list for Admins who can see players
         'payment_methods': 'can_manage_payment_methods',
     }
-    
+
     field_name = permission_map.get(permission_name)
     if not field_name:
         return False
-    
+
     return getattr(perms, field_name, False)
 
 
@@ -196,18 +426,41 @@ def invalidate_admin_permissions_cache(user):
         pass
 
 
+def sync_staff_flags(user, role):
+    """Keep is_staff / is_superuser / is_franchise_only aligned with staff_role."""
+    user.staff_role = role
+    if role == 'SUPER_ADMIN':
+        user.is_staff = True
+        user.is_superuser = True
+        user.is_franchise_only = False
+        user.works_under = None
+    elif role == 'ADMIN':
+        user.is_staff = True
+        user.is_superuser = False
+        user.is_franchise_only = True
+        user.works_under = None
+    elif role == 'AGENT':
+        user.is_staff = True
+        user.is_superuser = False
+        user.is_franchise_only = False
+    else:
+        user.is_staff = False
+        user.is_superuser = False
+        user.is_franchise_only = False
+        user.works_under = None
+
+
 def admin_required(view_func):
     """Decorator to require admin access"""
     @wraps(view_func)
     def wrapper(request, *args, **kwargs):
         try:
             if not request.user.is_authenticated:
-                # Redirect to game admin login with next parameter
                 from django.http import HttpResponseRedirect
                 from django.urls import reverse
                 try:
                     login_url = reverse('admin_login')
-                except:
+                except Exception:
                     login_url = '/game-admin/login/'
                 next_url = request.get_full_path()
                 return HttpResponseRedirect(f'{login_url}?next={next_url}')
@@ -224,25 +477,39 @@ def admin_required(view_func):
 
 
 def super_admin_required(view_func):
-    """Decorator to require super admin access"""
+    """Decorator to require Super Admin access"""
     @wraps(view_func)
     def wrapper(request, *args, **kwargs):
+        if not request.user.is_authenticated:
+            return redirect('admin_login')
         if not is_super_admin(request.user):
             messages.error(request, 'You do not have permission to access this page.')
+            return redirect('admin_dashboard')
+        return view_func(request, *args, **kwargs)
+    return wrapper
+
+
+def franchise_admin_required(view_func):
+    """Decorator: Super Admin or franchise Admin (not Agent)."""
+    @wraps(view_func)
+    def wrapper(request, *args, **kwargs):
+        if not request.user.is_authenticated:
             return redirect('admin_login')
+        if not (is_super_admin(request.user) or is_franchise_admin(request.user)):
+            messages.error(request, 'Only Admins can access this page.')
+            return redirect('admin_dashboard')
         return view_func(request, *args, **kwargs)
     return wrapper
 
 
 def permission_required(permission_name):
-    """Decorator factory to require specific permission"""
+    """Decorator factory to require specific menu permission"""
     def decorator(view_func):
         @wraps(view_func)
         def wrapper(request, *args, **kwargs):
-            if not has_permission(request.user, permission_name):
+            if not has_menu_permission(request.user, permission_name):
                 messages.error(request, 'You do not have permission to access this page.')
-                return redirect('admin_login')
+                return redirect('admin_dashboard')
             return view_func(request, *args, **kwargs)
         return wrapper
     return decorator
-

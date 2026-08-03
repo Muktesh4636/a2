@@ -6,11 +6,18 @@
         box-sizing: border-box; 
     }
     
+    html, body {
+        width: 100%;
+        max-width: 100%;
+        overflow-x: hidden;
+        -webkit-text-size-adjust: 100%;
+    }
+
     body {
         font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
         background: #ffffff;
         min-height: 100vh;
-        display: flex;
+        display: block;
         color: #2d3748;
     }
 
@@ -155,10 +162,13 @@
     /* Main Content */
     .main-content {
         margin-left: 260px;
-        flex: 1;
         padding: 24px;
         min-height: 100vh;
-        width: calc(100% - 260px);
+        width: auto;
+        max-width: 100%;
+        min-width: 0;
+        box-sizing: border-box;
+        overflow-x: hidden;
         background: #ffffff;
     }
     
@@ -226,13 +236,16 @@
     }
     
     @media (max-width: 768px) {
+        /* Use left (not transform) so off-screen sidebar cannot widen the page / trigger zoom-out */
         .sidebar {
-            transform: translateX(-100%);
-            transition: transform 0.3s;
+            left: -280px;
+            transform: none;
+            transition: left 0.3s;
         }
         
         .sidebar.open {
-            transform: translateX(0);
+            left: 0;
+            transform: none;
         }
         
         .sidebar-toggle {
@@ -242,9 +255,10 @@
         .main-content {
             margin-left: 0;
             width: 100%;
+            max-width: 100%;
             padding: 16px;
+            padding-top: 64px;
         }
     }
-</style>
 </style>
 

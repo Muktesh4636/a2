@@ -1,0 +1,16 @@
+{# Expects permission_items from build_permission_checklist_items() #}
+<div class="permissions-grid" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px;">
+    {% for item in permission_items %}
+    <div class="permission-item" style="display: flex; align-items: center; padding: 10px 12px; background: {% if item.disabled %}#f1f5f9{% else %}#f8fafc{% endif %}; border: 1px solid #e2e8f0; border-radius: 8px; {% if item.disabled %}opacity:0.8;{% endif %}">
+        <input type="checkbox"
+               id="{{ item.name }}"
+               name="{{ item.name }}"
+               {% if item.checked %}checked{% endif %}
+               {% if item.disabled %}disabled{% endif %}
+               style="width: 18px; height: 18px; margin-right: 10px; cursor: pointer; flex-shrink: 0;">
+        <label for="{{ item.name }}" style="margin: 0; font-weight: 500; cursor: pointer; flex: 1; font-size: 14px; color: #1e293b;">
+            {{ item.label }}{% if item.hint %} <span style="color:#94a3b8;font-weight:400;font-size:12px;">({{ item.hint }})</span>{% endif %}
+        </label>
+    </div>
+    {% endfor %}
+</div>

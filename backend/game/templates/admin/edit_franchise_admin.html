@@ -59,66 +59,9 @@
 
                 <div class="permissions-section">
                     <h2>🔐 Menu permissions</h2>
-                    <p style="color: #64748b; font-size: 13px; margin-bottom: 16px;">Select which menu options this franchise owner can access:</p>
-                    <div class="permissions-grid">
-                        <div class="permission-item">
-                            <input type="checkbox" id="can_view_dashboard" name="can_view_dashboard" {% if permissions.can_view_dashboard %}checked{% endif %}>
-                            <label for="can_view_dashboard">📊 Dashboard</label>
-                        </div>
-                        <div class="permission-item">
-                            <input type="checkbox" id="can_control_dice" name="can_control_dice" {% if permissions.can_control_dice %}checked{% endif %}>
-                            <label for="can_control_dice">🎯 Dice Control</label>
-                        </div>
-                        <div class="permission-item">
-                            <input type="checkbox" id="can_view_recent_rounds" name="can_view_recent_rounds" {% if permissions.can_view_recent_rounds %}checked{% endif %}>
-                            <label for="can_view_recent_rounds">🔄 Recent Rounds</label>
-                        </div>
-                        <div class="permission-item">
-                            <input type="checkbox" id="can_view_all_bets" name="can_view_all_bets" {% if permissions.can_view_all_bets %}checked{% endif %}>
-                            <label for="can_view_all_bets">💰 All Bets</label>
-                        </div>
-                        <div class="permission-item">
-                            <input type="checkbox" id="can_view_wallets" name="can_view_wallets" {% if permissions.can_view_wallets %}checked{% endif %}>
-                            <label for="can_view_wallets">💳 Wallets</label>
-                        </div>
-                        <div class="permission-item">
-                            <input type="checkbox" id="can_view_players" name="can_view_players" {% if permissions.can_view_players %}checked{% endif %}>
-                            <label for="can_view_players">👥 Players</label>
-                        </div>
-                        <div class="permission-item">
-                            <input type="checkbox" id="can_view_deposit_requests" name="can_view_deposit_requests" {% if permissions.can_view_deposit_requests %}checked{% endif %}>
-                            <label for="can_view_deposit_requests">📥 Deposit Requests</label>
-                        </div>
-                        <div class="permission-item">
-                            <input type="checkbox" id="can_view_withdraw_requests" name="can_view_withdraw_requests" {% if permissions.can_view_withdraw_requests %}checked{% endif %}>
-                            <label for="can_view_withdraw_requests">💸 Withdraw Requests</label>
-                        </div>
-                        <div class="permission-item">
-                            <input type="checkbox" id="can_view_transactions" name="can_view_transactions" {% if permissions.can_view_transactions %}checked{% endif %}>
-                            <label for="can_view_transactions">📋 Reports</label>
-                        </div>
-                        <div class="permission-item">
-                            <input type="checkbox" id="can_view_game_settings" name="can_view_game_settings" {% if permissions.can_view_game_settings %}checked{% endif %}>
-                            <label for="can_view_game_settings">⏱️ Game Settings</label>
-                        </div>
-                        <div class="permission-item">
-                            <input type="checkbox" id="can_view_help_center" name="can_view_help_center" {% if permissions.can_view_help_center %}checked{% endif %}>
-                            <label for="can_view_help_center">🆘 Help Center</label>
-                        </div>
-                        <div class="permission-item">
-                            <input type="checkbox" id="can_view_white_label" name="can_view_white_label" {% if permissions.can_view_white_label %}checked{% endif %}>
-                            <label for="can_view_white_label">💬 White Label Messages</label>
-                        </div>
-                        <div class="permission-item">
-                            <input type="checkbox" id="can_view_admin_management" name="can_view_admin_management" {% if permissions.can_view_admin_management %}checked{% endif %}>
-                            <label for="can_view_admin_management">👨‍💼 Worker Management</label>
-                        </div>
-                        <div class="permission-item">
-                            <input type="checkbox" id="can_manage_payment_methods" name="can_manage_payment_methods" {% if permissions.can_manage_payment_methods %}checked{% endif %}>
-                            <label for="can_manage_payment_methods">🏦 Payment Methods</label>
-                        </div>
-                    </div>
-                    <div class="note" style="margin-top: 12px;">Game Settings and Worker Management are typically Super Admin only.</div>
+                    <p style="color: #64748b; font-size: 13px; margin-bottom: 16px;">Select which menu options this Admin can access (full checklist):</p>
+                    {% include 'admin/_permissions_checklist.html' %}
+                    <div class="note" style="margin-top: 12px;">App Settings, Admin Management, and White Label are typically reserved for trusted Admins.</div>
                 </div>
 
                 <div class="btn-group">
