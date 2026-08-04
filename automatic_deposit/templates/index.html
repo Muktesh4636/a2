@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>PhonePe Transactions</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,700;1,9..40,400&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg0: #0b1220;
+      --bg1: #122038;
+      --ink: #e8eef8;
+      --muted: #93a4c3;
+      --accent: #2dd4a8;
+      --accent-dim: #1a9e7c;
+      --card: rgba(18, 32, 56, 0.85);
+      --line: rgba(148, 173, 210, 0.22);
+      --danger: #ff7b8a;
+      --warn: #f5c56b;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: "DM Sans", system-ui, sans-serif;
+      color: var(--ink);
+      background:
+        radial-gradient(900px 500px at 10% -10%, #1b3a5f 0%, transparent 55%),
+        radial-gradient(700px 420px at 100% 0%, #0f3d36 0%, transparent 50%),
+        linear-gradient(160deg, var(--bg0), var(--bg1));
+    }
+    .wrap { width: min(760px, calc(100% - 2rem)); margin: 0 auto; padding: 3rem 0 4rem; }
+    h1 { margin: 0 0 0.35rem; font-size: clamp(1.7rem, 4vw, 2.2rem); letter-spacing: -0.03em; }
+    .sub { margin: 0 0 1.75rem; color: var(--muted); line-height: 1.45; }
+    .panel {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 1.25rem;
+      backdrop-filter: blur(10px);
+      margin-bottom: 1rem;
+    }
+    .row { display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: center; }
+    button {
+      font: inherit; cursor: pointer; border: 0; border-radius: 12px;
+      padding: 0.85rem 1.2rem;
+      transition: transform 0.15s ease, background 0.15s ease, opacity 0.15s ease;
+    }
+    button:active { transform: translateY(1px); }
+    button:disabled { opacity: 0.55; cursor: not-allowed; }
+    .ghost {
+      background: rgba(255,255,255,0.06);
+      border: 1px solid var(--line);
+      color: var(--ink);
+      font-weight: 600;
+    }
+    .ghost:hover:not(:disabled) { border-color: var(--accent); background: rgba(45, 212, 168, 0.12); }
+    .ghost.active {
+      background: linear-gradient(135deg, var(--accent), var(--accent-dim));
+      color: #04241c; border-color: transparent; font-weight: 700;
+    }
+    .status { margin-top: 0.9rem; min-height: 1.4rem; color: var(--muted); font-size: 0.95rem; }
+    .status.error { color: var(--danger); }
+    .picks { display: none; margin-top: 1.25rem; gap: 0.65rem; flex-wrap: wrap; }
+    .picks.show { display: flex; }
+    .pick {
+      width: 3.1rem; height: 3.1rem; border-radius: 999px;
+      background: rgba(255,255,255,0.06); border: 1px solid var(--line);
+      color: var(--ink); font-weight: 700; font-size: 1.05rem;
+    }
+    .pick.active { background: rgba(45, 212, 168, 0.22); border-color: var(--accent); }
+    .list { margin-top: 1rem; display: grid; gap: 0.55rem; }
+    .item {
+      display: grid; grid-template-columns: 2.2rem 1fr auto; gap: 0.65rem;
+      align-items: center; padding: 0.75rem 0.85rem; border-radius: 12px;
+      border: 1px solid var(--line); background: rgba(0,0,0,0.18); font-size: 0.92rem;
+    }
+    .item .n {
+      width: 1.7rem; height: 1.7rem; border-radius: 999px; display: grid; place-items: center;
+      background: rgba(45, 212, 168, 0.15); color: var(--accent); font-weight: 700; font-size: 0.85rem;
+    }
+    .item .meta { color: var(--muted); font-size: 0.82rem; margin-top: 0.15rem; }
+    .item .amt { font-family: "JetBrains Mono", monospace; font-weight: 500; }
+    .item .utr-line {
+      margin-top: 0.35rem; font-family: "JetBrains Mono", monospace;
+      font-size: 0.88rem; color: var(--accent); font-weight: 700; word-break: break-all;
+    }
+    .item .utr-line.missing { color: var(--warn); font-weight: 500; }
+    .detail { display: none; margin-top: 1.25rem; }
+    .detail.show { display: block; }
+    .detail h2 { margin: 0 0 0.85rem; font-size: 1.15rem; }
+    dl { margin: 0; display: grid; grid-template-columns: 10rem 1fr; gap: 0.55rem 0.75rem; }
+    dt { color: var(--muted); }
+    dd { margin: 0; font-family: "JetBrains Mono", monospace; font-size: 0.92rem; word-break: break-all; }
+    dd.utr { color: var(--accent); font-weight: 700; font-size: 1.05rem; }
+    .hint { margin-top: 0.5rem; color: var(--muted); font-size: 0.85rem; line-height: 1.5; }
+    .token {
+      font-family: "JetBrains Mono", monospace; font-size: 0.85rem;
+      background: rgba(0,0,0,0.25); border: 1px solid var(--line);
+      border-radius: 10px; padding: 0.65rem 0.8rem; word-break: break-all;
+    }
+    ol.setup { margin: 0.5rem 0 0; padding-left: 1.2rem; color: var(--muted); }
+    ol.setup li { margin: 0.35rem 0; }
+    code { font-family: "JetBrains Mono", monospace; color: var(--accent); }
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <h1>PhonePe transactions</h1>
+    <p class="sub">No ADB. Install the companion app on the phone — it reads PhonePe and syncs UTR here over Wi‑Fi.</p>
+
+    <section class="panel">
+      <h2 style="margin:0 0 0.6rem; font-size:1.05rem;">1. Connect mobile app</h2>
+      <p class="hint" style="margin-top:0">Sync token (paste into the Android app):</p>
+      <div class="row" style="margin-top:0.5rem">
+        <div class="token" id="syncToken">{{ sync_token }}</div>
+        <button class="ghost" type="button" id="copyToken">Copy</button>
+        <button class="ghost" type="button" id="rotateToken">Rotate</button>
+      </div>
+      <ol class="setup">
+        <li>Open <code>android_companion</code> in Android Studio → Build APK → install on phone.</li>
+        <li>In the app: Server URL = <code id="serverHint">http://YOUR_PC_IP:5055</code></li>
+        <li>Paste sync token → Enable Accessibility for <strong>PhonePe Sync</strong>.</li>
+        <li>Unlock PhonePe, then tap <strong>Last 3 / 5 / 10</strong> in the mobile app.</li>
+        <li>Come back here and load the same count below.</li>
+      </ol>
+    </section>
+
+    <section class="panel">
+      <div class="row">
+        <button class="ghost limit-btn" type="button" data-limit="3">Last 3</button>
+        <button class="ghost limit-btn" type="button" data-limit="5">Last 5</button>
+        <button class="ghost limit-btn" type="button" data-limit="10">Last 10</button>
+        <span id="devicePill" class="status" style="margin:0"></span>
+      </div>
+      <div id="status" class="status">After the phone app syncs, click Last 3 / 5 / 10 here.</div>
+      <div id="picks" class="picks" aria-label="Transaction numbers"></div>
+      <div id="list" class="list"></div>
+      <div id="detail" class="detail">
+        <h2>Transaction details</h2>
+        <dl id="detailFields"></dl>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const statusEl = document.getElementById("status");
+    const picksEl = document.getElementById("picks");
+    const listEl = document.getElementById("list");
+    const detailEl = document.getElementById("detail");
+    const detailFields = document.getElementById("detailFields");
+    const devicePill = document.getElementById("devicePill");
+    const limitButtons = [...document.querySelectorAll(".limit-btn")];
+    const syncTokenEl = document.getElementById("syncToken");
+
+    let currentLimit = 5;
+    let cachedTransactions = [];
+
+    function setStatus(msg, kind = "") {
+      statusEl.textContent = msg;
+      statusEl.className = "status" + (kind ? " " + kind : "");
+    }
+    function setBusy(busy, label) {
+      limitButtons.forEach((b) => (b.disabled = busy));
+      picksEl.querySelectorAll("button").forEach((b) => (b.disabled = busy));
+      if (label) setStatus(label);
+    }
+    function escapeHtml(s) {
+      return String(s ?? "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;");
+    }
+
+    async function checkHealth() {
+      try {
+        const res = await fetch("/api/health");
+        const data = await res.json();
+        const last = data.last_synced_at
+          ? new Date(data.last_synced_at * 1000).toLocaleString()
+          : "never";
+        devicePill.textContent = `Synced txs: ${data.transactions_stored || 0} · last: ${last}`;
+      } catch {
+        devicePill.textContent = "Server offline";
+        devicePill.className = "status error";
+      }
+    }
+
+    function renderPicks(transactions) {
+      picksEl.innerHTML = "";
+      picksEl.classList.add("show");
+      transactions.forEach((t) => {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "pick";
+        btn.textContent = String(t.index);
+        btn.addEventListener("click", () => showCachedDetail(t.index, btn, transactions));
+        picksEl.appendChild(btn);
+      });
+      listEl.innerHTML = transactions
+        .map((t) => {
+          const utr = t.utr ? `UTR: ${escapeHtml(t.utr)}` : "UTR: not found";
+          const utrClass = t.utr ? "utr-line" : "utr-line missing";
+          return `
+        <div class="item">
+          <div class="n">${t.index}</div>
+          <div>
+            <div><strong>${escapeHtml(t.type)}</strong> ${escapeHtml(t.party)}</div>
+            <div class="meta">${escapeHtml(t.datetime || "")}${t.phonepe_txn_id ? " · " + escapeHtml(t.phonepe_txn_id) : ""}</div>
+            <div class="${utrClass}">${utr}</div>
+          </div>
+          <div class="amt">${escapeHtml(t.amount)}</div>
+        </div>`;
+        })
+        .join("");
+    }
+
+    function showCachedDetail(index, btn, transactions) {
+      picksEl.querySelectorAll(".pick").forEach((b) => b.classList.remove("active"));
+      if (btn) btn.classList.add("active");
+      const t = transactions.find((x) => Number(x.index) === Number(index));
+      if (!t) return;
+      renderDetail(t);
+      setStatus(t.utr ? `Showing #${index} · UTR ${t.utr}` : `Showing #${index}`);
+    }
+
+    function renderDetail(t) {
+      detailEl.classList.add("show");
+      const rows = [
+        ["#", t.index],
+        ["Status", t.status],
+        ["Date / time", t.datetime],
+        ["Type", t.type],
+        ["Party", t.party],
+        ["Amount", t.amount],
+        ["UPI / bank", t.upi_or_bank],
+        ["Debited from", t.debited_from],
+        ["PhonePe Txn ID", t.phonepe_txn_id],
+        ["UTR", t.utr, "utr"],
+      ];
+      detailFields.innerHTML = rows
+        .map(([k, v, cls]) => `<dt>${escapeHtml(k)}</dt><dd class="${cls || ""}">${escapeHtml(v || "—")}</dd>`)
+        .join("");
+    }
+
+    async function loadList(limit) {
+      currentLimit = limit;
+      limitButtons.forEach((b) => b.classList.toggle("active", Number(b.dataset.limit) === limit));
+      detailEl.classList.remove("show");
+      setBusy(true, `Loading last ${limit} from mobile sync…`);
+      try {
+        const res = await fetch("/api/transactions", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ limit, source: "mobile" }),
+        });
+        const data = await res.json();
+        if (!data.ok) throw new Error(data.error || "Failed");
+        cachedTransactions = data.transactions || [];
+        renderPicks(cachedTransactions);
+        const withUtr = cachedTransactions.filter((t) => t.utr).length;
+        setStatus(`Loaded last ${data.count} (UTR ${withUtr}/${data.count}).`);
+        if (cachedTransactions[0]) renderDetail(cachedTransactions[0]);
+      } catch (err) {
+        setStatus(err.message || String(err), "error");
+        picksEl.classList.remove("show");
+        listEl.innerHTML = "";
+        cachedTransactions = [];
+      } finally {
+        setBusy(false);
+        checkHealth();
+      }
+    }
+
+    document.getElementById("copyToken").addEventListener("click", async () => {
+      await navigator.clipboard.writeText(syncTokenEl.textContent.trim());
+      setStatus("Sync token copied.");
+    });
+    document.getElementById("rotateToken").addEventListener("click", async () => {
+      const res = await fetch("/api/sync/token/rotate", { method: "POST" });
+      const data = await res.json();
+      if (data.ok) {
+        syncTokenEl.textContent = data.sync_token;
+        setStatus("Token rotated. Update it in the mobile app.");
+      }
+    });
+    limitButtons.forEach((btn) => btn.addEventListener("click", () => loadList(Number(btn.dataset.limit))));
+
+    // Helpful LAN hint
+    fetch("/api/health").then(() => {
+      const host = location.hostname === "127.0.0.1" ? "YOUR_PC_LAN_IP" : location.hostname;
+      document.getElementById("serverHint").textContent = `http://${host}:5055`;
+    });
+    checkHealth();
+  </script>
+</body>
+</html>

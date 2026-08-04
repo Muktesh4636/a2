@@ -1264,9 +1264,6 @@ def initiate_deposit(request):
     except ValueError as exc:
         return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
 
-    if amount < 100:
-        return Response({'error': 'Minimum deposit amount is ₹100'}, status=status.HTTP_400_BAD_REQUEST)
-
     payment_link = f"https://pay.example.com/{uuid.uuid4().hex}?amount={amount}"
     return Response({
         'amount': str(amount),
@@ -1430,10 +1427,6 @@ def upload_deposit_proof(request):
         logger.warning(f"Deposit proof upload failed for user {request.user.username}: Invalid amount {amount_raw} - {exc}")
         return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
 
-    if amount < 100:
-        logger.warning(f"Deposit proof upload failed for user {request.user.username}: Amount {amount} below minimum ₹100")
-        return Response({'error': 'Minimum deposit amount is ₹100'}, status=status.HTTP_400_BAD_REQUEST)
-
     # Check for existing pending deposit request
     existing_pending = DepositRequest.objects.filter(user=request.user, status='PENDING').exists()
     if existing_pending:
@@ -1514,9 +1507,6 @@ def submit_utr(request):
         amount = _parse_amount(amount_raw)
     except ValueError as exc:
         return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
-
-    if amount < 100:
-        return Response({'error': 'Minimum deposit amount is ₹100'}, status=status.HTTP_400_BAD_REQUEST)
 
     # Check for existing pending deposit request
     existing_pending = DepositRequest.objects.filter(user=request.user, status='PENDING').exists()
@@ -2501,3 +2491,347 @@ def leaderboard(request):
     except Exception as e:
         logger.error(f"Error in leaderboard API: {str(e)}", exc_info=True)
         return Response({'error': 'Failed to fetch leaderboard data'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+# ─── Automatic deposit (PhonePe feed) ─────────────────────────────────────────
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def deposit_mode(request):
+    """Return current deposit mode: manual | automatic."""
+    from accounts.auto_deposit import is_automatic_mode, expire_stale_sessions
+    expire_stale_sessions()
+    mode = 'automatic' if is_automatic_mode() else 'manual'
+    return Response({'mode': mode, 'automatic': mode == 'automatic'})
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def auto_deposit_initiate(request):
+    """
+    Start an automatic deposit session.
+    Body: { amount, payment_method_id? }
+    Returns unique_amount the player must pay exactly.
+    """
+    from accounts.auto_deposit import initiate_auto_deposit, session_status_payload, is_automatic_mode
+
+    if not is_automatic_mode():
+        return Response(
+            {'error': 'Automatic deposit is not enabled. Use manual deposit.'},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    amount_raw = request.data.get('amount')
+    try:
+        amount_dec = _parse_amount(amount_raw)
+        requested = int(amount_dec)  # whole-rupee wallet credit
+    except ValueError as exc:
+        return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+    payment_method = None
+    payment_method_id = request.data.get('payment_method_id')
+    if payment_method_id:
+        try:
+            pm = PaymentMethod.objects.get(id=payment_method_id, is_active=True)
+            if pm.owner_id is None or pm.owner_id == getattr(request.user, 'worker_id', None):
+                payment_method = pm
+        except (PaymentMethod.DoesNotExist, ValueError, TypeError):
+            pass
+
+    _link_user_to_franchise_by_package(request)
+
+    try:
+        session = initiate_auto_deposit(request.user, requested, payment_method=payment_method)
+    except ValueError as exc:
+        return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+    except Exception as exc:
+        logger.exception('auto_deposit_initiate failed: %s', exc)
+        return Response({'error': 'Failed to start automatic deposit'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    payload = session_status_payload(session)
+    upi_id = ''
+    if payment_method and payment_method.upi_id:
+        upi_id = payment_method.upi_id
+    elif payment_method is None:
+        first = PaymentMethod.objects.filter(is_active=True).exclude(upi_id='').exclude(upi_id__isnull=True).first()
+        if first:
+            upi_id = first.upi_id or ''
+
+    payload.update({
+        'message': f'Pay exactly ₹{session.unique_amount}. Do not change the amount.',
+        'upi_id': upi_id,
+        'currency': 'INR',
+    })
+    return Response(payload, status=status.HTTP_201_CREATED)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def auto_deposit_status(request, session_id):
+    """Poll automatic deposit session status."""
+    from accounts.auto_deposit import session_status_payload, expire_stale_sessions
+    from accounts.models import PendingAutoDeposit
+
+    expire_stale_sessions()
+    try:
+        session = PendingAutoDeposit.objects.get(pk=session_id, user=request.user)
+    except PendingAutoDeposit.DoesNotExist:
+        return Response({'error': 'Session not found'}, status=status.HTTP_404_NOT_FOUND)
+    return Response(session_status_payload(session))
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def auto_deposit_active(request):
+    """Return the user's current PENDING automatic deposit session, if any."""
+    from accounts.auto_deposit import session_status_payload, expire_stale_sessions
+    from accounts.models import PendingAutoDeposit
+
+    expire_stale_sessions()
+    session = (
+        PendingAutoDeposit.objects.filter(user=request.user, status='PENDING')
+        .order_by('-created_at')
+        .first()
+    )
+    if not session:
+        return Response({'active': False, 'session': None})
+    return Response({'active': True, 'session': session_status_payload(session)})
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def upi_callback(request):
+    """
+    Called by game APK after a successful UPI Intent payment.
+    Auth (either works):
+      1. Authorization: Bearer <JWT>  (preferred)
+      2. callback_token from auto/initiate response  (survives JWT expiry in PhonePe)
+    Payload: { session_id, utr, txn_id?, amount?, callback_token? }
+    """
+    from accounts.auto_deposit import (
+        _credit_pending_session,
+        session_status_payload,
+        expire_stale_sessions,
+        verify_callback_token,
+        parse_amount,
+    )
+    from accounts.models import PendingAutoDeposit
+    from django.db import transaction as db_transaction
+
+    session_id = request.data.get('session_id')
+    utr = str(request.data.get('utr') or '').strip()
+    txn_id = str(request.data.get('txn_id') or '').strip()
+    amount_raw = request.data.get('amount')
+    callback_token = (
+        str(request.data.get('callback_token') or '').strip()
+        or str(request.headers.get('X-Deposit-Token') or '').strip()
+    )
+
+    if not session_id:
+        return Response({'error': 'session_id required'}, status=status.HTTP_400_BAD_REQUEST)
+    if not utr:
+        utr = txn_id
+    if not utr:
+        return Response({'error': 'utr or txn_id required'}, status=status.HTTP_400_BAD_REQUEST)
+
+    expire_stale_sessions()
+
+    try:
+        session = PendingAutoDeposit.objects.select_related('user').get(pk=session_id)
+    except PendingAutoDeposit.DoesNotExist:
+        return Response({'error': 'Session not found'}, status=status.HTTP_404_NOT_FOUND)
+
+    # Auth: JWT user must own session, OR valid per-session callback_token
+    user = request.user if getattr(request.user, 'is_authenticated', False) else None
+    if user:
+        if session.user_id != user.id:
+            return Response({'error': 'Session does not belong to this user'}, status=status.HTTP_403_FORBIDDEN)
+    elif verify_callback_token(session, callback_token):
+        user = session.user
+    else:
+        logger.warning(
+            'upi_callback 401: session=%s auth=%s token_present=%s',
+            session_id,
+            bool(user),
+            bool(callback_token),
+        )
+        return Response(
+            {
+                'error': 'Authentication required',
+                'detail': 'Send Authorization: Bearer <token> or callback_token from initiate response',
+            },
+            status=status.HTTP_401_UNAUTHORIZED,
+        )
+
+    if session.status == 'CREDITED':
+        return Response({'ok': True, 'already_credited': True, **session_status_payload(session)})
+
+    if session.status != 'PENDING':
+        return Response(
+            {'error': f'Session is {session.status}, cannot credit'},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    phonepe_amount = session.unique_amount
+    if amount_raw is not None:
+        try:
+            phonepe_amount = parse_amount(amount_raw) or session.unique_amount
+        except Exception:
+            pass
+
+    with db_transaction.atomic():
+        locked = PendingAutoDeposit.objects.select_for_update().get(pk=session.pk)
+        ok = _credit_pending_session(
+            locked,
+            utr=utr,
+            phonepe_amount=phonepe_amount,
+            party_name='UPI Intent',
+            txn_type='Received from',
+            payment_time=None,
+            raw_payload={
+                'source': 'upi_intent_callback',
+                'txn_id': txn_id,
+                'utr': utr,
+                'amount': str(amount_raw or ''),
+                'auth': 'jwt' if getattr(request.user, 'is_authenticated', False) else 'callback_token',
+            },
+        )
+
+    if ok:
+        logger.info(
+            'upi_callback: credited session=%s user=%s utr=%s',
+            session_id, user.username, utr,
+        )
+        session.refresh_from_db()
+        return Response({'ok': True, **session_status_payload(session)})
+
+    return Response(
+        {'error': 'Credit failed — franchise balance or session expired'},
+        status=status.HTTP_400_BAD_REQUEST,
+    )
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+@authentication_classes([])
+def phonepe_sync(request):
+    """
+    PhonePe Sync companion posts transactions here (same shape as Flask /api/sync).
+    Header: X-Sync-Token
+    Body: { device_id?, sync_token?, transactions: [ { amount, utr, type, party, ... } ] }
+    """
+    from accounts.auto_deposit import verify_sync_token, ingest_phonepe_transactions, get_or_create_sync_token
+
+    get_or_create_sync_token()
+    data = request.data if hasattr(request, 'data') else {}
+    if not isinstance(data, dict):
+        data = {}
+    token = (
+        request.headers.get('X-Sync-Token')
+        or data.get('sync_token')
+        or ''
+    )
+    if not verify_sync_token(token):
+        return Response({'ok': False, 'error': 'Invalid sync token'}, status=status.HTTP_401_UNAUTHORIZED)
+
+    items = data.get('transactions') or []
+    if not isinstance(items, list) or not items:
+        return Response({'ok': False, 'error': 'transactions array required'}, status=status.HTTP_400_BAD_REQUEST)
+
+    result = ingest_phonepe_transactions(items)
+    return Response({
+        'ok': True,
+        'saved': len(items),
+        'device_id': (data.get('device_id') or 'unknown')[:120],
+        **result,
+    })
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+@authentication_classes([])
+def phonepe_pending_trigger(request):
+    """
+    Companion polls this: if any PENDING auto-deposits exist, fetch PhonePe History.
+    Header: X-Sync-Token
+    """
+    from accounts.auto_deposit import verify_sync_token, get_or_create_sync_token, pending_trigger_payload
+
+    get_or_create_sync_token()
+    token = (
+        request.headers.get('X-Sync-Token')
+        or request.query_params.get('sync_token')
+        or ''
+    )
+    if not verify_sync_token(token):
+        return Response({'ok': False, 'error': 'Invalid sync token'}, status=status.HTTP_401_UNAUTHORIZED)
+    return Response(pending_trigger_payload())
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+@authentication_classes([])
+def companion_heartbeat(request):
+    """Companion posts a heartbeat every 2 minutes so admin can see if it's online."""
+    from accounts.auto_deposit import verify_sync_token, get_or_create_sync_token, companion_heartbeat as _heartbeat
+
+    get_or_create_sync_token()
+    token = request.headers.get('X-Sync-Token') or request.data.get('sync_token') or ''
+    if not verify_sync_token(token):
+        return Response({'ok': False, 'error': 'Invalid sync token'}, status=status.HTTP_401_UNAUTHORIZED)
+    device_id = request.data.get('device_id', 'unknown')
+    version = request.data.get('version', '')
+    _heartbeat(device_id, version)
+    return Response({'ok': True})
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+@authentication_classes([])
+def companion_status_api(request):
+    """Admin dashboard: is the companion online?"""
+    from accounts.auto_deposit import verify_sync_token, companion_status
+
+    token = request.headers.get('X-Sync-Token') or request.query_params.get('sync_token') or ''
+    if not verify_sync_token(token):
+        return Response({'ok': False, 'error': 'Invalid sync token'}, status=status.HTTP_401_UNAUTHORIZED)
+    return Response({'ok': True, **companion_status()})
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+@authentication_classes([])
+def today_utr_log_api(request):
+    """Return all PhonePe credit transactions synced today (UTR log). Sync-token protected."""
+    from accounts.auto_deposit import verify_sync_token, today_credit_utrs
+    token = request.headers.get('X-Sync-Token') or request.query_params.get('sync_token') or ''
+    if not verify_sync_token(token):
+        return Response({'ok': False, 'error': 'Invalid sync token'}, status=status.HTTP_401_UNAUTHORIZED)
+    rows = today_credit_utrs()
+    return Response({'ok': True, 'count': len(rows), 'utrs': rows})
+
+
+@api_view(['POST'])
+def admin_manual_credit(request, session_id):
+    """Admin manually credits a pending auto-deposit session."""
+    if not (request.user.is_authenticated and request.user.is_staff):
+        return Response({'error': 'Forbidden'}, status=status.HTTP_403_FORBIDDEN)
+    from accounts.auto_deposit import _credit_pending_session
+    from accounts.models import PendingAutoDeposit
+    try:
+        session = PendingAutoDeposit.objects.select_related('user').get(id=session_id, status='PENDING')
+    except PendingAutoDeposit.DoesNotExist:
+        return Response({'error': 'Not found or not PENDING'}, status=status.HTTP_404_NOT_FOUND)
+    from django.utils import timezone as tz
+    ok = _credit_pending_session(
+        session,
+        utr='MANUAL-' + str(session_id),
+        phonepe_amount=session.unique_amount,
+        party_name='Manual Admin Credit',
+        txn_type='Received from',
+        payment_time=tz.now(),
+        raw_payload={'manual': True},
+    )
+    if ok:
+        return Response({'ok': True, 'credited': int(session.requested_amount)})
+    return Response({'ok': False, 'error': 'Credit failed'}, status=status.HTTP_400_BAD_REQUEST)

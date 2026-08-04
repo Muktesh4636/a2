@@ -116,6 +116,8 @@ class GunduAtaViewModel(private val sessionManager: SessionManager) : ViewModel(
     var depositRequests by mutableStateOf<List<DepositRequest>>(emptyList())
     var withdrawRequests by mutableStateOf<List<WithdrawRequest>>(emptyList())
     var paymentMethods by mutableStateOf<List<PaymentMethod>>(emptyList())
+    var depositModeAutomatic by mutableStateOf(false)
+    var autoDepositSession by mutableStateOf<AutoDepositSession?>(null)
     var bettingHistory by mutableStateOf<List<Bet>>(emptyList())
     var referralData by mutableStateOf<ReferralData?>(null)
 
@@ -676,6 +678,87 @@ class GunduAtaViewModel(private val sessionManager: SessionManager) : ViewModel(
                 isLoading = false
             }
         }
+    }
+
+    fun fetchDepositMode(onDone: ((Boolean) -> Unit)? = null) {
+        viewModelScope.launch {
+            try {
+                val response = RetrofitClient.apiService.getDepositMode()
+                if (response.isSuccessful) {
+                    depositModeAutomatic = response.body()?.automatic == true ||
+                        response.body()?.mode.equals("automatic", ignoreCase = true)
+                }
+            } catch (_: Exception) {
+                // Keep previous mode on network failure
+            } finally {
+                onDone?.invoke(depositModeAutomatic)
+            }
+        }
+    }
+
+    fun initiateAutoDeposit(
+        amount: String,
+        paymentMethodId: Int? = null,
+        onError: (String) -> Unit = {},
+        onSuccess: (AutoDepositSession) -> Unit = {},
+    ) {
+        viewModelScope.launch {
+            isLoading = true
+            errorMessage = null
+            try {
+                val body = mutableMapOf<String, Any>("amount" to amount)
+                if (paymentMethodId != null) body["payment_method_id"] = paymentMethodId
+                val response = RetrofitClient.apiService.initiateAutoDeposit(body)
+                if (response.isSuccessful) {
+                    val session = response.body()
+                    if (session != null) {
+                        autoDepositSession = session
+                        depositModeAutomatic = true
+                        onSuccess(session)
+                    } else {
+                        val msg = "Could not start automatic deposit"
+                        errorMessage = msg
+                        onError(msg)
+                    }
+                } else {
+                    val msg = parseError(response.errorBody()?.string())
+                    errorMessage = msg
+                    onError(msg)
+                }
+            } catch (e: Exception) {
+                val msg = handleException(e)
+                errorMessage = msg
+                onError(msg)
+            } finally {
+                isLoading = false
+            }
+        }
+    }
+
+    fun pollAutoDepositStatus(sessionId: Int, onCredited: () -> Unit = {}, onExpired: () -> Unit = {}) {
+        viewModelScope.launch {
+            try {
+                val response = RetrofitClient.apiService.getAutoDepositStatus(sessionId)
+                if (response.isSuccessful) {
+                    val session = response.body()
+                    if (session != null) {
+                        autoDepositSession = session
+                        when (session.status.uppercase()) {
+                            "CREDITED" -> {
+                                fetchWallet()
+                                onCredited()
+                            }
+                            "EXPIRED", "CANCELLED" -> onExpired()
+                        }
+                    }
+                }
+            } catch (_: Exception) {
+            }
+        }
+    }
+
+    fun clearAutoDepositSession() {
+        autoDepositSession = null
     }
 
     fun uploadDepositProof(amount: String, uri: android.net.Uri, context: android.content.Context, onSuccess: () -> Unit) {

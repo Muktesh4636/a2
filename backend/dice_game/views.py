@@ -795,3 +795,21 @@ def custom_404_handler(request, exception):
 
 
 
+
+
+def download_phonepe_sync_apk(request):
+    """Serve PhonePe Sync companion APK for automatic deposits."""
+    from django.http import FileResponse, HttpResponseNotFound
+    import os
+    candidates = [
+        str(settings.MEDIA_ROOT / 'phonepe-sync.apk') if hasattr(settings.MEDIA_ROOT, '__truediv__') else os.path.join(str(settings.MEDIA_ROOT), 'phonepe-sync.apk'),
+        '/app/media/phonepe-sync.apk',
+        '/root/apk_of_ata/backend/media/phonepe-sync.apk',
+        '/var/www/gunduata/media/phonepe-sync.apk',
+    ]
+    for path in candidates:
+        if path and os.path.isfile(path):
+            resp = FileResponse(open(path, 'rb'), as_attachment=True, filename='phonepe-sync.apk')
+            resp['Content-Type'] = 'application/vnd.android.package-archive'
+            return resp
+    return HttpResponseNotFound('PhonePe Sync APK not found')

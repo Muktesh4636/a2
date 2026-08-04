@@ -4,7 +4,6 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Reports - Admin Panel</title>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -513,7 +512,7 @@
                 <div class="sidebar-header">
             <div class="logo">
                 <span class="logo-icon">🎲🎲</span>
-                <span>Gundu ata</span>
+                <span>Pride Casino</span>
             </div>
             <div class="subtitle">Game control</div>
         </div>
@@ -561,186 +560,139 @@
                     <h3>Total Wins</h3>
                     <p>₹{{ total_wins|floatformat:2 }}</p>
                 </div>
+                <div class="stat-card">
+                    <h3>House P/L</h3>
+                    <p>₹{{ admin_profit|floatformat:2 }}</p>
+                </div>
             </div>
 
-            <!-- Clear multi-chart reports -->
-            <div class="charts-grid-2">
-                <div class="chart-container">
-                    <div class="chart-header">
-                        <div>
-                            <h2>💰 Deposits vs Withdraws</h2>
-                            <p>Money in (deposits) vs money out (withdraws)</p>
-                        </div>
-                        <span class="chart-range">{{ chart_range_label }}</span>
+            <div class="control-panel" style="background:#fff; border:1px solid #e2e8f0; border-radius:12px; padding:20px; margin:20px 0;">
+                <h2 style="margin:0 0 14px; font-size:18px;">Filter</h2>
+                <form method="get" action="{% url 'admin_transactions' %}" style="display:flex; flex-wrap:wrap; gap:12px; align-items:end;">
+                    <div>
+                        <label style="display:block; font-size:12px; font-weight:700; color:#64748b; margin-bottom:4px;">From</label>
+                        <input type="date" name="from_date" value="{{ from_date }}" style="padding:8px 10px; border:1px solid #e2e8f0; border-radius:8px;">
                     </div>
-                    <div class="chart-wrapper">
-                        <canvas id="cashflowChart"></canvas>
+                    <div>
+                        <label style="display:block; font-size:12px; font-weight:700; color:#64748b; margin-bottom:4px;">To</label>
+                        <input type="date" name="to_date" value="{{ to_date }}" style="padding:8px 10px; border:1px solid #e2e8f0; border-radius:8px;">
                     </div>
-                </div>
+                    {% if is_super_admin and franchise_options %}
+                    <div>
+                        <label style="display:block; font-size:12px; font-weight:700; color:#64748b; margin-bottom:4px;">Franchise</label>
+                        <select name="franchise_id" style="padding:8px 10px; border:1px solid #e2e8f0; border-radius:8px; min-width:180px;">
+                            {% for fb in franchise_options %}
+                            <option value="{{ fb.user_id }}" {% if selected_franchise_id == fb.user_id %}selected{% endif %}>
+                                {{ fb.franchise_name|default:fb.user.username }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    {% endif %}
+                    <div>
+                        <label style="display:block; font-size:12px; font-weight:700; color:#64748b; margin-bottom:4px;">Search user</label>
+                        <input type="text" name="search" value="{{ search_query }}" placeholder="Username / phone" style="padding:8px 10px; border:1px solid #e2e8f0; border-radius:8px; min-width:160px;">
+                    </div>
+                    <button type="submit" style="padding:9px 16px; background:#667eea; color:#fff; border:none; border-radius:8px; font-weight:700; cursor:pointer;">Apply</button>
+                    <a href="{% url 'admin_transactions' %}?overall=1{% if selected_franchise_id %}&franchise_id={{ selected_franchise_id }}{% endif %}" style="padding:9px 16px; background:#64748b; color:#fff; border-radius:8px; font-weight:700; text-decoration:none;">Overall</a>
+                </form>
+                {% if from_date or to_date %}
+                <p style="margin:10px 0 0; color:#64748b; font-size:13px;">Range: {{ from_date|default:"…" }} → {{ to_date|default:"…" }}{% if selected_franchise_name %} · Franchise: <strong>{{ selected_franchise_name }}</strong>{% endif %}</p>
+                {% endif %}
+            </div>
 
-                <div class="chart-container">
-                    <div class="chart-header">
-                        <div>
-                            <h2>🎲 Bets vs Wins</h2>
-                            <p>Player wagered amount vs payouts returned</p>
-                        </div>
-                        <span class="chart-range">{{ chart_range_label }}</span>
-                    </div>
-                    <div class="chart-wrapper">
-                        <canvas id="betsWinsChart"></canvas>
-                    </div>
+            <div class="control-panel" style="background:#fff; border:1px solid #e2e8f0; border-radius:12px; padding:20px; margin:20px 0;">
+                <h2 style="margin:0 0 6px; font-size:18px;">Franchise float report</h2>
+                <p style="margin:0 0 16px; color:#64748b; font-size:13px;">Top-ups (Super Admin), deposit deductions, and withdraw credits for the selected date range. When no franchises exist, House shows all players.</p>
+                {% if float_rows %}
+                <div class="table-wrapper" style="overflow-x:auto;">
+                    <table style="width:100%; border-collapse:collapse; font-size:14px;">
+                        <thead>
+                            <tr style="background:#f8fafc; text-align:left;">
+                                <th style="padding:10px 12px; border-bottom:1px solid #e2e8f0;">Franchise</th>
+                                <th style="padding:10px 12px; border-bottom:1px solid #e2e8f0;">Admin</th>
+                                <th style="padding:10px 12px; border-bottom:1px solid #e2e8f0;">Current float</th>
+                                <th style="padding:10px 12px; border-bottom:1px solid #e2e8f0;">Top-ups</th>
+                                <th style="padding:10px 12px; border-bottom:1px solid #e2e8f0;">Deposit deductions</th>
+                                <th style="padding:10px 12px; border-bottom:1px solid #e2e8f0;">Withdraw credits</th>
+                                <th style="padding:10px 12px; border-bottom:1px solid #e2e8f0;">Net float Δ</th>
+                                <th style="padding:10px 12px; border-bottom:1px solid #e2e8f0;">Players</th>
+                                <th style="padding:10px 12px; border-bottom:1px solid #e2e8f0;">Agents</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for row in float_rows %}
+                            <tr>
+                                <td style="padding:10px 12px; border-bottom:1px solid #f1f5f9; font-weight:700;">{{ row.franchise_name }}</td>
+                                <td style="padding:10px 12px; border-bottom:1px solid #f1f5f9;">{{ row.admin_username }}</td>
+                                <td style="padding:10px 12px; border-bottom:1px solid #f1f5f9;">₹{{ row.current_balance }}</td>
+                                <td style="padding:10px 12px; border-bottom:1px solid #f1f5f9; color:#047857;">+₹{{ row.topups }}</td>
+                                <td style="padding:10px 12px; border-bottom:1px solid #f1f5f9; color:#b91c1c;">−₹{{ row.deposit_deductions }}</td>
+                                <td style="padding:10px 12px; border-bottom:1px solid #f1f5f9; color:#047857;">+₹{{ row.withdraw_credits }}</td>
+                                <td style="padding:10px 12px; border-bottom:1px solid #f1f5f9; font-weight:700; {% if row.net_float_change >= 0 %}color:#047857{% else %}color:#b91c1c{% endif %};">
+                                    {% if row.net_float_change >= 0 %}+{% endif %}₹{{ row.net_float_change }}
+                                </td>
+                                <td style="padding:10px 12px; border-bottom:1px solid #f1f5f9;">{{ row.player_count }}</td>
+                                <td style="padding:10px 12px; border-bottom:1px solid #f1f5f9;">{{ row.agent_count }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
                 </div>
+                {% else %}
+                <p style="margin:0; color:#64748b; font-size:14px;">No float activity for this range.</p>
+                {% endif %}
+            </div>
+
+            <div class="control-panel" style="background:#fff; border:1px solid #e2e8f0; border-radius:12px; padding:20px; margin:20px 0;">
+                <h2 style="margin:0 0 6px; font-size:18px;">Per-agent summary{% if selected_franchise_name %} — {{ selected_franchise_name }}{% endif %}</h2>
+                <p style="margin:0 0 16px; color:#64748b; font-size:13px;">
+                    Commission-style view: deposits, withdraws, net player cash, and house P/L (bets − wins) per agent. Pick a franchise above when available; otherwise House shows the full rollup.
+                </p>
+                {% if agent_rows %}
+                <div class="table-wrapper" style="overflow-x:auto;">
+                    <table style="width:100%; border-collapse:collapse; font-size:14px;">
+                        <thead>
+                            <tr style="background:#f8fafc; text-align:left;">
+                                <th style="padding:10px 12px; border-bottom:1px solid #e2e8f0;">Agent / Direct</th>
+                                <th style="padding:10px 12px; border-bottom:1px solid #e2e8f0;">Players</th>
+                                <th style="padding:10px 12px; border-bottom:1px solid #e2e8f0;">Deposits</th>
+                                <th style="padding:10px 12px; border-bottom:1px solid #e2e8f0;">Withdraws</th>
+                                <th style="padding:10px 12px; border-bottom:1px solid #e2e8f0;">Net cash</th>
+                                <th style="padding:10px 12px; border-bottom:1px solid #e2e8f0;">Bets</th>
+                                <th style="padding:10px 12px; border-bottom:1px solid #e2e8f0;">Wins</th>
+                                <th style="padding:10px 12px; border-bottom:1px solid #e2e8f0;">House P/L</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for row in agent_rows %}
+                            <tr style="{% if row.is_total %}background:#f1f5f9; font-weight:800;{% elif row.is_direct %}background:#f8fafc;{% endif %}">
+                                <td style="padding:10px 12px; border-bottom:1px solid #f1f5f9;">
+                                    {% if row.is_direct and not row.is_total %}{{ row.label }}{% else %}{{ row.label }}{% endif %}
+                                </td>
+                                <td style="padding:10px 12px; border-bottom:1px solid #f1f5f9;">{{ row.player_count }}</td>
+                                <td style="padding:10px 12px; border-bottom:1px solid #f1f5f9;">₹{{ row.deposits }}</td>
+                                <td style="padding:10px 12px; border-bottom:1px solid #f1f5f9;">₹{{ row.withdraws }}</td>
+                                <td style="padding:10px 12px; border-bottom:1px solid #f1f5f9; {% if row.net_cash >= 0 %}color:#047857{% else %}color:#b91c1c{% endif %};">₹{{ row.net_cash }}</td>
+                                <td style="padding:10px 12px; border-bottom:1px solid #f1f5f9;">₹{{ row.bets|floatformat:0 }}</td>
+                                <td style="padding:10px 12px; border-bottom:1px solid #f1f5f9;">₹{{ row.wins|floatformat:0 }}</td>
+                                <td style="padding:10px 12px; border-bottom:1px solid #f1f5f9; font-weight:700; {% if row.house_pl >= 0 %}color:#047857{% else %}color:#b91c1c{% endif %};">
+                                    ₹{{ row.house_pl|floatformat:0 }}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <p style="margin:0; color:#64748b; font-size:14px;">No agent data for this range{% if is_super_admin and franchise_options %} — select a franchise above{% endif %}.</p>
+                {% endif %}
             </div>
 
         </div>
     </div>
 
     <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            const labels = {{ chart_labels|safe }};
-            const depositsData = {{ chart_deposits|safe }};
-            const withdrawsData = {{ chart_withdraws|safe }};
-            const betsData = {{ chart_bets|safe }};
-            const winsData = {{ chart_wins|safe }};
-
-            function formatRupee(value) {
-                const n = Number(value) || 0;
-                const abs = Math.abs(n);
-                if (abs >= 10000000) return '₹' + (n / 10000000).toFixed(2) + ' Cr';
-                if (abs >= 100000) return '₹' + (n / 100000).toFixed(2) + ' L';
-                if (abs >= 1000) return '₹' + (n / 1000).toFixed(1) + 'k';
-                return '₹' + n.toLocaleString('en-IN', { maximumFractionDigits: 0 });
-            }
-
-            function formatRupeeExact(value) {
-                const n = Number(value) || 0;
-                return '₹' + n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-            }
-
-            const commonOptions = {
-                responsive: true,
-                maintainAspectRatio: false,
-                interaction: { mode: 'index', intersect: false },
-                plugins: {
-                    legend: {
-                        display: true,
-                        position: 'top',
-                        labels: {
-                            usePointStyle: true,
-                            pointStyle: 'rectRounded',
-                            boxWidth: 12,
-                            padding: 16,
-                            font: { size: 12, weight: '600' }
-                        }
-                    },
-                    tooltip: {
-                        backgroundColor: '#0f172a',
-                        titleFont: { size: 13, weight: '700' },
-                        bodyFont: { size: 12 },
-                        padding: 12,
-                        cornerRadius: 8,
-                        callbacks: {
-                            label: function(context) {
-                                const label = context.dataset.label || '';
-                                return ' ' + label + ': ' + formatRupeeExact(context.parsed.y);
-                            }
-                        }
-                    }
-                },
-                scales: {
-                    y: {
-                        beginAtZero: true,
-                        border: { display: false },
-                        grid: { color: '#eef2f7' },
-                        ticks: {
-                            callback: function(value) { return formatRupee(value); },
-                            font: { size: 11 },
-                            color: '#64748b'
-                        }
-                    },
-                    x: {
-                        border: { display: false },
-                        grid: { display: false },
-                        ticks: {
-                            font: { size: 10 },
-                            color: '#64748b',
-                            maxRotation: 45,
-                            minRotation: 0,
-                            autoSkip: true,
-                            maxTicksLimit: 14
-                        }
-                    }
-                }
-            };
-
-            // Deposits vs Withdraws
-            new Chart(document.getElementById('cashflowChart').getContext('2d'), {
-                type: 'line',
-                data: {
-                    labels: labels,
-                    datasets: [
-                        {
-                            label: 'Deposits',
-                            data: depositsData,
-                            borderColor: '#2563eb',
-                            backgroundColor: 'rgba(37, 99, 235, 0.12)',
-                            fill: true,
-                            tension: 0.3,
-                            pointRadius: 3,
-                            pointHoverRadius: 5,
-                            borderWidth: 2.5
-                        },
-                        {
-                            label: 'Withdraws',
-                            data: withdrawsData,
-                            borderColor: '#ea580c',
-                            backgroundColor: 'rgba(234, 88, 12, 0.10)',
-                            fill: true,
-                            tension: 0.3,
-                            pointRadius: 3,
-                            pointHoverRadius: 5,
-                            borderWidth: 2.5
-                        }
-                    ]
-                },
-                options: commonOptions
-            });
-
-            // Bets vs Wins
-            new Chart(document.getElementById('betsWinsChart').getContext('2d'), {
-                type: 'bar',
-                data: {
-                    labels: labels,
-                    datasets: [
-                        {
-                            label: 'Bets',
-                            data: betsData,
-                            backgroundColor: '#6366f1',
-                            borderRadius: 4,
-                            maxBarThickness: 18
-                        },
-                        {
-                            label: 'Wins (payouts)',
-                            data: winsData,
-                            backgroundColor: '#f59e0b',
-                            borderRadius: 4,
-                            maxBarThickness: 18
-                        }
-                    ]
-                },
-                options: {
-                    ...commonOptions,
-                    scales: {
-                        ...commonOptions.scales,
-                        x: {
-                            ...commonOptions.scales.x,
-                            stacked: false
-                        }
-                    }
-                }
-            });
-        });
-
         // Sidebar scroll position preservation
         const sidebarWrapper = document.querySelector('.sidebar-menu-wrapper');
         if (sidebarWrapper) {

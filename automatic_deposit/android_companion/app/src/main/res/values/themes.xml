@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.PhonePeSync" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+        <item name="colorPrimary">#2DD4A8</item>
+        <item name="colorPrimaryVariant">#1A9E7C</item>
+        <item name="colorOnPrimary">#04241C</item>
+        <item name="android:statusBarColor">#0B1220</item>
+        <item name="android:navigationBarColor">#0B1220</item>
+        <item name="android:windowBackground">#0B1220</item>
+        <item name="android:textColor">#E8EEF8</item>
+    </style>
+</resources>

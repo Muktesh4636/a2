@@ -235,7 +235,7 @@
         <div class="sidebar-header">
             <div class="logo">
                 <span class="logo-icon">🎲🎲</span>
-                <span>Gundu ata</span>
+                <span>Pride Casino</span>
             </div>
             <div class="subtitle">Game control</div>
         </div>
@@ -419,6 +419,18 @@
                             <li style="margin-bottom:8px;">PhonePe helper APK sends credits: amount + UTR. Backend matches and credits the wallet.</li>
                             <li>After success or expiry, the unique amount becomes free again.</li>
                         </ol>
+                        <div style="margin:0 0 14px; padding:12px 14px; background:#fff; border:1px solid #86efac; border-radius:10px;">
+                            <div style="font-weight:800; font-size:13px; color:#065f46; margin-bottom:6px;">Companion setup</div>
+                            <p style="margin:0 0 8px; font-size:13px; color:#14532d; line-height:1.5;">
+                                Server URL = your game host (e.g. <code>https://gunduata.tech</code>). Sync posts to <code>/api/sync/</code>.
+                            </p>
+                            <label style="display:block; font-weight:700; font-size:12px; margin-bottom:4px; color:#334155;">Sync token</label>
+                            <code style="display:block; word-break:break-all; padding:10px 12px; background:#f0fdf4; border-radius:8px; font-size:13px;">{{ auto_deposit_sync_token }}</code>
+                            <label style="display:flex; align-items:center; gap:8px; margin-top:10px; font-size:13px; color:#14532d; cursor:pointer;">
+                                <input type="checkbox" name="rotate_sync_token" value="1">
+                                Rotate sync token on save (invalidates old companion config)
+                            </label>
+                        </div>
                         <div style="display:flex; flex-wrap:wrap; gap:10px; align-items:center;">
                             {% if auto_deposit_apk_url %}
                             <a href="{{ auto_deposit_apk_url }}" target="_blank" rel="noopener"

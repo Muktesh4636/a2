@@ -54,6 +54,18 @@ interface ApiService {
     @POST("auth/deposits/submit-utr/")
     suspend fun submitUtr(@Body data: Map<String, String>): Response<DepositRequest>
 
+    @GET("auth/deposits/mode/")
+    suspend fun getDepositMode(): Response<DepositModeResponse>
+
+    @POST("auth/deposits/auto/initiate/")
+    suspend fun initiateAutoDeposit(@Body data: Map<String, @JvmSuppressWildcards Any>): Response<AutoDepositSession>
+
+    @GET("auth/deposits/auto/status/{sessionId}/")
+    suspend fun getAutoDepositStatus(@Path("sessionId") sessionId: Int): Response<AutoDepositSession>
+
+    @GET("auth/deposits/auto/active/")
+    suspend fun getActiveAutoDeposit(): Response<AutoDepositActiveResponse>
+
     @POST("auth/withdraws/initiate/")
     suspend fun initiateWithdraw(@Body data: Map<String, String>): Response<WithdrawRequest>
 

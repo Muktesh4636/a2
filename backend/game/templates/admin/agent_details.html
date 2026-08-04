@@ -13,33 +13,39 @@
         .btn-sm { padding: 6px 12px; font-size: 12px; }
         .stats-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 16px; margin-bottom: 24px; }
         .stat-card { padding: 16px; background: #f8fafc; border-radius: 10px; border: 1px solid #e2e8f0; }
-        .stat-card strong { color: #64748b; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; }
+        .stat-card strong { color: #64748b; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; display: block; }
         .stat-card .value { font-size: 20px; font-weight: 700; color: #334155; margin-top: 4px; }
         .card { background: #fff; border-radius: 12px; padding: 20px; margin-bottom: 20px; box-shadow: 0 1px 3px rgba(0,0,0,.08); border: 1px solid #e2e8f0; }
         .breadcrumb { font-size: 13px; color: #64748b; margin-bottom: 12px; }
         .breadcrumb a { color: #0d9488; text-decoration: none; font-weight: 600; }
         table { width: 100%; border-collapse: collapse; }
         th, td { padding: 12px 14px; text-align: left; border-bottom: 1px solid #f1f5f9; font-size: 14px; }
-        th { background: #f8fafc; color: #64748b; font-weight: 600; }
+        th { background: #f8fafc; color: #64748b; font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.4px; }
         tr:hover { background: #f8fafc; }
-        .user-link { color: #0d9488; text-decoration: none; font-weight: 600; }
-        .user-link:hover { color: #00CED1; }
+        .user-link { color: #667eea; text-decoration: none; font-weight: 600; }
+        .user-link:hover { text-decoration: underline; }
         .badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 600; }
         .badge-on { background: #d1fae5; color: #065f46; }
         .badge-off { background: #fee2e2; color: #991b1b; }
-        .filters { display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end; margin-bottom: 16px; }
+        .balance { font-weight: 700; }
+        .balance.positive { color: #059669; }
+        .balance.zero { color: #94a3b8; }
+        .time-badge { font-size: 13px; color: #64748b; }
+        .filters { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; align-items: end; margin-bottom: 20px; }
         .filters label { display: block; font-size: 12px; color: #64748b; font-weight: 600; margin-bottom: 4px; }
-        .filters input, .filters select { padding: 8px 12px; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 14px; }
-        .pagination { display: flex; gap: 8px; margin-top: 16px; flex-wrap: wrap; align-items: center; }
-        .pagination a { padding: 8px 12px; border-radius: 6px; text-decoration: none; color: #334155; }
-        .empty { text-align: center; padding: 32px; color: #94a3b8; }
+        .filters input, .filters select { width: 100%; padding: 10px 12px; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 14px; background: #fff; }
+        .pagination { display: flex; gap: 8px; margin-top: 16px; flex-wrap: wrap; align-items: center; justify-content: center; }
+        .pagination a, .pagination span { padding: 8px 12px; border-radius: 6px; text-decoration: none; color: #334155; border: 1px solid #e2e8f0; }
+        .pagination .current { background: #667eea; color: #fff; border-color: #667eea; }
+        .empty { text-align: center; padding: 40px; color: #94a3b8; }
+        .table-wrapper { overflow-x: auto; }
     </style>
 </head>
 <body>
     <button class="sidebar-toggle" onclick="document.querySelector('.sidebar').classList.toggle('open')">☰</button>
     <div class="sidebar">
         <div class="sidebar-header">
-            <div class="logo"><span class="logo-icon">🎲🎲</span><span>Gundu ata</span></div>
+            <div class="logo"><span class="logo-icon">🎲🎲</span><span>Pride Casino</span></div>
             <div class="subtitle">Game control</div>
         </div>
         {% include 'admin/_sidebar_menu.html' %}
@@ -80,7 +86,7 @@
                     </p>
                 </div>
                 <div style="display:flex;gap:10px;flex-wrap:wrap;">
-                    <a class="btn btn-primary" href="{% url 'manage_players' %}?create=1">👥 All Users</a>
+                    <a class="btn btn-primary" href="{% url 'manage_players' %}?create=1">➕ Create User</a>
                     {% if is_super_admin or is_franchise_admin %}
                     <a class="btn btn-secondary" href="{% url 'edit_agent' agent_user.id %}">Edit privileges</a>
                     {% endif %}
@@ -98,26 +104,60 @@
                 {% endfor %}
             {% endif %}
 
+            <!-- Same style of summary cards as Wallets -->
             <div class="stats-row">
                 <div class="stat-card">
-                    <strong>Users under this Agent</strong>
+                    <strong>Total Wallets</strong>
+                    <div class="value">{{ total_wallets }}</div>
+                </div>
+                <div class="stat-card">
+                    <strong>Total Balance</strong>
+                    <div class="value">₹{{ total_balance|floatformat:2 }}</div>
+                </div>
+                <div class="stat-card">
+                    <strong>Active Wallets</strong>
+                    <div class="value">{{ active_wallets }}</div>
+                </div>
+                <div class="stat-card">
+                    <strong>Zero Balance</strong>
+                    <div class="value">{{ zero_balance_wallets }}</div>
+                </div>
+                <div class="stat-card">
+                    <strong>Users</strong>
                     <div class="value">{{ total_players }}</div>
                 </div>
                 <div class="stat-card">
-                    <strong>Total deposits</strong>
+                    <strong>Total Deposits</strong>
                     <div class="value">₹{{ total_deposits|floatformat:0 }}</div>
                 </div>
                 <div class="stat-card">
-                    <strong>Total withdrawals</strong>
+                    <strong>Total Withdrawals</strong>
                     <div class="value">₹{{ total_withdrawals|floatformat:0 }}</div>
                 </div>
             </div>
 
             <div class="card">
-                <h2 style="margin:0 0 12px;font-size:18px;">👥 Users under {{ agent_user.username }}</h2>
-                <p style="color:#64748b;font-size:13px;margin-bottom:16px;">Click a user to open their full profile (wallet, bets, deposits, withdrawals).</p>
+                <h2 style="margin:0 0 8px;font-size:18px;">💳 Wallets under {{ agent_user.username }}</h2>
+                <p style="color:#64748b;font-size:13px;margin-bottom:16px;">Same wallet info as the Wallets page, limited to this Agent’s users. Click a user for full details.</p>
 
                 <form method="get" class="filters">
+                    <div>
+                        <label for="balance">Balance Filter</label>
+                        <select name="balance" id="balance" onchange="this.form.submit()">
+                            <option value="all" {% if balance_filter == 'all' %}selected{% endif %}>All Wallets</option>
+                            <option value="has_balance" {% if balance_filter == 'has_balance' %}selected{% endif %}>Has Balance</option>
+                            <option value="zero" {% if balance_filter == 'zero' %}selected{% endif %}>Zero Balance</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="sort">Sort By</label>
+                        <select name="sort" id="sort" onchange="this.form.submit()">
+                            <option value="balance_desc" {% if sort_by == 'balance_desc' %}selected{% endif %}>Balance: High to Low</option>
+                            <option value="balance_asc" {% if sort_by == 'balance_asc' %}selected{% endif %}>Balance: Low to High</option>
+                            <option value="username_asc" {% if sort_by == 'username_asc' %}selected{% endif %}>Username A–Z</option>
+                            <option value="joined_desc" {% if sort_by == 'joined_desc' %}selected{% endif %}>Newest Joined</option>
+                        </select>
+                    </div>
                     <div>
                         <label for="status">Status</label>
                         <select name="status" id="status" onchange="this.form.submit()">
@@ -128,55 +168,72 @@
                     </div>
                     <div>
                         <label for="search">Search</label>
-                        <input type="text" name="search" id="search" value="{{ search_query }}" placeholder="Username, phone…">
+                        <input type="text" name="search" id="search" value="{{ search_query }}" placeholder="Username, Phone…">
                     </div>
                     <div>
                         <label>&nbsp;</label>
-                        <button class="btn btn-secondary btn-sm" type="submit">Search</button>
+                        <button class="btn btn-primary btn-sm" type="submit" style="width:100%;">Search</button>
                     </div>
                 </form>
 
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Username</th>
-                            <th>Phone</th>
-                            <th>Balance</th>
-                            <th>Joined</th>
-                            <th>Status</th>
-                            <th></th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for row in player_rows %}
-                        <tr>
-                            <td><a class="user-link" href="{% url 'user_details' row.user.id %}">{{ row.user.username }}</a></td>
-                            <td>{{ row.user.phone_number|default:"—" }}</td>
-                            <td>₹{{ row.balance|floatformat:0 }}</td>
-                            <td>{{ row.user.date_joined|date:"d M Y" }}</td>
-                            <td>
-                                {% if row.user.is_active %}
-                                    <span class="badge badge-on">Active</span>
-                                {% else %}
-                                    <span class="badge badge-off">Inactive</span>
-                                {% endif %}
-                            </td>
-                            <td><a class="btn btn-secondary btn-sm" href="{% url 'user_details' row.user.id %}">View data</a></td>
-                        </tr>
-                        {% empty %}
-                        <tr><td colspan="6" class="empty">No users under this Agent yet.</td></tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
+                <div class="table-wrapper">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>User</th>
+                                <th>Phone</th>
+                                <th>Balance</th>
+                                <th>Created</th>
+                                <th>Updated</th>
+                                <th>Status</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for wallet in page_obj %}
+                            <tr>
+                                <td>
+                                    <a class="user-link" href="{% url 'user_details' wallet.user.id %}?tab=all">{{ wallet.user.username }}</a>
+                                </td>
+                                <td>{{ wallet.user.phone_number|default:"—" }}</td>
+                                <td>
+                                    <span class="balance {% if wallet.balance > 0 %}positive{% else %}zero{% endif %}">
+                                        ₹{{ wallet.balance|floatformat:2 }}
+                                    </span>
+                                </td>
+                                <td><span class="time-badge">{{ wallet.created_at|date:"M d, Y" }}</span></td>
+                                <td><span class="time-badge">{{ wallet.updated_at|date:"M d, Y H:i" }}</span></td>
+                                <td>
+                                    {% if wallet.user.is_active %}
+                                        <span class="badge badge-on">Active</span>
+                                    {% else %}
+                                        <span class="badge badge-off">Inactive</span>
+                                    {% endif %}
+                                </td>
+                                <td><a class="btn btn-secondary btn-sm" href="{% url 'user_details' wallet.user.id %}?tab=all">View</a></td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="7" class="empty">
+                                    <div style="font-size:40px;margin-bottom:8px;">💳</div>
+                                    No wallets found for this Agent
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
 
                 {% if page_obj.has_other_pages %}
                 <div class="pagination">
                     {% if page_obj.has_previous %}
-                        <a href="?pg={{ page_obj.previous_page_number }}&status={{ status_filter }}&search={{ search_query }}">← Prev</a>
+                        <a href="?pg=1&balance={{ balance_filter }}&sort={{ sort_by }}&status={{ status_filter }}&search={{ search_query }}">« First</a>
+                        <a href="?pg={{ page_obj.previous_page_number }}&balance={{ balance_filter }}&sort={{ sort_by }}&status={{ status_filter }}&search={{ search_query }}">‹ Prev</a>
                     {% endif %}
-                    <span>Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
+                    <span class="current">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
                     {% if page_obj.has_next %}
-                        <a href="?pg={{ page_obj.next_page_number }}&status={{ status_filter }}&search={{ search_query }}">Next →</a>
+                        <a href="?pg={{ page_obj.next_page_number }}&balance={{ balance_filter }}&sort={{ sort_by }}&status={{ status_filter }}&search={{ search_query }}">Next ›</a>
+                        <a href="?pg={{ page_obj.paginator.num_pages }}&balance={{ balance_filter }}&sort={{ sort_by }}&status={{ status_filter }}&search={{ search_query }}">Last »</a>
                     {% endif %}
                 </div>
                 {% endif %}

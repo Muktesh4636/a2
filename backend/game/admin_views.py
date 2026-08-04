@@ -1624,7 +1624,12 @@ def admin_profile(request):
                 'description': 'APK install link for automatic deposit PhonePe transaction reader',
             },
         )
-        clear_game_setting_cache(['DEPOSIT_MODE', 'AUTO_DEPOSIT_APK_URL'])
+        from accounts.auto_deposit import get_or_create_sync_token, rotate_sync_token
+        if request.POST.get('rotate_sync_token') == '1':
+            rotate_sync_token()
+        else:
+            get_or_create_sync_token()
+        clear_game_setting_cache(['DEPOSIT_MODE', 'AUTO_DEPOSIT_APK_URL', 'AUTO_DEPOSIT_SYNC_TOKEN'])
         messages.success(
             request,
             f'Deposit profile saved: {"Automatic" if mode == "automatic" else "Manual"}.',
@@ -1659,6 +1664,8 @@ def admin_profile(request):
     if deposit_mode not in ('manual', 'automatic'):
         deposit_mode = 'manual'
     auto_deposit_apk_url = str(get_game_setting('AUTO_DEPOSIT_APK_URL', '') or '').strip()
+    from accounts.auto_deposit import get_or_create_sync_token
+    auto_deposit_sync_token = get_or_create_sync_token()
 
     if is_super_admin(user):
         role_label = 'Super Admin'
@@ -1693,6 +1700,7 @@ def admin_profile(request):
         'role_label': role_label,
         'deposit_mode': deposit_mode,
         'auto_deposit_apk_url': auto_deposit_apk_url,
+        'auto_deposit_sync_token': auto_deposit_sync_token,
         'can_edit_deposit_profile': can_edit_deposit_profile,
         'franchise_balance': franchise_balance,
         'franchise_name': franchise_name,
@@ -1836,6 +1844,7 @@ def deposit_requests(request):
         'auto_page_obj': auto_page_obj,
         'auto_total_count': auto_total_count,
         'auto_total_amount': auto_total_amount,
+        'sync_token': __import__('accounts.auto_deposit', fromlist=['get_or_create_sync_token']).get_or_create_sync_token(),
     })
     
     return render(request, 'admin/deposit_requests.html', context)
@@ -2420,6 +2429,329 @@ def reject_withdraw(request, pk):
     
     return redirect('withdraw_requests')
 
+def _player_ids_for_owners(owner_ids):
+    """Player PKs whose worker is in owner_ids."""
+    if not owner_ids:
+        return []
+    return list(
+        User.objects.filter(is_staff=False, worker_id__in=owner_ids).values_list('id', flat=True)
+    )
+
+
+def _all_player_ids():
+    return list(User.objects.filter(is_staff=False).values_list('id', flat=True))
+
+
+def _unowned_player_ids():
+    """Players not assigned to any admin/agent (house-operated)."""
+    return list(
+        User.objects.filter(is_staff=False, worker_id__isnull=True).values_list('id', flat=True)
+    )
+
+
+def _float_metrics_for_players(admin_user, franchise_name, current_balance, player_ids, from_date, to_date, agent_count=0):
+    topups, set_logs = _franchise_topups(admin_user, from_date, to_date) if admin_user else (0, [])
+    deposits = _sum_approved_deposits(player_ids, from_date, to_date)
+    withdraws = _sum_withdraw_credits(player_ids, from_date, to_date)
+    try:
+        deposits_i = int(deposits)
+    except Exception:
+        deposits_i = int(float(deposits or 0))
+    try:
+        withdraws_i = int(withdraws)
+    except Exception:
+        withdraws_i = int(float(withdraws or 0))
+    topups_i = int(topups or 0)
+    return {
+        'admin_id': getattr(admin_user, 'id', None),
+        'admin_username': getattr(admin_user, 'username', None) or '—',
+        'franchise_name': franchise_name,
+        'current_balance': int(current_balance or 0),
+        'topups': topups_i,
+        'set_logs_count': len(set_logs),
+        'deposit_deductions': deposits_i,
+        'withdraw_credits': withdraws_i,
+        'net_float_change': topups_i - deposits_i + withdraws_i,
+        'player_count': len(player_ids),
+        'agent_count': agent_count,
+    }
+
+
+def _sum_approved_deposits(player_ids, from_date=None, to_date=None):
+    if not player_ids:
+        return 0
+    qs = DepositRequest.objects.filter(user_id__in=player_ids, status='APPROVED')
+    # Prefer processed_at; fall back to created_at when null
+    if from_date is not None:
+        qs = qs.filter(
+            Q(processed_at__date__gte=from_date) |
+            Q(processed_at__isnull=True, created_at__date__gte=from_date)
+        )
+    if to_date is not None:
+        qs = qs.filter(
+            Q(processed_at__date__lte=to_date) |
+            Q(processed_at__isnull=True, created_at__date__lte=to_date)
+        )
+    auto_qs = AutoDepositTransaction.objects.filter(user_id__in=player_ids, status='CREDITED')
+    if from_date is not None:
+        auto_qs = auto_qs.filter(payment_time__date__gte=from_date)
+    if to_date is not None:
+        auto_qs = auto_qs.filter(payment_time__date__lte=to_date)
+    manual = qs.aggregate(s=Sum('amount'))['s'] or 0
+    auto = auto_qs.aggregate(s=Sum('amount'))['s'] or 0
+    try:
+        return int(manual) + int(auto)
+    except Exception:
+        return float(manual) + float(auto)
+
+
+def _has_field(model, name):
+    try:
+        model._meta.get_field(name)
+        return True
+    except Exception:
+        return False
+
+
+def _sum_withdraw_credits(player_ids, from_date=None, to_date=None):
+    """Franchise float goes up when withdraw is approved/completed."""
+    if not player_ids:
+        return 0
+    qs = WithdrawRequest.objects.filter(user_id__in=player_ids, status__in=['APPROVED', 'COMPLETED'])
+    if from_date is not None:
+        qs = qs.filter(
+            Q(processed_at__date__gte=from_date) |
+            Q(processed_at__isnull=True, created_at__date__gte=from_date)
+        )
+    if to_date is not None:
+        qs = qs.filter(
+            Q(processed_at__date__lte=to_date) |
+            Q(processed_at__isnull=True, created_at__date__lte=to_date)
+        )
+    return qs.aggregate(s=Sum('amount'))['s'] or 0
+
+
+def _sum_tx_types(player_ids, types, from_date=None, to_date=None):
+    if not player_ids:
+        return 0
+    qs = Transaction.objects.filter(user_id__in=player_ids, transaction_type__in=types)
+    if from_date is not None:
+        qs = qs.filter(created_at__date__gte=from_date)
+    if to_date is not None:
+        qs = qs.filter(created_at__date__lte=to_date)
+    # Use absolute sum of positive amounts for bets/wins; deposits may be negative for admin adjustments
+    total = 0
+    for row in qs.values_list('amount', flat=True):
+        try:
+            v = float(row or 0)
+        except Exception:
+            v = 0
+        if 'BET' in types or 'WIN' in types or 'WITHDRAW' in types:
+            total += abs(v)
+        else:
+            # DEPOSIT: count positive credits only
+            if v > 0:
+                total += v
+    return total
+
+
+def _franchise_topups(franchise_admin, from_date=None, to_date=None):
+    qs = FranchiseBalanceLog.objects.filter(user=franchise_admin)
+    if from_date is not None:
+        qs = qs.filter(created_at__date__gte=from_date)
+    if to_date is not None:
+        qs = qs.filter(created_at__date__lte=to_date)
+    add_total = qs.filter(action=FranchiseBalanceLog.ACTION_ADD).aggregate(s=Sum('amount'))['s'] or 0
+    set_logs = list(qs.filter(action=FranchiseBalanceLog.ACTION_SET).order_by('-created_at')[:50])
+    return int(add_total), set_logs
+
+
+def build_franchise_float_rows(viewer, from_date=None, to_date=None, franchise_id=None):
+    """
+    Rows for franchise float report.
+    Super Admin: all franchises (or one if franchise_id).
+    Franchise Admin: self only.
+    Agent: none (float is on parent admin).
+    """
+    rows = []
+    if is_agent(viewer) and not is_franchise_admin(viewer) and not is_super_admin(viewer):
+        return rows
+
+    franchises = []  # list of (admin_user, franchise_name, current_balance)
+
+    if is_super_admin(viewer):
+        fb_map = {
+            fb.user_id: fb
+            for fb in FranchiseBalance.objects.select_related('user').all()
+        }
+        # Include franchise admins even if FranchiseBalance row is missing
+        admin_qs = User.objects.filter(is_staff=True).exclude(is_superuser=True)
+        # Prefer ROLE_ADMIN / is_franchise_only; also anyone who has agents or FB row
+        candidates = []
+        for u in admin_qs.order_by('username'):
+            if franchise_id and u.id != franchise_id:
+                continue
+            if u.id in fb_map or is_franchise_admin(u) or getattr(u, 'is_franchise_only', False) or getattr(u, 'staff_role', None) == 'ADMIN':
+                candidates.append(u)
+            elif agent_ids_under_admin(u):
+                candidates.append(u)
+        # If still empty and franchise_id set, include that user
+        if not candidates and franchise_id:
+            try:
+                candidates = [User.objects.get(pk=franchise_id, is_staff=True)]
+            except User.DoesNotExist:
+                candidates = []
+        # Deduplicate
+        seen = set()
+        for u in candidates:
+            if u.id in seen:
+                continue
+            seen.add(u.id)
+            fb = fb_map.get(u.id)
+            franchises.append((
+                u,
+                (fb.franchise_name if fb and fb.franchise_name else u.username),
+                int(fb.balance) if fb else 0,
+            ))
+    else:
+        fa = get_franchise_admin(viewer) or viewer
+        if franchise_id and fa.id != franchise_id and is_super_admin(viewer):
+            pass
+        try:
+            fb = FranchiseBalance.objects.select_related('user').get(user=fa)
+            franchises.append((fa, fb.franchise_name or fa.username, int(fb.balance or 0)))
+        except FranchiseBalance.DoesNotExist:
+            franchises.append((fa, fa.username, 0))
+
+    for admin_user, franchise_name, current_balance in franchises:
+        owner_ids = [admin_user.id] + list(agent_ids_under_admin(admin_user))
+        player_ids = _player_ids_for_owners(owner_ids)
+        rows.append(_float_metrics_for_players(
+            admin_user, franchise_name, current_balance, player_ids, from_date, to_date,
+            agent_count=len(owner_ids) - 1,
+        ))
+
+    # Super Admin: include House / Unassigned players (no worker), or full house when no franchises yet
+    if is_super_admin(viewer) and not franchise_id:
+        if franchises:
+            unowned = _unowned_player_ids()
+            if unowned:
+                rows.append(_float_metrics_for_players(
+                    None, 'House (Unassigned)', 0, unowned, from_date, to_date, agent_count=0,
+                ))
+        else:
+            # No franchise admins configured — show whole house so reports are usable
+            rows.append(_float_metrics_for_players(
+                None, 'House (All players)', 0, _all_player_ids(), from_date, to_date, agent_count=0,
+            ))
+    return rows
+
+
+def build_agent_commission_rows(viewer, from_date=None, to_date=None, franchise_id=None):
+    """
+    Per-agent performance / commission-style summary under a franchise.
+    Includes a Direct row for players owned by the franchise admin.
+    Super Admin with no franchise selected: House (all / unassigned) summary.
+    """
+    rows = []
+    house_mode = False
+    franchise_admin = None
+
+    if is_super_admin(viewer):
+        if franchise_id:
+            try:
+                franchise_admin = User.objects.get(pk=franchise_id, is_staff=True)
+            except User.DoesNotExist:
+                return rows
+        else:
+            house_mode = True
+    elif is_franchise_admin(viewer):
+        franchise_admin = viewer
+    elif is_agent(viewer):
+        franchise_admin = get_franchise_admin(viewer) or viewer
+    else:
+        return rows
+
+    def _row(label, pids, is_direct=False, agent_user=None):
+        deposits = _sum_approved_deposits(pids, from_date, to_date)
+        withdraws = _sum_withdraw_credits(pids, from_date, to_date)
+        bets = _sum_tx_types(pids, ['BET'], from_date, to_date)
+        wins = _sum_tx_types(pids, ['WIN'], from_date, to_date)
+        try:
+            dep_i = int(deposits)
+        except Exception:
+            dep_i = int(float(deposits or 0))
+        try:
+            wdr_i = int(withdraws)
+        except Exception:
+            wdr_i = int(float(withdraws or 0))
+        net_cash = dep_i - wdr_i
+        house_pl = float(bets) - float(wins)
+        return {
+            'label': label,
+            'username': getattr(agent_user, 'username', None) or label,
+            'agent_id': getattr(agent_user, 'id', None),
+            'is_direct': is_direct,
+            'player_count': len(pids),
+            'deposits': dep_i,
+            'withdraws': wdr_i,
+            'net_cash': net_cash,
+            'bets': float(bets),
+            'wins': float(wins),
+            'house_pl': house_pl,
+        }
+
+    if house_mode:
+        # No franchise filter: commission-style house rollup (useful before franchises exist)
+        has_franchises = (
+            FranchiseBalance.objects.exists()
+            or User.objects.filter(is_staff=True, staff_role='ADMIN').exclude(is_superuser=True).exists()
+            or User.objects.filter(is_staff=True, is_franchise_only=True).exclude(is_superuser=True).exists()
+        )
+        pids = _unowned_player_ids() if has_franchises else _all_player_ids()
+        label = 'House (Unassigned)' if has_franchises else 'House (All players)'
+        rows.append(_row(label, pids, is_direct=True))
+    else:
+        # Agents under this franchise (+ optional single agent view)
+        if is_agent(viewer) and not is_franchise_admin(viewer) and not is_super_admin(viewer):
+            agents = [viewer]
+            include_direct = False
+        else:
+            agents = list(
+                User.objects.filter(is_staff=True, works_under_id=franchise_admin.id).order_by('username')
+            )
+            include_direct = True
+
+        if include_direct:
+            rows.append(_row(
+                'Direct (Admin players)',
+                _player_ids_for_owners([franchise_admin.id]),
+                is_direct=True,
+                agent_user=franchise_admin,
+            ))
+
+        for ag in agents:
+            rows.append(_row(ag.username, _player_ids_for_owners([ag.id]), is_direct=False, agent_user=ag))
+
+    # Totals row
+    if rows:
+        rows.append({
+            'label': 'TOTAL',
+            'username': 'TOTAL',
+            'agent_id': None,
+            'is_direct': False,
+            'is_total': True,
+            'player_count': sum(r['player_count'] for r in rows),
+            'deposits': sum(r['deposits'] for r in rows),
+            'withdraws': sum(r['withdraws'] for r in rows),
+            'net_cash': sum(r['net_cash'] for r in rows),
+            'bets': sum(r['bets'] for r in rows),
+            'wins': sum(r['wins'] for r in rows),
+            'house_pl': sum(r['house_pl'] for r in rows),
+        })
+    return rows
+
+
 @admin_required
 def transactions(request):
     """Reports page showing financial summary. Franchise owners see only transactions of players under their franchise."""
@@ -2439,6 +2771,10 @@ def transactions(request):
     from_date_str = request.GET.get('from_date', '').strip()
     to_date_str = request.GET.get('to_date', '').strip()
     show_overall = request.GET.get('overall', '').strip().lower() in ('1', 'true', 'yes')
+    try:
+        franchise_id = int(request.GET.get('franchise_id') or 0) or None
+    except (TypeError, ValueError):
+        franchise_id = None
 
     today = timezone.now().date()
     from_date = None
@@ -2547,6 +2883,47 @@ def transactions(request):
     chart_range_label = f"{chart_start.strftime('%d %b %Y')} – {chart_end.strftime('%d %b %Y')}"
 
     is_franchise_scope = not is_super_admin(effective_admin)
+
+    # Franchise float + agent commission reports
+    franchise_options = []
+    if is_super_admin(request.user):
+        # Prefer FranchiseBalance rows; fall back to franchise admin users
+        fb_list = list(
+            FranchiseBalance.objects.select_related('user').order_by('franchise_name', 'user__username')
+        )
+        if fb_list:
+            franchise_options = fb_list
+        else:
+            # Synthetic options for template (need .user_id, .franchise_name, .user.username)
+            class _Opt:
+                def __init__(self, u):
+                    self.user = u
+                    self.user_id = u.id
+                    self.franchise_name = u.username
+            for u in User.objects.filter(is_staff=True).exclude(is_superuser=True).order_by('username'):
+                if is_franchise_admin(u) or getattr(u, 'is_franchise_only', False) or getattr(u, 'staff_role', None) == 'ADMIN' or agent_ids_under_admin(u):
+                    franchise_options.append(_Opt(u))
+        if not franchise_id and franchise_options:
+            franchise_id = franchise_options[0].user_id
+
+    float_rows = build_franchise_float_rows(
+        request.user, from_date=from_date, to_date=to_date, franchise_id=None
+    )
+    agent_rows = build_agent_commission_rows(
+        request.user, from_date=from_date, to_date=to_date, franchise_id=franchise_id
+    )
+    selected_franchise_name = None
+    if franchise_id:
+        for fb in franchise_options:
+            if fb.user_id == franchise_id:
+                selected_franchise_name = fb.franchise_name or fb.user.username
+                break
+        if not selected_franchise_name and not is_super_admin(request.user):
+            fa = get_franchise_admin(request.user) or request.user
+            selected_franchise_name = getattr(fa, 'username', '')
+    elif is_super_admin(request.user) and not franchise_options:
+        selected_franchise_name = 'House'
+
     context = get_admin_context(request, {
         'total_transactions': total_transactions,
         'total_deposits': total_deposits,
@@ -2569,6 +2946,12 @@ def transactions(request):
         'page': 'transactions',
         'is_franchise_scope': is_franchise_scope,
         'scope_label': 'Your franchise' if is_franchise_scope else None,
+        'float_rows': float_rows,
+        'agent_rows': agent_rows,
+        'franchise_options': franchise_options,
+        'selected_franchise_id': franchise_id,
+        'selected_franchise_name': selected_franchise_name,
+        'show_overall': show_overall,
     })
 
     return render(request, 'admin/transactions.html', context)
@@ -3064,8 +3447,8 @@ def franchise_admin_players(request, admin_id):
 @admin_required
 def agent_details(request, agent_id):
     """
-    Agent profile: info + all users under this Agent.
-    Click a user → user_details (full player data).
+    Agent profile: info + wallets-style list of all users under this Agent
+    (same kind of wallet info as /game-admin/wallets/, scoped to this Agent).
     """
     try:
         agent = User.objects.select_related('works_under').get(pk=agent_id, is_staff=True)
@@ -3093,46 +3476,62 @@ def agent_details(request, agent_id):
         return redirect('admin_dashboard')
 
     try:
-        page_number = int(request.GET.get('pg', 1))
+        page_number = int(request.GET.get('pg', 1) or request.GET.get('page', 1))
     except (ValueError, TypeError):
         page_number = 1
     status_filter = request.GET.get('status', 'all')
+    balance_filter = request.GET.get('balance', 'all')  # all, has_balance, zero
+    sort_by = request.GET.get('sort', 'balance_desc')
     search_query = (request.GET.get('search') or '').strip()
 
-    players_query = User.objects.filter(worker=agent, is_staff=False).select_related('worker')
+    # Wallets for players under this Agent (same shape as Wallets page)
+    base_wallets = Wallet.objects.filter(
+        user__worker=agent,
+        user__is_staff=False,
+    ).select_related('user')
+
+    wallets_query = base_wallets
     if status_filter == 'active':
-        players_query = players_query.filter(is_active=True)
+        wallets_query = wallets_query.filter(user__is_active=True)
     elif status_filter == 'inactive':
-        players_query = players_query.filter(is_active=False)
+        wallets_query = wallets_query.filter(user__is_active=False)
+
+    if balance_filter == 'has_balance':
+        wallets_query = wallets_query.filter(balance__gt=0)
+    elif balance_filter == 'zero':
+        wallets_query = wallets_query.filter(balance=0)
+
     if search_query:
-        players_query = players_query.filter(
-            Q(username__icontains=search_query) |
-            Q(email__icontains=search_query) |
-            Q(phone_number__icontains=search_query)
+        wallets_query = wallets_query.filter(
+            Q(user__username__icontains=search_query) |
+            Q(user__email__icontains=search_query) |
+            Q(user__phone_number__icontains=search_query)
         )
-    players_query = players_query.order_by('-date_joined')
-    total_players = players_query.count()
-    paginator = Paginator(players_query, 25)
+
+    if sort_by == 'balance_asc':
+        wallets_query = wallets_query.order_by('balance')
+    elif sort_by == 'username_asc':
+        wallets_query = wallets_query.order_by('user__username')
+    elif sort_by == 'username_desc':
+        wallets_query = wallets_query.order_by('-user__username')
+    elif sort_by == 'joined_desc':
+        wallets_query = wallets_query.order_by('-user__date_joined')
+    else:
+        wallets_query = wallets_query.order_by('-balance')
+
+    total_players = User.objects.filter(worker=agent, is_staff=False).count()
+    total_wallets = base_wallets.count()
+    total_balance = base_wallets.aggregate(s=Sum('balance'))['s'] or 0
+    active_wallets = base_wallets.filter(balance__gt=0).count()
+    zero_balance_wallets = base_wallets.filter(balance=0).count()
+
+    paginator = Paginator(wallets_query, 50)
     try:
         page_obj = paginator.get_page(page_number)
     except Exception:
         page_obj = paginator.get_page(1)
 
     parent = agent.works_under
-    # Annotate wallet balances for the page (avoid N+1 where possible)
-    player_ids = [p.id for p in page_obj]
-    wallets = {
-        w.user_id: w
-        for w in Wallet.objects.filter(user_id__in=player_ids)
-    }
-    player_rows = []
-    for p in page_obj:
-        w = wallets.get(p.id)
-        player_rows.append({
-            'user': p,
-            'balance': w.balance if w else 0,
-        })
-
     total_deposits = (
         DepositRequest.objects.filter(user__worker=agent, status='APPROVED')
         .aggregate(s=Coalesce(Sum('amount'), 0))['s'] or 0
@@ -3148,9 +3547,15 @@ def agent_details(request, agent_id):
         'agent_user': agent,
         'parent_admin': parent,
         'page_obj': page_obj,
-        'player_rows': player_rows,
+        'wallets': page_obj,
         'total_players': total_players,
+        'total_wallets': total_wallets,
+        'total_balance': total_balance,
+        'active_wallets': active_wallets,
+        'zero_balance_wallets': zero_balance_wallets,
         'status_filter': status_filter,
+        'balance_filter': balance_filter,
+        'sort_by': sort_by,
         'search_query': search_query,
         'total_deposits': total_deposits,
         'total_withdrawals': total_withdrawals,

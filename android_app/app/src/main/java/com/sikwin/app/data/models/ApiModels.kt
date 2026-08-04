@@ -47,6 +47,30 @@ data class DepositRequest(
     val created_at: String
 )
 
+data class DepositModeResponse(
+    val mode: String,
+    val automatic: Boolean = false
+)
+
+data class AutoDepositSession(
+    val session_id: Int,
+    val status: String,
+    val requested_amount: Int,
+    val unique_amount: String,
+    val utr: String? = null,
+    val expires_at: String? = null,
+    val credited_at: String? = null,
+    val payment_method_id: Int? = null,
+    val message: String? = null,
+    val upi_id: String? = null,
+    val currency: String? = null
+)
+
+data class AutoDepositActiveResponse(
+    val active: Boolean,
+    val session: AutoDepositSession? = null
+)
+
 data class WithdrawRequest(
     val id: Int,
     val amount: String,

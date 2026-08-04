@@ -378,6 +378,50 @@ class AutoDepositTransaction(models.Model):
         return self.party_name or '—'
 
 
+class PendingAutoDeposit(models.Model):
+    """
+    Player auto-deposit session: locks a unique pay amount until credit, cancel, or expiry.
+    Wallet is credited with requested_amount (whole rupees) when PhonePe matches unique_amount.
+    """
+    STATUS_CHOICES = [
+        ('PENDING', 'Pending'),
+        ('CREDITED', 'Credited'),
+        ('EXPIRED', 'Expired'),
+        ('CANCELLED', 'Cancelled'),
+    ]
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='pending_auto_deposits')
+    requested_amount = models.BigIntegerField(help_text='Whole-rupee amount credited to wallet on success')
+    unique_amount = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        help_text='Exact amount the player must pay (for PhonePe matching)',
+    )
+    payment_method = models.ForeignKey(
+        'PaymentMethod',
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='pending_auto_deposits',
+    )
+    status = models.CharField(max_length=16, choices=STATUS_CHOICES, default='PENDING', db_index=True)
+    utr = models.CharField(max_length=64, blank=True, default='')
+    expires_at = models.DateTimeField(db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    credited_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['unique_amount', 'status']),
+            models.Index(fields=['user', 'status']),
+        ]
+
+    def __str__(self):
+        return f"{self.user.username} ₹{self.requested_amount} pay ₹{self.unique_amount} ({self.status})"
+
+
 class WithdrawRequest(models.Model):
     """Manual withdraw requests reviewed by admin"""
     STATUS_CHOICES = [

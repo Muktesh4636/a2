@@ -1,0 +1,12 @@
+.venv/
+__pycache__/
+data/
+*.db
+.DS_Store
+android_companion/.gradle/
+android_companion/app/build/
+android_companion/build/
+android_companion/local.properties
+*.apk
+*.iml
+.idea/

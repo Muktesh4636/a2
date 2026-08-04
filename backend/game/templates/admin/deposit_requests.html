@@ -485,7 +485,7 @@
                 <div class="sidebar-header">
             <div class="logo">
                 <span class="logo-icon">🎲🎲</span>
-                <span>Gundu ata</span>
+                <span>Pride Casino</span>
             </div>
             <div class="subtitle">Game control</div>
         </div>
@@ -536,6 +536,36 @@
             </div>
 
             {% if deposit_mode == 'automatic' %}
+
+            <!-- Companion status + live pending deposits -->
+            <div id="auto-live-panel" style="margin-bottom:20px; background:#f0fdf4; border:1px solid #86efac; border-radius:12px; padding:16px;">
+                <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px; margin-bottom:12px;">
+                    <div style="display:flex; align-items:center; gap:10px;">
+                        <span id="companion-dot" style="width:10px;height:10px;border-radius:50%;background:#d1d5db;display:inline-block;"></span>
+                        <strong style="color:#14532d;">PhonePe Sync Companion</strong>
+                        <span id="companion-label" style="font-size:13px;color:#6b7280;">Checking…</span>
+                    </div>
+                    <button onclick="loadLive()" style="background:#047857;color:#fff;border:none;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:13px;">↺ Refresh</button>
+                </div>
+                <div id="pending-list-wrap">
+                    <p style="color:#6b7280;font-size:13px;">Loading pending deposits…</p>
+                </div>
+            </div>
+
+            <!-- Today's PhonePe UTR Log -->
+            <div id="utr-log-panel" style="margin-bottom:20px; background:#eff6ff; border:1px solid #93c5fd; border-radius:12px; padding:16px;">
+                <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px; margin-bottom:12px;">
+                    <div>
+                        <strong style="color:#1e3a8a;">📋 Today's PhonePe Credit UTRs</strong>
+                        <span id="utr-count" style="font-size:13px;color:#3b82f6;margin-left:8px;">Loading…</span>
+                    </div>
+                    <button onclick="loadUtrLog()" style="background:#1d4ed8;color:#fff;border:none;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:13px;">↺ Refresh UTR Log</button>
+                </div>
+                <div id="utr-log-wrap">
+                    <p style="color:#6b7280;font-size:13px;">Loading today's credit transactions…</p>
+                </div>
+            </div>
+
             <div class="stats-grid">
                 <div class="stat-card">
                     <h3>Successful deposits</h3>
@@ -1237,6 +1267,97 @@
             100% { background-color: transparent; border-left: 0px solid transparent; }
         }
     </style>
+    <script>
+    const SYNC_TOKEN = "{{ sync_token }}";
+    async function loadLive() {
+        try {
+            // Companion status
+            const sRes = await fetch('/api/auto-deposit/status/?sync_token=' + SYNC_TOKEN);
+            if (sRes.ok) {
+                const s = await sRes.json();
+                const dot = document.getElementById('companion-dot');
+                const lbl = document.getElementById('companion-label');
+                if (s.online) {
+                    dot.style.background = '#22c55e';
+                    lbl.textContent = 'Online · v' + (s.version || '?') + ' · ' + (s.device_id || '');
+                } else {
+                    dot.style.background = '#ef4444';
+                    lbl.textContent = s.last_seen ? 'Offline · last seen ' + new Date(s.last_seen).toLocaleTimeString() : 'Offline';
+                }
+            }
+            // Pending deposits
+            const pRes = await fetch('/api/auto-deposit/pending-trigger/?sync_token=' + SYNC_TOKEN);
+            const wrap = document.getElementById('pending-list-wrap');
+            if (pRes.ok) {
+                const p = await pRes.json();
+                if (!p.needs_fetch || p.pending_count === 0) {
+                    wrap.innerHTML = '<p style="color:#15803d;font-size:13px;">No pending auto-deposits right now.</p>';
+                } else {
+                    const amounts = (p.pending_amounts || [p.latest_unique_amount]).join(', ₹');
+                    wrap.innerHTML = `
+                        <div style="background:#fff;border:1px solid #bbf7d0;border-radius:8px;padding:12px 16px;">
+                            <div style="font-size:13px;color:#064e3b;margin-bottom:8px;">
+                                <strong>${p.pending_count} deposit(s) waiting</strong> — expected amounts: <strong>₹${amounts}</strong>
+                            </div>
+                            <div style="font-size:12px;color:#6b7280;">Companion will auto-fetch PhonePe. Manual credit below if needed.</div>
+                        </div>`;
+                }
+            }
+        } catch(e) { console.warn('live panel', e); }
+    }
+    // Load on page open and refresh every 10s
+    loadLive();
+    setInterval(loadLive, 10000);
+
+    async function loadUtrLog() {
+        const wrap = document.getElementById('utr-log-wrap');
+        const cnt  = document.getElementById('utr-count');
+        try {
+            const res = await fetch('/api/auto-deposit/utr-log/?sync_token=' + SYNC_TOKEN);
+            if (!res.ok) { wrap.innerHTML = '<p style="color:#ef4444">Failed to load UTR log.</p>'; return; }
+            const data = await res.json();
+            const utrs = data.utrs || [];
+            cnt.textContent = utrs.length + ' credit(s) today';
+            if (utrs.length === 0) {
+                wrap.innerHTML = '<p style="color:#6b7280;font-size:13px;">No PhonePe credit transactions synced yet today.</p>';
+                return;
+            }
+            const rows = utrs.map(u => `
+                <tr style="font-size:13px;">
+                    <td style="padding:6px 10px;font-family:monospace;color:#1d4ed8;">${u.utr}</td>
+                    <td style="padding:6px 10px;font-weight:700;">₹${u.amount}</td>
+                    <td style="padding:6px 10px;">${u.party_name}</td>
+                    <td style="padding:6px 10px;">
+                        <span style="padding:2px 8px;border-radius:4px;font-size:11px;
+                            background:${u.status==='CREDITED'?'#dcfce7':'#fef9c3'};
+                            color:${u.status==='CREDITED'?'#166534':'#854d0e'};">
+                            ${u.status}
+                        </span>
+                    </td>
+                    <td style="padding:6px 10px;">${u.username}</td>
+                    <td style="padding:6px 10px;color:#6b7280;">${new Date(u.payment_time).toLocaleTimeString()}</td>
+                </tr>`).join('');
+            wrap.innerHTML = `
+                <div style="overflow-x:auto;">
+                    <table style="width:100%;border-collapse:collapse;">
+                        <thead>
+                            <tr style="background:#dbeafe;font-size:12px;text-align:left;">
+                                <th style="padding:6px 10px;">UTR / Ref No.</th>
+                                <th style="padding:6px 10px;">Amount</th>
+                                <th style="padding:6px 10px;">From</th>
+                                <th style="padding:6px 10px;">Status</th>
+                                <th style="padding:6px 10px;">Player</th>
+                                <th style="padding:6px 10px;">Time</th>
+                            </tr>
+                        </thead>
+                        <tbody>${rows}</tbody>
+                    </table>
+                </div>`;
+        } catch(e) { wrap.innerHTML = '<p style="color:#ef4444">Error: ' + e.message + '</p>'; }
+    }
+    loadUtrLog();
+    setInterval(loadUtrLog, 30000);
+    </script>
 </body>
 </html>
 

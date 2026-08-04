@@ -17,6 +17,11 @@ import kotlinx.coroutines.delay
 import kotlin.time.Duration.Companion.seconds
 import android.net.Uri
 import android.content.Intent
+import android.content.Context
+import android.media.RingtoneManager
+import android.os.VibrationEffect
+import android.os.Vibrator
+import android.os.VibratorManager
 import android.widget.Toast
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
@@ -63,6 +68,13 @@ fun PaymentScreen(
     val usdtBonusPercent = 0.05
     
     val isUsdt = paymentMethod.contains("USDT", ignoreCase = true)
+    val isAutomatic = viewModel.depositModeAutomatic && !isUsdt
+    val payAmount = if (isAutomatic) {
+        viewModel.autoDepositSession?.unique_amount ?: amount
+    } else {
+        amount
+    }
+    val autoStatus = viewModel.autoDepositSession?.status?.uppercase()
     
     val usdtAmount = if (isUsdt) {
         try {
@@ -111,9 +123,55 @@ fun PaymentScreen(
     LaunchedEffect(Unit) {
         viewModel.fetchPaymentMethods()
         viewModel.clearError()
+        viewModel.fetchDepositMode { automatic ->
+            if (automatic && !isUsdt) {
+                viewModel.initiateAutoDeposit(amount) { session ->
+                    Toast.makeText(
+                        context,
+                        "Pay exactly ₹${session.unique_amount}",
+                        Toast.LENGTH_LONG
+                    ).show()
+                }
+            }
+        }
     }
 
-    fun openUpiApp(packageName: String?, specificUpiId: String?) {
+    // Poll automatic deposit until credited / expired
+    LaunchedEffect(isAutomatic, viewModel.autoDepositSession?.session_id) {
+        val sessionId = viewModel.autoDepositSession?.session_id ?: return@LaunchedEffect
+        if (!isAutomatic) return@LaunchedEffect
+        while (true) {
+            delay(5.seconds)
+            val status = viewModel.autoDepositSession?.status?.uppercase()
+            if (status == "CREDITED" || status == "EXPIRED" || status == "CANCELLED") break
+            viewModel.pollAutoDepositStatus(
+                sessionId,
+                onCredited = {
+                    // Vibrate + success sound on credited
+                    try {
+                        val uri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
+                        RingtoneManager.getRingtone(context, uri)?.play()
+                        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+                            val vm = context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager
+                            vm.defaultVibrator.vibrate(VibrationEffect.createWaveform(longArrayOf(0, 200, 100, 300), -1))
+                        } else {
+                            @Suppress("DEPRECATION")
+                            val vib = context.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
+                            @Suppress("DEPRECATION")
+                            vib.vibrate(longArrayOf(0, 200, 100, 300), -1)
+                        }
+                    } catch (_: Exception) { }
+                    Toast.makeText(context, "✅ Deposit credited!", Toast.LENGTH_LONG).show()
+                    onSubmitSuccess()
+                },
+                onExpired = {
+                    Toast.makeText(context, "Deposit session expired", Toast.LENGTH_LONG).show()
+                }
+            )
+        }
+    }
+
+    fun openUpiApp(packageName: String?, specificUpiId: String?, payAm: String = payAmount) {
         val upiId = specificUpiId ?: viewModel.paymentMethods.firstOrNull { !it.upi_id.isNullOrBlank() }?.upi_id 
         
         if (upiId.isNullOrBlank()) {
@@ -121,10 +179,10 @@ fun PaymentScreen(
             return
         }
 
-        // Create UPI payment URI
+        // Create UPI payment URI — use unique pay amount in automatic mode
         val payeeName = "GunduAta"
         val transactionNote = "Wallet Topup"
-        val upiUri = "upi://pay?pa=$upiId&pn=$payeeName&am=$amount&cu=INR&tn=$transactionNote"
+        val upiUri = "upi://pay?pa=$upiId&pn=$payeeName&am=$payAm&cu=INR&tn=$transactionNote"
         
         // Debug logging
         android.util.Log.d("PaymentScreen", "Opening UPI app - Package: $packageName, UPI URI: $upiUri")
@@ -255,12 +313,29 @@ fun PaymentScreen(
                 fontSize = 18.sp
             )
             Text(
-                "₹$amount",
+                "₹$payAmount",
                 color = Color(0xFF0022AA), // Deep blue for amount
                 fontSize = 36.sp,
                 fontWeight = FontWeight.ExtraBold,
                 modifier = Modifier.padding(vertical = 8.dp)
             )
+            if (isAutomatic) {
+                Text(
+                    "Pay this exact amount — do not change it",
+                    color = Color(0xFFB45309),
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(bottom = 4.dp)
+                )
+                if (amount != payAmount) {
+                    Text(
+                        "Selected deposit: ₹$amount",
+                        color = Color.Gray,
+                        fontSize = 12.sp
+                    )
+                }
+            }
 
             if (isUsdt) {
                 Surface(
@@ -281,7 +356,11 @@ fun PaymentScreen(
             }
 
             Text(
-                if (isUsdt) "Please transfer USDT to the address below" else "Please fill in UTR after successful payment",
+                when {
+                    isAutomatic -> "Pay via UPI below. Balance credits automatically after PhonePe confirms."
+                    isUsdt -> "Please transfer USDT to the address below"
+                    else -> "Please fill in UTR after successful payment"
+                },
                 color = Color.Black,
                 fontSize = 14.sp,
                 textAlign = TextAlign.Center
@@ -499,22 +578,34 @@ fun PaymentScreen(
                                 isSelected = selectedMethod == method.name,
                                 onClick = { 
                                     selectedMethod = method.name
-                                    // Identify package based on name (with improved matching)
                                     val packageName = getPaymentPackage(method.name)
-                                    // Use specific UPI ID if available
-                                    if (!method.upi_id.isNullOrBlank()) {
-                                        // Debug: Log the method name and detected package
-                                        android.util.Log.d("PaymentScreen", "Method: ${method.name}, Package: $packageName, UPI ID: ${method.upi_id}")
-                                        openUpiApp(packageName, method.upi_id)
-                                    } else {
-                                        // Fallback for non-UPI or if UPI ID missing
-                                        // If it's a Bank method, maybe show a toast or dialog with details
+                                    if (method.upi_id.isNullOrBlank()) {
                                         if (method.method_type == "BANK") {
                                             Toast.makeText(context, "Please use Bank Transfer details", Toast.LENGTH_SHORT).show()
                                         } else {
                                             Toast.makeText(context, "No UPI ID for this method", Toast.LENGTH_SHORT).show()
                                         }
+                                        return@PaymentMethodItem
                                     }
+                                    // Always register auto-deposit on payment click, then open UPI.
+                                    // Backend creates PENDING → PhonePe Sync fetches after 10s.
+                                    Toast.makeText(context, "Starting deposit…", Toast.LENGTH_SHORT).show()
+                                    viewModel.initiateAutoDeposit(
+                                        amount = amount,
+                                        paymentMethodId = method.id,
+                                        onError = { err ->
+                                            Toast.makeText(context, err, Toast.LENGTH_LONG).show()
+                                            openUpiApp(packageName, method.upi_id, amount)
+                                        },
+                                        onSuccess = { session ->
+                                            Toast.makeText(
+                                                context,
+                                                "Pay exactly ₹${session.unique_amount}",
+                                                Toast.LENGTH_LONG
+                                            ).show()
+                                            openUpiApp(packageName, method.upi_id, session.unique_amount)
+                                        },
+                                    )
                                 }
                             )
                             Spacer(modifier = Modifier.height(8.dp))
@@ -525,6 +616,56 @@ fun PaymentScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
 
+            if (isAutomatic) {
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    color = Color(0xFFECFDF5),
+                    shape = RoundedCornerShape(12.dp),
+                    border = BorderStroke(1.dp, Color(0xFF86EFAC))
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        when (autoStatus) {
+                            "CREDITED" -> {
+                                Text("Deposit credited!", color = Color(0xFF047857), fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                            }
+                            "EXPIRED", "CANCELLED" -> {
+                                Text("Session ended. Start a new deposit.", color = Color(0xFFB45309), fontWeight = FontWeight.Bold)
+                            }
+                            else -> {
+                                CircularProgressIndicator(
+                                    color = Color(0xFF059669),
+                                    modifier = Modifier.size(28.dp)
+                                )
+                                Spacer(modifier = Modifier.height(10.dp))
+                                Text(
+                                    "Waiting for PhonePe confirmation…",
+                                    color = Color(0xFF065F46),
+                                    fontWeight = FontWeight.SemiBold,
+                                    textAlign = TextAlign.Center
+                                )
+                                Text(
+                                    "After you pay, keep this screen open or return later — wallet updates automatically.",
+                                    color = Color(0xFF14532D),
+                                    fontSize = 12.sp,
+                                    textAlign = TextAlign.Center,
+                                    modifier = Modifier.padding(top = 6.dp)
+                                )
+                            }
+                        }
+                        if (viewModel.errorMessage != null) {
+                            Text(
+                                viewModel.errorMessage!!,
+                                color = Color.Red,
+                                modifier = Modifier.padding(top = 8.dp),
+                                fontSize = 13.sp
+                            )
+                        }
+                    }
+                }
+            } else {
             // Screenshot Section
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -629,6 +770,7 @@ fun PaymentScreen(
                     modifier = Modifier.padding(top = 8.dp)
                 )
             }
+            } // end manual screenshot flow
         }
     }
 }
