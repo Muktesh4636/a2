@@ -1676,14 +1676,15 @@ public class GameApiClient : MonoBehaviour
         }
     }
 
-    private IEnumerator DeleteLastBetCoroutine(Action<bool, string> callback = null)
+    private IEnumerator DeleteLastBetCoroutine(Action<bool, string, int, string> callback = null)
     {
         // Endpoint from provided API docs
         var url = $"{baseUrl}/api/game/bet/last/";
 
         using (var req = UnityWebRequest.Delete(url))
         {
-            // Ensure request headers
+            // DELETE needs an explicit download handler to read refund / bet_number JSON
+            req.downloadHandler = new DownloadHandlerBuffer();
             req.SetRequestHeader("Content-Type", "application/json");
             AddAuthHeader(req); // reuses existing method to attach Authorization header
 
@@ -1703,11 +1704,31 @@ public class GameApiClient : MonoBehaviour
             if (hasError)
             {
                 string errText = req.downloadHandler != null ? req.downloadHandler.text : req.error;
-                callback?.Invoke(false, errText);
+                callback?.Invoke(false, errText, 0, null);
                 yield break;
             }
 
-            callback?.Invoke(true, null);
+            int betNumber = 0;
+            string walletBalance = null;
+            try
+            {
+                var body = req.downloadHandler != null ? req.downloadHandler.text : null;
+                if (!string.IsNullOrEmpty(body))
+                {
+                    var parsed = JsonConvert.DeserializeObject<RemoveLastBetResponse>(body);
+                    if (parsed != null)
+                    {
+                        betNumber = parsed.bet_number;
+                        walletBalance = parsed.wallet_balance;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.LogWarning("DeleteLastBet parse warning: " + ex.Message);
+            }
+
+            callback?.Invoke(true, null, betNumber, walletBalance);
         }
     }
 
@@ -2272,7 +2293,7 @@ public class GameApiClient : MonoBehaviour
     public void GetPaymentMethods(Action<bool, List<PaymentMethod>, string> callback = null) =>
         StartCoroutine(GetPaymentMethodsCoroutine(callback));
 
-    public void DeleteLastBet(Action<bool, string> callback = null) =>
+    public void DeleteLastBet(Action<bool, string, int, string> callback = null) =>
         StartCoroutine(DeleteLastBetCoroutine(callback));
 
     public void UploadDepositProof(string amount, byte[] screenshotBytes, string screenshotFileName, string paymentLink = null,

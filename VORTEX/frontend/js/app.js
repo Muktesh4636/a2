@@ -24,17 +24,43 @@ let fill = { water: 0, earth: 0, fire: 0 };
 let canPartFlag = false;
 let partAmt = 0;
 let totalM = 0;
+let payoutAmt = 0;
 
 const fmt = (n) => Number(n || 0).toLocaleString("en-IN");
 const delay = (ms) => new Promise((r) => setTimeout(r, turbo ? ms * 0.45 : ms));
 
+const isSnap = (data) =>
+  !!data &&
+  typeof data === "object" &&
+  data.fill &&
+  typeof data.fill === "object" &&
+  typeof data.balance === "number";
+
 const applyState = (data) => {
-  balance = data.balance;
-  bet = data.bet;
-  fill = { ...data.fill };
+  if (!isSnap(data)) return false;
+  balance = Number(data.balance) || 0;
+  bet = Number(data.bet) || bet || 10;
+  fill = {
+    water: Number(data.fill.water) || 0,
+    earth: Number(data.fill.earth) || 0,
+    fire: Number(data.fill.fire) || 0,
+  };
   canPartFlag = !!data.can_part;
-  partAmt = data.part_amount || 0;
-  totalM = data.total_mult || 0;
+  partAmt = Number(data.part_amount) || 0;
+  totalM = Number(data.total_mult) || 0;
+  payoutAmt =
+    typeof data.payout === "number"
+      ? data.payout
+      : Math.round(bet * totalM);
+  return true;
+};
+
+const recoverState = async () => {
+  try {
+    applyState(await fetchState());
+  } catch (_) {
+    /* keep last good local state */
+  }
 };
 
 const syncBoard = async (animate = true, changed = null) => {
@@ -54,7 +80,6 @@ const syncBoard = async (animate = true, changed = null) => {
     return;
   }
   await Promise.all(keys.map((k) => board.animateFillTo(k, fill[k], { turbo })));
-  // Ensure untouched rings stay exact
   board.setVisual({ ...fill });
   board.drawBoard();
 };
@@ -69,15 +94,31 @@ const toast = (msg) => {
 
 const render = () => {
   $("gameBalance").textContent = fmt(balance);
+  const progress =
+    (Number(fill.water) || 0) + (Number(fill.earth) || 0) + (Number(fill.fire) || 0);
   controls.update({
     bet,
-    payoutText: totalM ? fmt(Math.round(bet * totalM)) : "0",
+    payoutText: progress > 0 ? fmt(payoutAmt || Math.round(bet * totalM)) : "0",
     partText: canPartFlag ? `₹${fmt(partAmt)}` : "-",
-    hasProgress: fill.water + fill.earth + fill.fire > 0,
+    hasProgress: progress > 0,
     canPart: canPartFlag,
     busy,
     auto,
   });
+};
+
+const scheduleAuto = async () => {
+  if (!auto) return;
+  await delay(400);
+  if (!auto) return;
+  if (busy) {
+    // retry once busy clears
+    await delay(200);
+    if (auto && !busy) spin();
+    else if (auto) scheduleAuto();
+    return;
+  }
+  spin();
 };
 
 const cashOut = async (partial) => {
@@ -86,13 +127,14 @@ const cashOut = async (partial) => {
   render();
   try {
     const data = partial ? await postPart() : await postCashout();
-    applyState(data);
+    if (!applyState(data)) await recoverState();
     toast(data.message);
     await syncBoard(true);
     if (!partial) reel.setFaceInstant("fire");
   } catch (e) {
     toast(e.message || "Cash out failed");
-    if (e.data) applyState(e.data);
+    if (isSnap(e.data)) applyState(e.data);
+    else await recoverState();
   } finally {
     busy = false;
     render();
@@ -111,12 +153,10 @@ const spin = async () => {
 
   busy = true;
   controls.setSpinning(true);
-  render();
-
+  const prevBalance = balance;
   balance = +(balance - bet);
   render();
 
-  // Vertical reel races while the server rolls the result
   reel.startSpin();
   const minSpinMs = turbo ? 180 : 350;
   const spunAt = performance.now();
@@ -125,50 +165,52 @@ const spin = async () => {
     const data = await postSpin();
     const wait = Math.max(0, minSpinMs - (performance.now() - spunAt));
     if (wait) await delay(wait);
-    applyState(data);
+    if (!applyState(data)) await recoverState();
     await reel.stopOn(data.drop || "fire", { turbo });
     toast(data.message);
     await syncBoard(true, data.changed || null);
   } catch (e) {
     toast(e.message || "Spin failed");
-    if (e.data) {
-      applyState(e.data);
-      await reel.stopOn(e.data.drop || reel.getFace(), { turbo: true });
-      await syncBoard(false);
-    } else {
-      try {
-        applyState(await fetchState());
-        reel.setFaceInstant(reel.getFace());
-        await syncBoard(false);
-      } catch {
-        reel.setFaceInstant("fire");
-      }
-    }
     auto = false;
+    try {
+      if (isSnap(e.data)) {
+        applyState(e.data);
+        await reel.stopOn(e.data.drop || reel.getFace(), { turbo: true });
+      } else {
+        balance = prevBalance;
+        await recoverState();
+        reel.setFaceInstant(reel.getFace());
+      }
+      await syncBoard(false);
+    } catch {
+      balance = prevBalance;
+      reel.setFaceInstant("fire");
+    }
+  } finally {
+    busy = false;
+    controls.setSpinning(false);
+    render();
+    board.drawBoard();
   }
 
-  busy = false;
-  controls.setSpinning(false);
-  render();
-  board.drawBoard();
-
-  if (auto) {
-    await delay(400);
-    if (auto) spin();
-  }
+  if (auto) scheduleAuto();
 };
 
 const controls = createControls({
   getBet: () => bet,
   setBet: async (v) => {
+    const prev = bet;
     bet = v;
     render();
     try {
       const data = await postBet(v);
-      applyState(data);
+      if (!applyState(data)) await recoverState();
       render();
     } catch (e) {
+      bet = prev;
       toast(e.message || "Bet update failed");
+      await recoverState();
+      render();
     }
   },
   isBusy: () => busy,
@@ -186,12 +228,25 @@ const controls = createControls({
 $("demoClose").onclick = () => $("demoTab").classList.add("hidden");
 
 const howto = $("howto");
-const closeHowto = () => howto.classList.add("hidden");
-howto.onclick = closeHowto;
-$("howtoClose").onclick = (e) => {
-  e.stopPropagation();
-  closeHowto();
+const closeHowto = () => {
+  if (!howto) return;
+  howto.classList.add("hidden");
+  try {
+    localStorage.setItem("vortex_howto_seen", "1");
+  } catch (_) {}
 };
+if (howto) {
+  howto.onclick = closeHowto;
+  $("howtoClose")?.addEventListener("click", (e) => {
+    e.stopPropagation();
+    closeHowto();
+  });
+  try {
+    if (localStorage.getItem("vortex_howto_seen") === "1") {
+      howto.classList.add("hidden");
+    }
+  } catch (_) {}
+}
 
 const boot = async () => {
   reel.setFaceInstant("fire");

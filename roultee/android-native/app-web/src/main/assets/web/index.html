@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>Speed Auto Roulette</title>
-  <link rel="stylesheet" href="styles.css?v=192" />
+  <link rel="stylesheet" href="styles.css?v=196" />
   <script type="importmap">
   {
     "imports": {
@@ -53,21 +53,16 @@
         </div>
       </div>
 
-      <!-- History pinned on game-shell so expanded board cannot cover it -->
-      <div class="history-strip">
-        <div class="history" id="history" aria-label="Recent results">
-          <span class="last-round-empty">—</span>
-        </div>
-      </div>
-
       <div class="betting" id="betting">
         <div class="board-area">
           <div class="table" id="bet-table"></div>
 
           <aside class="side-tools">
+            <!-- board expand/collapse temporarily disabled
             <button type="button" id="board-toggle" class="board-toggle" aria-label="Collapse board" title="Collapse board">
               <span class="board-toggle-icon" aria-hidden="true">▼</span>
             </button>
+            -->
             <div class="side-group">
               <span class="side-label">UNDO</span>
               <button type="button" id="undo-bet" class="fab undo-fab" title="Undo">↺</button>
@@ -90,16 +85,16 @@
           </aside>
         </div>
 
-        <footer class="bet-footer">
-          <div class="footer-meta">
-            <span class="footer-line">Total Bet <strong id="total-bet">₹0</strong></span>
-            <span class="footer-line">Balance <strong id="balance">₹0</strong></span>
+        <!-- Recent results sit under the betting board -->
+        <div class="history-strip">
+          <div class="history" id="history" aria-label="Recent results">
+            <span class="last-round-empty">—</span>
           </div>
-          <div class="footer-game">
-            <span class="footer-title">Speed Auto Roulette</span>
-            <span class="footer-range">₹10 – 500,000</span>
-          </div>
-        </footer>
+        </div>
+
+        <!-- Footer meta removed — balance stays in top bar -->
+        <span id="total-bet" hidden>₹0</span>
+        <span id="balance" hidden>₹0</span>
       </div>
     </section>
 
@@ -177,6 +172,6 @@
     </div>
   </div>
 
-  <script type="module" src="app.js?v=192"></script>
+  <script type="module" src="app.js?v=196"></script>
 </body>
 </html>

@@ -31,6 +31,7 @@ except ImportError:
     TESSERACT_AVAILABLE = False
 
 from .models import User, Wallet, Transaction, DepositRequest, WithdrawRequest, PaymentMethod, UserBankDetail, DailyReward, LuckyDraw, DeviceToken, FranchiseBalance
+from .client_events import ClientEvent
 from game.models import MegaSpinProbability
 from .serializers import (
     UserRegistrationSerializer,
@@ -586,6 +587,45 @@ def loading_time(request):
     except Exception as e:
         logger.exception(f"Error in loading_time: {e}")
         return Response({'loading_time': 3}, status=status.HTTP_200_OK)
+
+
+@api_view(['POST'])
+@authentication_classes([])
+@permission_classes([AllowAny])
+@csrf_exempt
+def client_events(request):
+    """Receive telemetry/analytics events from the Android/Unity client.
+    Accepts optional JWT auth — works for both authenticated and anonymous clients.
+    Silently succeeds so client never blocks on logging errors."""
+    try:
+        data = request.data if hasattr(request, 'data') else {}
+        user = None
+        try:
+            from rest_framework_simplejwt.authentication import JWTAuthentication
+            auth = JWTAuthentication()
+            result = auth.authenticate(request)
+            if result:
+                user = result[0]
+        except Exception:
+            pass
+
+        event_type = str(data.get('event_type') or data.get('type') or 'INFO')[:16]
+        name = str(data.get('name') or data.get('event') or 'unknown')[:128]
+        ClientEvent.objects.create(
+            user=user,
+            event_type=event_type,
+            name=name,
+            message=str(data.get('message') or '')[:2000],
+            screen=str(data.get('screen') or '')[:64],
+            props=data.get('props') or data.get('properties') or {},
+            username=str(data.get('username') or (user.username if user else ''))[:150],
+            device_model=str(data.get('device_model') or data.get('deviceModel') or '')[:128],
+            android_version=str(data.get('android_version') or data.get('androidVersion') or '')[:32],
+            app_version=str(data.get('app_version') or data.get('appVersion') or data.get('version') or '')[:32],
+        )
+    except Exception as e:
+        logger.warning(f"client_events save error: {e}")
+    return Response({'ok': True}, status=status.HTTP_200_OK)
 
 
 @api_view(['POST'])
@@ -2716,33 +2756,32 @@ def upi_callback(request):
 @authentication_classes([])
 def phonepe_sync(request):
     """
-    PhonePe Sync companion posts transactions here (same shape as Flask /api/sync).
-    Header: X-Sync-Token
+    PhonePe Sync companion posts transactions here.
+    Auth: X-Sync-Token OR Bearer JWT (staff login via /api/companion/login/).
     Body: { device_id?, sync_token?, transactions: [ { amount, utr, type, party, ... } ] }
     """
-    from accounts.auto_deposit import verify_sync_token, ingest_phonepe_transactions, get_or_create_sync_token
+    from accounts.auto_deposit import ingest_phonepe_transactions, get_or_create_sync_token
 
     get_or_create_sync_token()
+    user, mode, err = _companion_user_from_request(request)
+    if mode is None:
+        return err or Response({'ok': False, 'error': 'Login required'}, status=status.HTTP_401_UNAUTHORIZED)
+
     data = request.data if hasattr(request, 'data') else {}
     if not isinstance(data, dict):
         data = {}
-    token = (
-        request.headers.get('X-Sync-Token')
-        or data.get('sync_token')
-        or ''
-    )
-    if not verify_sync_token(token):
-        return Response({'ok': False, 'error': 'Invalid sync token'}, status=status.HTTP_401_UNAUTHORIZED)
 
     items = data.get('transactions') or []
     if not isinstance(items, list) or not items:
         return Response({'ok': False, 'error': 'transactions array required'}, status=status.HTTP_400_BAD_REQUEST)
 
-    result = ingest_phonepe_transactions(items)
+    result = ingest_phonepe_transactions(items, synced_by=user)
     return Response({
         'ok': True,
         'saved': len(items),
+        'auth': mode,
         'device_id': (data.get('device_id') or 'unknown')[:120],
+        'logged_in_as': getattr(user, 'username', None),
         **result,
     })
 
@@ -2753,18 +2792,14 @@ def phonepe_sync(request):
 def phonepe_pending_trigger(request):
     """
     Companion polls this: if any PENDING auto-deposits exist, fetch PhonePe History.
-    Header: X-Sync-Token
+    Auth: X-Sync-Token or Bearer JWT (staff).
     """
-    from accounts.auto_deposit import verify_sync_token, get_or_create_sync_token, pending_trigger_payload
+    from accounts.auto_deposit import get_or_create_sync_token, pending_trigger_payload
 
     get_or_create_sync_token()
-    token = (
-        request.headers.get('X-Sync-Token')
-        or request.query_params.get('sync_token')
-        or ''
-    )
-    if not verify_sync_token(token):
-        return Response({'ok': False, 'error': 'Invalid sync token'}, status=status.HTTP_401_UNAUTHORIZED)
+    _user, mode, err = _companion_user_from_request(request)
+    if mode is None:
+        return err or Response({'ok': False, 'error': 'Login required'}, status=status.HTTP_401_UNAUTHORIZED)
     return Response(pending_trigger_payload())
 
 
@@ -2772,17 +2807,17 @@ def phonepe_pending_trigger(request):
 @permission_classes([AllowAny])
 @authentication_classes([])
 def companion_heartbeat(request):
-    """Companion posts a heartbeat every 2 minutes so admin can see if it's online."""
-    from accounts.auto_deposit import verify_sync_token, get_or_create_sync_token, companion_heartbeat as _heartbeat
+    """Companion posts a heartbeat so admin can see if it's online."""
+    from accounts.auto_deposit import get_or_create_sync_token, companion_heartbeat as _heartbeat
 
     get_or_create_sync_token()
-    token = request.headers.get('X-Sync-Token') or request.data.get('sync_token') or ''
-    if not verify_sync_token(token):
-        return Response({'ok': False, 'error': 'Invalid sync token'}, status=status.HTTP_401_UNAUTHORIZED)
+    user, mode, err = _companion_user_from_request(request)
+    if mode is None:
+        return err or Response({'ok': False, 'error': 'Login required'}, status=status.HTTP_401_UNAUTHORIZED)
     device_id = request.data.get('device_id', 'unknown')
     version = request.data.get('version', '')
     _heartbeat(device_id, version)
-    return Response({'ok': True})
+    return Response({'ok': True, 'auth': mode, 'logged_in_as': getattr(user, 'username', None)})
 
 
 @api_view(['GET'])
@@ -2809,6 +2844,582 @@ def today_utr_log_api(request):
         return Response({'ok': False, 'error': 'Invalid sync token'}, status=status.HTTP_401_UNAUTHORIZED)
     rows = today_credit_utrs()
     return Response({'ok': True, 'count': len(rows), 'utrs': rows})
+
+
+def _companion_user_from_request(request):
+    """
+    Resolve logged-in staff for companion apps (SVS Pay / PhonePe monitor).
+    Accepts Authorization: Bearer <jwt> or X-Sync-Token (legacy).
+    Returns (user_or_None, auth_mode, error_response_or_None)
+    """
+    from rest_framework_simplejwt.authentication import JWTAuthentication
+    from accounts.auto_deposit import verify_sync_token, get_or_create_sync_token
+
+    # 1) JWT
+    try:
+        auth = JWTAuthentication().authenticate(request)
+        if auth:
+            user, _ = auth
+            if user and user.is_active and (user.is_staff or user.is_superuser):
+                return user, 'jwt', None
+            return None, None, Response(
+                {'ok': False, 'error': 'Staff account required'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+    except Exception:
+        pass
+
+    # 2) Sync token (legacy / device after login stores it)
+    sync = (
+        request.headers.get('X-Sync-Token')
+        or (getattr(request, 'data', {}) or {}).get('sync_token')
+        or request.query_params.get('sync_token')
+        or ''
+    )
+    get_or_create_sync_token()
+    if verify_sync_token(sync):
+        return None, 'sync_token', None
+
+    return None, None, Response(
+        {'ok': False, 'error': 'Login required'},
+        status=status.HTTP_401_UNAUTHORIZED,
+    )
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+@authentication_classes([])
+@csrf_exempt
+def companion_login(request):
+    """
+    Login for SVS Pay + PhonePe Sync companion apps.
+    Staff / Admin / Agent / Super Admin only (unlike game-app login which blocks staff).
+    """
+    from rest_framework_simplejwt.tokens import RefreshToken
+    from accounts.auto_deposit import get_or_create_sync_token
+    from django.db.models import Q
+
+    username = (request.data.get('username') or request.data.get('phone') or '').strip()
+    password = (request.data.get('password') or '').strip()
+    app_name = (request.data.get('app') or '').strip() or 'companion'
+
+    if not username or not password:
+        return Response({'ok': False, 'error': 'Username and password required'}, status=status.HTTP_400_BAD_REQUEST)
+
+    clean_phone = username
+    if any(c.isdigit() for c in username):
+        digits = ''.join(filter(str.isdigit, username))
+        if len(digits) >= 10:
+            clean_phone = digits[-10:]
+
+    user = User.objects.filter(
+        Q(username__iexact=username) |
+        Q(phone_number=username) |
+        Q(phone_number=clean_phone)
+    ).first()
+
+    if not user or not user.check_password(password):
+        return Response({'ok': False, 'error': 'Invalid credentials'}, status=status.HTTP_401_UNAUTHORIZED)
+    if not user.is_active:
+        return Response({'ok': False, 'error': 'Account disabled'}, status=status.HTTP_403_FORBIDDEN)
+    if not (user.is_staff or user.is_superuser):
+        return Response(
+            {'ok': False, 'error': 'Only staff accounts can use SVS Pay / PhonePe Sync'},
+            status=status.HTTP_403_FORBIDDEN,
+        )
+
+    refresh = RefreshToken.for_user(user)
+    try:
+        _set_single_session(user.id, refresh)
+    except Exception:
+        pass
+
+    sync_token = get_or_create_sync_token()
+    role = getattr(user, 'staff_role', None) or ('SUPER_ADMIN' if user.is_superuser else 'ADMIN')
+
+    return Response({
+        'ok': True,
+        'app': app_name,
+        'access': str(refresh.access_token),
+        'refresh': str(refresh),
+        'sync_token': sync_token,
+        'user': {
+            'id': user.id,
+            'username': user.username,
+            'staff_role': role,
+            'is_superuser': bool(user.is_superuser),
+            'is_staff': bool(user.is_staff),
+        },
+    })
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+@authentication_classes([])
+def companion_me(request):
+    """Validate companion session (JWT staff or sync token)."""
+    user, mode, err = _companion_user_from_request(request)
+    if mode is None:
+        return err or Response({'ok': False, 'error': 'Login required'}, status=status.HTTP_401_UNAUTHORIZED)
+    if mode == 'sync_token':
+        return Response({'ok': True, 'auth': 'sync_token', 'user': None})
+    return Response({
+        'ok': True,
+        'auth': 'jwt',
+        'user': {
+            'id': user.id,
+            'username': user.username,
+            'staff_role': getattr(user, 'staff_role', None) or ('SUPER_ADMIN' if user.is_superuser else 'STAFF'),
+            'is_superuser': bool(user.is_superuser),
+            'is_staff': bool(user.is_staff),
+        },
+    })
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+@authentication_classes([])
+@csrf_exempt
+def companion_change_password(request):
+    """Change password for SVS Pay / PhonePe Sync staff accounts."""
+    user, err = _svs_pay_require_user(request)
+    if err:
+        return err
+
+    current_password = (request.data.get('current_password') or '').strip()
+    new_password = (request.data.get('new_password') or '').strip()
+    confirm_password = (request.data.get('confirm_password') or '').strip()
+    if not current_password or not new_password or not confirm_password:
+        return Response(
+            {'ok': False, 'error': 'current_password, new_password and confirm_password are required'},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    if not user.check_password(current_password):
+        return Response({'ok': False, 'error': 'Current password is incorrect'}, status=status.HTTP_400_BAD_REQUEST)
+    if new_password != confirm_password:
+        return Response({'ok': False, 'error': 'New passwords do not match'}, status=status.HTTP_400_BAD_REQUEST)
+    if len(new_password) < 4:
+        return Response({'ok': False, 'error': 'New password too short'}, status=status.HTTP_400_BAD_REQUEST)
+    if current_password == new_password:
+        return Response({'ok': False, 'error': 'New password must be different'}, status=status.HTTP_400_BAD_REQUEST)
+
+    user.set_password(new_password)
+    user.save(update_fields=['password'])
+    return Response({'ok': True, 'message': 'Password updated'})
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+@authentication_classes([])
+def svs_pay_transactions_api(request):
+    """
+    SVS Pay: list PhonePe-synced transactions.
+    Auth: Bearer JWT (staff) or X-Sync-Token.
+    Super Admin (svs) sees all accounts; other staff see only their own synced rows.
+    Query: day=last2|today|yesterday|YYYY-MM-DD|all , account=muktesh , limit=2000
+    """
+    from datetime import datetime as _dt
+    from datetime import time as _time
+    from datetime import timedelta as _td
+    from django.utils import timezone as tz
+    from zoneinfo import ZoneInfo
+    from accounts.auto_deposit import list_auto_deposit_transactions
+    from accounts.models import AutoDepositTransaction, User as AccUser
+
+    user, mode, err = _companion_user_from_request(request)
+    if mode is None:
+        return err or Response({'ok': False, 'error': 'Login required'}, status=status.HTTP_401_UNAUTHORIZED)
+
+    day_raw = (request.query_params.get('day') or 'last2').strip().lower()
+    account = (request.query_params.get('account') or '').strip()
+    try:
+        limit = int(request.query_params.get('limit') or 2000)
+    except (TypeError, ValueError):
+        limit = 2000
+
+    is_super = bool(user and (user.is_superuser or getattr(user, 'staff_role', None) == 'SUPER_ADMIN'))
+
+    # Non-super staff: force filter to their own PhonePe Sync account
+    synced_by_id = None
+    account_username = None
+    if user and not is_super:
+        synced_by_id = user.id
+    elif account:
+        account_username = account
+
+    def _serialize_qs(qs):
+        out = []
+        for t in qs:
+            out.append({
+                'id': t.id,
+                'utr': t.utr,
+                'amount': str(t.amount),
+                'party_name': t.party_name or '—',
+                'txn_type': t.txn_type or 'Received from',
+                'status': t.status,
+                'username': t.user.username if t.user_id else '—',
+                'account': t.synced_by.username if getattr(t, 'synced_by_id', None) else '—',
+                'synced_by': t.synced_by.username if getattr(t, 'synced_by_id', None) else None,
+                'payment_time': t.payment_time.isoformat() if t.payment_time else '',
+                'created_at': t.created_at.isoformat() if t.created_at else '',
+            })
+        return out
+
+    def _apply_account(qs):
+        if synced_by_id:
+            qs = qs.filter(synced_by_id=synced_by_id)
+        if account_username:
+            qs = qs.filter(synced_by__username__iexact=account_username)
+        return qs
+
+    # PhonePe / staff are India-based — day filters use IST, not server UTC
+    ist = ZoneInfo('Asia/Kolkata')
+    local_today = tz.now().astimezone(ist).date()
+
+    if day_raw in ('all', '*'):
+        qs = _apply_account(
+            AutoDepositTransaction.objects.all().select_related('user', 'synced_by').order_by('-payment_time', '-id')
+        )
+        rows = _serialize_qs(qs[: max(1, min(limit, 2000))])
+        day_label = 'all'
+    elif day_raw in ('last2', 'last_2', '2days', 'two_days'):
+        start_day = local_today - _td(days=1)
+        start_dt = _dt.combine(start_day, _time.min, tzinfo=ist)
+        end_dt = _dt.combine(local_today + _td(days=1), _time.min, tzinfo=ist)
+        qs = _apply_account(
+            AutoDepositTransaction.objects.filter(
+                payment_time__gte=start_dt,
+                payment_time__lt=end_dt,
+            ).select_related('user', 'synced_by').order_by('-payment_time', '-id')
+        )
+        rows = _serialize_qs(qs[: max(1, min(limit, 2000))])
+        day_label = f'{start_day.isoformat()}..{local_today.isoformat()}'
+    else:
+        if day_raw in ('today', 'todays'):
+            day = local_today
+        elif day_raw in ('yesterday', 'yday'):
+            day = local_today - _td(days=1)
+        else:
+            try:
+                day = _dt.strptime(day_raw, '%Y-%m-%d').date()
+            except ValueError:
+                return Response(
+                    {'ok': False, 'error': 'day must be last2, today, yesterday, YYYY-MM-DD, or all'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+        rows = list_auto_deposit_transactions(
+            day=day, limit=limit, synced_by_id=synced_by_id, account_username=account_username,
+        )
+        day_label = day.isoformat()
+
+    total_amount = 0.0
+    credited = 0
+    unmatched = 0
+    for r in rows:
+        try:
+            total_amount += float(r.get('amount') or 0)
+        except Exception:
+            pass
+        if r.get('status') == 'CREDITED':
+            credited += 1
+        elif r.get('status') == 'UNMATCHED':
+            unmatched += 1
+
+    # Account list for Super Admin filter dropdown
+    accounts = []
+    if is_super:
+        accounts = list(
+            AccUser.objects.filter(
+                is_staff=True,
+                phonepe_synced_transactions__isnull=False,
+            ).distinct().order_by('username').values_list('username', flat=True)
+        )
+        # Always include known sync accounts even before first txn
+        for name in ('muktesh', 'Gundu', 'svs'):
+            if name not in accounts and AccUser.objects.filter(username=name, is_staff=True).exists():
+                accounts.append(name)
+
+    return Response({
+        'ok': True,
+        'app': 'SVS Pay',
+        'auth': mode,
+        'day': day_label,
+        'account_filter': account_username or (user.username if synced_by_id else None),
+        'count': len(rows),
+        'credited': credited,
+        'unmatched': unmatched,
+        'total_amount': round(total_amount, 2),
+        'transactions': rows,
+        'accounts': accounts,
+        'is_super_admin': is_super,
+        'logged_in_as': getattr(user, 'username', None),
+    })
+
+
+def _svs_pay_require_user(request):
+    """JWT staff user required (not anonymous sync-token)."""
+    user, mode, err = _companion_user_from_request(request)
+    if mode is None:
+        return None, err or Response({'ok': False, 'error': 'Login required'}, status=status.HTTP_401_UNAUTHORIZED)
+    if user is None:
+        return None, Response({'ok': False, 'error': 'Staff login required'}, status=status.HTTP_401_UNAUTHORIZED)
+    return user, None
+
+
+def _svs_pay_wallet_for(user):
+    from decimal import Decimal
+    from django.db.models import Sum
+    from accounts.models import AutoDepositTransaction, SvsPaySettlement
+
+    collected = (
+        AutoDepositTransaction.objects.filter(synced_by=user).aggregate(s=Sum('amount'))['s']
+        or Decimal('0')
+    )
+    reserved = (
+        SvsPaySettlement.objects.filter(user=user, status__in=['PENDING', 'APPROVED', 'PAID'])
+        .aggregate(s=Sum('amount'))['s']
+        or Decimal('0')
+    )
+    available = collected - reserved
+    if available < 0:
+        available = Decimal('0')
+    pending_settle = (
+        SvsPaySettlement.objects.filter(user=user, status='PENDING').aggregate(s=Sum('amount'))['s']
+        or Decimal('0')
+    )
+    paid = (
+        SvsPaySettlement.objects.filter(user=user, status='PAID').aggregate(s=Sum('amount'))['s']
+        or Decimal('0')
+    )
+    return {
+        'collected': float(collected),
+        'reserved': float(reserved),
+        'available': float(available),
+        'pending_settlement': float(pending_settle),
+        'paid_out': float(paid),
+        'currency': 'INR',
+    }
+
+
+def _bank_account_payload(ba):
+    return {
+        'id': ba.id,
+        'account_holder': ba.account_holder,
+        'account_number': ba.account_number,
+        'account_number_masked': ba.masked_number(),
+        'ifsc': ba.ifsc,
+        'bank_name': ba.bank_name or '',
+        'is_primary': ba.is_primary,
+        'created_at': ba.created_at.isoformat() if ba.created_at else '',
+    }
+
+
+def _settlement_payload(s):
+    return {
+        'id': s.id,
+        'amount': str(s.amount),
+        'status': s.status,
+        'note': s.note or '',
+        'account_holder': s.account_holder,
+        'account_number_masked': (
+            (('X' * (len(s.account_number) - 4)) + s.account_number[-4:])
+            if s.account_number and len(s.account_number) > 4
+            else (s.account_number or '')
+        ),
+        'ifsc': s.ifsc,
+        'bank_name': s.bank_name or '',
+        'created_at': s.created_at.isoformat() if s.created_at else '',
+        'processed_at': s.processed_at.isoformat() if s.processed_at else '',
+    }
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+@authentication_classes([])
+def svs_pay_wallet_api(request):
+    """Home wallet: collected UPI total, available to settle, pending/paid."""
+    user, err = _svs_pay_require_user(request)
+    if err:
+        return err
+    wallet = _svs_pay_wallet_for(user)
+    from accounts.models import SvsPayBankAccount
+    primary = SvsPayBankAccount.objects.filter(user=user, is_primary=True).first()
+    if primary is None:
+        primary = SvsPayBankAccount.objects.filter(user=user).first()
+    return Response({
+        'ok': True,
+        'wallet': wallet,
+        'bank_account': _bank_account_payload(primary) if primary else None,
+        'logged_in_as': user.username,
+        'is_super_admin': bool(user.is_superuser or getattr(user, 'staff_role', None) == 'SUPER_ADMIN'),
+    })
+
+
+@api_view(['GET', 'POST'])
+@permission_classes([AllowAny])
+@authentication_classes([])
+def svs_pay_bank_accounts_api(request):
+    """List or add owner bank accounts for settlement."""
+    from accounts.models import SvsPayBankAccount
+
+    user, err = _svs_pay_require_user(request)
+    if err:
+        return err
+
+    if request.method == 'GET':
+        rows = [_bank_account_payload(b) for b in SvsPayBankAccount.objects.filter(user=user)]
+        return Response({'ok': True, 'count': len(rows), 'bank_accounts': rows})
+
+    data = request.data if isinstance(request.data, dict) else {}
+    holder = (data.get('account_holder') or '').strip()
+    number = (data.get('account_number') or '').strip().replace(' ', '')
+    ifsc = (data.get('ifsc') or '').strip().upper().replace(' ', '')
+    bank_name = (data.get('bank_name') or '').strip()
+    if not holder or not number or not ifsc:
+        return Response(
+            {'ok': False, 'error': 'account_holder, account_number and ifsc are required'},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    if len(number) < 6 or not number.isdigit():
+        return Response({'ok': False, 'error': 'Invalid account number'}, status=status.HTTP_400_BAD_REQUEST)
+    if len(ifsc) != 11 or not ifsc.isalnum():
+        return Response({'ok': False, 'error': 'IFSC must be 11 characters'}, status=status.HTTP_400_BAD_REQUEST)
+
+    make_primary = bool(data.get('is_primary', True))
+    if make_primary or not SvsPayBankAccount.objects.filter(user=user).exists():
+        SvsPayBankAccount.objects.filter(user=user, is_primary=True).update(is_primary=False)
+        make_primary = True
+
+    ba = SvsPayBankAccount.objects.create(
+        user=user,
+        account_holder=holder,
+        account_number=number,
+        ifsc=ifsc,
+        bank_name=bank_name,
+        is_primary=make_primary,
+    )
+    return Response({'ok': True, 'bank_account': _bank_account_payload(ba)}, status=status.HTTP_201_CREATED)
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+@authentication_classes([])
+def svs_pay_bank_account_primary_api(request, pk):
+    """Mark a bank account as primary for settlements."""
+    from accounts.models import SvsPayBankAccount
+
+    user, err = _svs_pay_require_user(request)
+    if err:
+        return err
+    ba = SvsPayBankAccount.objects.filter(user=user, pk=pk).first()
+    if not ba:
+        return Response({'ok': False, 'error': 'Bank account not found'}, status=status.HTTP_404_NOT_FOUND)
+    SvsPayBankAccount.objects.filter(user=user, is_primary=True).update(is_primary=False)
+    ba.is_primary = True
+    ba.save(update_fields=['is_primary', 'updated_at'])
+    return Response({'ok': True, 'bank_account': _bank_account_payload(ba)})
+
+
+@api_view(['GET', 'POST'])
+@permission_classes([AllowAny])
+@authentication_classes([])
+def svs_pay_settlements_api(request):
+    """
+    GET: settlement history for logged-in owner (super admin can pass ?all=1).
+    POST: request settlement of available balance to primary/selected bank.
+    """
+    from decimal import Decimal, InvalidOperation
+    from accounts.models import SvsPayBankAccount, SvsPaySettlement
+
+    user, err = _svs_pay_require_user(request)
+    if err:
+        return err
+
+    is_super = bool(user.is_superuser or getattr(user, 'staff_role', None) == 'SUPER_ADMIN')
+
+    if request.method == 'GET':
+        qs = SvsPaySettlement.objects.all().select_related('user', 'bank_account')
+        if not (is_super and str(request.query_params.get('all') or '') in ('1', 'true', 'yes')):
+            qs = qs.filter(user=user)
+        rows = [_settlement_payload(s) for s in qs[:200]]
+        return Response({'ok': True, 'count': len(rows), 'settlements': rows, 'wallet': _svs_pay_wallet_for(user)})
+
+    data = request.data if isinstance(request.data, dict) else {}
+    try:
+        amount = Decimal(str(data.get('amount') or '0')).quantize(Decimal('0.01'))
+    except (InvalidOperation, ValueError):
+        return Response({'ok': False, 'error': 'Invalid amount'}, status=status.HTTP_400_BAD_REQUEST)
+    if amount <= 0:
+        return Response({'ok': False, 'error': 'Amount must be greater than 0'}, status=status.HTTP_400_BAD_REQUEST)
+
+    wallet = _svs_pay_wallet_for(user)
+    if amount > Decimal(str(wallet['available'])):
+        return Response(
+            {'ok': False, 'error': f'Available balance is ₹{wallet["available"]}'},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    bank_id = data.get('bank_account_id')
+    ba = None
+    if bank_id:
+        ba = SvsPayBankAccount.objects.filter(user=user, pk=bank_id).first()
+    if ba is None:
+        ba = SvsPayBankAccount.objects.filter(user=user, is_primary=True).first() or SvsPayBankAccount.objects.filter(user=user).first()
+    if ba is None:
+        return Response(
+            {'ok': False, 'error': 'Add a bank account before requesting settlement'},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    s = SvsPaySettlement.objects.create(
+        user=user,
+        bank_account=ba,
+        amount=amount,
+        status='PENDING',
+        note=(data.get('note') or '').strip()[:255],
+        account_holder=ba.account_holder,
+        account_number=ba.account_number,
+        ifsc=ba.ifsc,
+        bank_name=ba.bank_name,
+    )
+    return Response({
+        'ok': True,
+        'settlement': _settlement_payload(s),
+        'wallet': _svs_pay_wallet_for(user),
+        'message': 'Settlement requested. Backend will transfer to your bank.',
+    }, status=status.HTTP_201_CREATED)
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+@authentication_classes([])
+def svs_pay_settlement_action_api(request, pk):
+    """Super admin: approve / mark paid / reject a settlement from backend."""
+    from django.utils import timezone as tz
+    from accounts.models import SvsPaySettlement
+
+    user, err = _svs_pay_require_user(request)
+    if err:
+        return err
+    is_super = bool(user.is_superuser or getattr(user, 'staff_role', None) == 'SUPER_ADMIN')
+    if not is_super:
+        return Response({'ok': False, 'error': 'Super admin only'}, status=status.HTTP_403_FORBIDDEN)
+
+    s = SvsPaySettlement.objects.filter(pk=pk).first()
+    if not s:
+        return Response({'ok': False, 'error': 'Not found'}, status=status.HTTP_404_NOT_FOUND)
+
+    action = (request.data.get('action') or '').strip().lower()
+    mapping = {'approve': 'APPROVED', 'paid': 'PAID', 'reject': 'REJECTED'}
+    if action not in mapping:
+        return Response({'ok': False, 'error': 'action must be approve, paid, or reject'}, status=status.HTTP_400_BAD_REQUEST)
+    s.status = mapping[action]
+    s.processed_by = user
+    s.processed_at = tz.now()
+    if request.data.get('note'):
+        s.note = str(request.data.get('note'))[:255]
+    s.save()
+    return Response({'ok': True, 'settlement': _settlement_payload(s)})
 
 
 @api_view(['POST'])

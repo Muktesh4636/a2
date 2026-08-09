@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0d1117" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <title>CRICKET</title>
+  <script>
+    /* APK WebView already pads below the status bar — avoid a second top gap */
+    (function () {
+      try {
+        var ua = navigator.userAgent || '';
+        var bridge = window.AndroidBridge;
+        var inApp = /GunduAtaApp/i.test(ua) || !!(bridge && typeof bridge.isSystemBarsInsetApplied === 'function');
+        if (inApp) {
+          document.documentElement.classList.add('android-system-bars');
+          document.addEventListener('DOMContentLoaded', function () {
+            document.body.classList.add('in-app', 'android-system-bars');
+          });
+        }
+      } catch (e) {}
+    })();
+  </script>
+  <style>
+    :root {
+      --bg: #0d1117;
+      --card: #161b22;
+      --elevated: #1c222e;
+      --gold: #d4af37;
+      --gold-bright: #ffd54f;
+      --blue: #76c7ed;
+      --pink: #e57373;
+      --muted: #9aa3af;
+      --border: #3a4556;
+      --on-odd: #0a0a0a;
+      --safe-top: env(safe-area-inset-top, 0px);
+    }
+    * { box-sizing: border-box; }
+    html {
+      margin: 0;
+      background: var(--bg);
+    }
+    html, body {
+      margin: 0;
+      min-height: 100%;
+      min-height: 100dvh;
+      background: var(--bg);
+      color: #fff;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+    body { padding-bottom: 76px; padding-bottom: calc(76px + env(safe-area-inset-bottom, 0px)); }
+    body.no-bottom-nav { padding-bottom: 16px; padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px)); }
+    body.no-bottom-nav .nav { display: none !important; }
+    a { color: inherit; text-decoration: none; }
+
+    .top {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 14px 8px;
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      background: var(--bg);
+      border-bottom: 1px solid rgba(58, 69, 86, 0.45);
+    }
+    /* Browser/notch only — APK WebView already pads below the status bar */
+    body:not(.android-system-bars):not(.in-app) .top {
+      padding-top: max(6px, var(--safe-top));
+    }
+    body.android-system-bars .top,
+    body.in-app .top,
+    html.android-system-bars .top {
+      padding-top: 4px;
+    }
+    .brand-icon {
+      width: 22px; height: 22px;
+      border-radius: 50%;
+      background: var(--gold);
+      display: grid; place-items: center;
+      font-size: 12px; color: #111; font-weight: 800;
+    }
+    .brand { color: var(--gold); font-weight: 800; letter-spacing: .06em; font-size: 18px; }
+    .spacer { flex: 1; }
+    .my-bets { color: var(--gold-bright); font-size: 13px; font-weight: 600; margin-right: 6px; }
+    .wallet {
+      background: var(--elevated);
+      border: 1px solid #2a3340;
+      border-radius: 20px;
+      padding: 6px 10px;
+      font-size: 13px;
+      font-weight: 700;
+    }
+    .plus {
+      width: 30px; height: 30px; border-radius: 50%;
+      background: var(--gold-bright); color: #111;
+      display: grid; place-items: center; font-weight: 800; font-size: 18px;
+      margin-left: 8px;
+    }
+
+    .wrap { padding: 0 14px 20px; max-width: 480px; margin: 0 auto; }
+    .tabs {
+      display: flex; gap: 0; margin: 4px 0 14px;
+      border-bottom: 1px solid #2a3340;
+    }
+    .tabs button {
+      flex: 1; background: none; border: 0; color: var(--muted);
+      padding: 12px 8px 10px; font-size: 15px; font-weight: 600; cursor: pointer;
+      border-bottom: 2px solid transparent;
+    }
+    .tabs button.active { color: var(--gold); border-bottom-color: var(--gold); }
+    .dot {
+      display: inline-block; width: 8px; height: 8px; border-radius: 50%;
+      background: #2e7d32; margin-right: 6px; vertical-align: middle;
+    }
+
+    .match-card, .market-card, .score-card {
+      background: var(--card);
+      border-radius: 12px;
+      padding: 14px;
+      margin-bottom: 12px;
+      border: 1px solid #2a3340;
+    }
+    .match-card { cursor: pointer; }
+    .match-card h3 {
+      margin: 0 0 6px; font-size: 16px; line-height: 1.3;
+    }
+    .meta { color: var(--muted); font-size: 12px; margin-bottom: 10px; }
+    .badge {
+      display: inline-block; padding: 3px 8px; border-radius: 6px;
+      font-size: 11px; font-weight: 700; margin-left: 8px;
+      background: rgba(46,125,50,.18); color: #81c784;
+    }
+    .badge.up { background: rgba(84,110,122,.25); color: #b0bec5; }
+    .odds-row { display: flex; gap: 8px; }
+    .odd-btn {
+      flex: 1; border: 0; border-radius: 8px; padding: 8px 8px;
+      cursor: pointer; text-align: center; color: var(--on-odd);
+      min-height: 0;
+    }
+    .odd-btn.blue { background: var(--blue); }
+    .odd-btn.pink { background: var(--pink); }
+    .odd-btn .name {
+      font-size: 11px; font-weight: 600; line-height: 1.2;
+      margin-bottom: 3px; max-height: 2.4em; overflow: hidden;
+    }
+    .odd-btn .price { font-size: 15px; font-weight: 800; letter-spacing: -0.02em; }
+
+    .crumb { color: var(--muted); font-size: 11px; margin-bottom: 6px; }
+    .title {
+      font-size: 17px; font-weight: 800; line-height: 1.25;
+      text-transform: uppercase; margin: 0 0 10px;
+    }
+    .actions { display: flex; gap: 10px; align-items: center; margin-bottom: 14px; }
+    .icon-btn, .pill {
+      background: var(--elevated); border: 1px solid var(--border);
+      color: var(--muted); border-radius: 10px; padding: 10px 12px; cursor: pointer;
+      font-size: 13px; font-weight: 600;
+    }
+    .pill { border-radius: 20px; }
+    .pill.on { color: var(--blue); border-color: var(--blue); background: #1a2836; }
+
+    .score-card { padding: 0; overflow: hidden; }
+    .score-head {
+      background: rgba(118,199,237,.85); color: #0a1a24;
+      font-weight: 700; font-size: 13px; padding: 8px 12px;
+    }
+    .score-body { padding: 12px 14px; }
+    .score-row {
+      display: flex; align-items: center; gap: 8px;
+      padding: 4px 0; font-weight: 700; font-size: 15px;
+    }
+    .score-row .abbr { min-width: 28px; }
+    .team-logo {
+      width: 22px; height: 22px; border-radius: 50%; object-fit: contain;
+      background: #0f141c; border: 1px solid #314055; flex: 0 0 auto;
+    }
+    .bat-dot {
+      width: 7px; height: 7px; border-radius: 50%; background: var(--blue);
+    }
+    .score-row .score { margin-left: auto; }
+    .score-foot { color: var(--muted); font-size: 12px; margin-top: 8px; }
+
+    .section-title { font-size: 16px; font-weight: 700; margin: 6px 0 8px; }
+    .filters {
+      display: flex; gap: 6px; overflow-x: auto; padding-bottom: 4px;
+      scrollbar-width: none;
+    }
+    .filters::-webkit-scrollbar { display: none; }
+    .chip {
+      flex: 0 0 auto; border: 1px solid var(--border); background: transparent;
+      color: var(--muted); border-radius: 8px; padding: 6px 10px;
+      font-size: 11px; font-weight: 600; cursor: pointer;
+    }
+    .chip.active { border-color: var(--blue); background: var(--elevated); color: #fff; }
+    .updated { color: var(--muted); font-size: 10px; margin: 6px 0 10px; }
+    .market-card { padding: 11px !important; }
+    .market-card h4 { margin: 0 0 2px; font-size: 13px; font-weight: 700; }
+    .market-card .sub { color: var(--muted); font-size: 11px; margin-bottom: 8px; }
+
+    .empty, .loading, .error {
+      text-align: center; color: var(--muted); padding: 40px 16px; font-size: 14px;
+    }
+    .error { color: #ef9a9a; }
+    .back {
+      background: none; border: 0; color: var(--gold); font-size: 20px;
+      cursor: pointer; padding: 0 4px 0 0; line-height: 1;
+    }
+
+    .nav {
+      position: fixed; left: 0; right: 0; bottom: 0;
+      height: 64px; background: #12161d; border-top: 1px solid #2a3340;
+      display: flex; align-items: center; justify-content: space-around;
+      max-width: 480px; margin: 0 auto;
+    }
+    .nav a {
+      color: var(--gold); font-size: 10px; font-weight: 700;
+      display: flex; flex-direction: column; align-items: center; gap: 4px;
+      opacity: .75;
+    }
+    .nav a.active { opacity: 1; }
+    .nav .mid {
+      width: 48px; height: 48px; border-radius: 50%;
+      background: var(--gold); color: #111;
+      display: grid; place-items: center; font-size: 18px;
+      margin-top: -18px; box-shadow: 0 4px 12px rgba(212,175,55,.35);
+    }
+    .toast {
+      position: fixed; left: 50%; bottom: 80px; transform: translateX(-50%);
+      background: #222; border: 1px solid #444; padding: 10px 14px;
+      border-radius: 10px; font-size: 13px; display: none; z-index: 50;
+      max-width: 90%;
+    }
+  </style>
+</head>
+<body>
+  <header class="top">
+    <button class="back" id="backBtn" style="display:none" aria-label="Back">←</button>
+    <div class="brand-icon">🏏</div>
+    <div class="brand">CRICKET</div>
+    <div class="spacer"></div>
+    <div class="my-bets" id="myBets">My bets</div>
+    <div class="wallet" id="wallet">₹ —</div>
+    <div class="plus" id="plusBtn" title="Add funds">+</div>
+  </header>
+
+  <main class="wrap" id="app">
+    <div class="loading">Loading cricket…</div>
+  </main>
+
+  <nav class="nav" id="bottomNav">
+    <a href="/sports/"><span>⌂</span><span>HOME</span></a>
+    <a href="#"><span>🎁</span><span>PROMOTIONS</span></a>
+    <a class="active" href="/cricket/"><span class="mid">🏏</span><span>CRICKET</span></a>
+    <a href="/"><span>🎲</span><span>CASINO</span></a>
+    <a href="/"><span>👤</span><span>PROFILE</span></a>
+  </nav>
+  <div class="toast" id="toast"></div>
+
+  <script src="/sports/auth-wallet.js"></script>
+  <script>
+    const app = document.getElementById('app');
+    const backBtn = document.getElementById('backBtn');
+    const toastEl = document.getElementById('toast');
+    if (window.GunduSportsAuth) GunduSportsAuth.bootWallet('wallet');
+    let listTab = 'pre'; // live | pre
+    let filter = 'all';
+    let showScoreboard = true;
+    let pollTimer = null;
+
+    function toast(msg) {
+      toastEl.textContent = msg;
+      toastEl.style.display = 'block';
+      clearTimeout(toast._t);
+      toast._t = setTimeout(() => toastEl.style.display = 'none', 2200);
+    }
+
+    function qs() {
+      return new URLSearchParams(location.search);
+    }
+    function setQuery(params) {
+      const u = new URL(location.href);
+      Object.entries(params).forEach(([k, v]) => {
+        if (v == null || v === '') u.searchParams.delete(k);
+        else u.searchParams.set(k, v);
+      });
+      history.pushState({}, '', u);
+    }
+
+    function teamAbbr(name) {
+      const parts = String(name || '').trim().split(/\s+/).filter(Boolean);
+      if (!parts.length) return '?';
+      if (parts.length === 1) return parts[0].slice(0, 3).toUpperCase();
+      return parts.slice(0, 3).map(p => p[0].toUpperCase()).join('');
+    }
+    function teamLogoUrl(name) {
+      return '/api/sports/team-logo/?' + new URLSearchParams({
+        name: name || 'Team', sport: 'cricket', fallback: '1'
+      }).toString();
+    }
+
+    function isOverByOver(q) {
+      q = (q || '').toLowerCase();
+      const keys = ['over by over','delivery of over','next ball','next over','ball by ball','this over','runs in over'];
+      if (keys.some(k => q.includes(k))) return true;
+      if (/\d+(st|nd|rd|th)?\s+delivery/.test(q)) return true;
+      if (q.includes('total runs in') && (q.includes('delivery') || q.includes('over'))) return true;
+      return false;
+    }
+    function isSpecial(q) {
+      q = (q || '').toLowerCase();
+      return ['special','fancy','player','top batsman','man of the match','most runs','most wickets','boundary','sixes','fours']
+        .some(k => q.includes(k));
+    }
+    function filterMarkets(markets, tab) {
+      return (markets || []).filter(m => {
+        const q = `${m.market_name || ''} ${m.market_type || ''} ${m.period || ''}`;
+        if (tab === 'all') return true;
+        if (tab === 'over') return isOverByOver(q);
+        if (tab === 'special') return isSpecial(q);
+        return !isOverByOver(q) && !isSpecial(q); // main
+      });
+    }
+
+    async function getJson(url) {
+      const r = await fetch(url, { headers: { Accept: 'application/json' } });
+      if (!r.ok) throw new Error(`Failed (${r.status})`);
+      return r.json();
+    }
+
+    function oddButtons(outcomes, onPick) {
+      const outs = outcomes || [];
+      if (!outs.length) return '<div class="meta">No odds</div>';
+      return `<div class="odds-row">${outs.map((o, i) => `
+        <button class="odd-btn ${i % 2 === 0 ? 'blue' : 'pink'}" data-name="${esc(o.name || o.team || '')}" data-price="${esc(o.price_format || '-')}">
+          <div class="name">${esc(o.name || o.team || '')}</div>
+          <div class="price">${esc(o.price_format || '-')}</div>
+        </button>`).join('')}</div>`;
+    }
+
+    function esc(s) {
+      return String(s ?? '').replace(/[&<>"']/g, c => ({
+        '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+      }[c]));
+    }
+
+    function setBottomNavVisible(show) {
+      document.body.classList.toggle('no-bottom-nav', !show);
+    }
+
+    async function renderList() {
+      setBottomNavVisible(true);
+      backBtn.style.display = 'none';
+      app.innerHTML = `
+        <div class="tabs">
+          <button class="${listTab === 'live' ? 'active' : ''}" data-tab="live"><span class="dot"></span>Live</button>
+          <button class="${listTab === 'pre' ? 'active' : ''}" data-tab="pre">Pre Events</button>
+        </div>
+        <div class="loading">Loading matches…</div>`;
+      app.querySelectorAll('.tabs button').forEach(b => b.onclick = () => {
+        listTab = b.dataset.tab;
+        setQuery({ view: '', event_id: '', pre: listTab === 'pre' ? '1' : '' });
+        renderList();
+      });
+
+      try {
+        const url = listTab === 'live' ? '/api/cricket/live-events/' : '/api/cricket/pre-events/';
+        const data = await getJson(url);
+        const events = data.events || [];
+        if (!events.length) {
+          app.querySelector('.loading').outerHTML = `<div class="empty">${listTab === 'live' ? 'No live matches right now.' : 'No pre-match events available.'}</div>`;
+          return;
+        }
+        const html = events.map(e => {
+          const status = (e.clock_status || '').toUpperCase();
+          const badge = status === 'STARTED' ? '<span class="badge">LIVE</span>'
+            : status === 'NOT_STARTED' || !status ? '<span class="badge up">UPCOMING</span>'
+            : `<span class="badge up">${esc(status)}</span>`;
+          const odds = (e.match_odds || []).map(o => ({ name: o.team, price_format: o.price_format }));
+          return `<article class="match-card" data-id="${e.event_id}">
+            <h3>${esc(e.match_name)} ${badge}</h3>
+            <div class="meta">${esc(e.competition || e.current_innings || (listTab === 'pre' ? 'Upcoming' : ''))}</div>
+            ${oddButtons(odds)}
+          </article>`;
+        }).join('');
+        app.querySelector('.loading').outerHTML = html;
+        app.querySelectorAll('.match-card').forEach(card => {
+          card.onclick = () => {
+            const id = card.dataset.id;
+            setQuery({ view: 'match', event_id: id, pre: listTab === 'pre' ? '1' : '0' });
+            renderMatch(id, listTab === 'pre');
+          };
+        });
+        app.querySelectorAll('.odd-btn').forEach(btn => {
+          btn.onclick = (ev) => {
+            ev.stopPropagation();
+            toast(`${btn.dataset.name} @ ${btn.dataset.price}`);
+          };
+        });
+      } catch (err) {
+        app.querySelector('.loading').outerHTML = `<div class="error">${esc(err.message)}. <a href="javascript:location.reload()">Retry</a></div>`;
+      }
+    }
+
+    async function renderMatch(eventId, isPre) {
+      setBottomNavVisible(false);
+      backBtn.style.display = 'block';
+      app.innerHTML = `<div class="loading">Loading markets…</div>`;
+      if (pollTimer) clearInterval(pollTimer);
+
+      async function load() {
+        const url = isPre
+          ? `/api/cricket/preevent-odds/?event_id=${eventId}`
+          : `/api/cricket/live-odds/?event_id=${eventId}`;
+        const d = await getJson(url);
+        const markets = d.all_markets || [];
+        const main = filterMarkets(markets, 'main');
+        const over = filterMarkets(markets, 'over');
+        const special = filterMarkets(markets, 'special');
+        const filtered = filterMarkets(markets, filter);
+        const crumb = (() => {
+          if (isPre && d.competition) return `Cricket > ${d.competition} > Upcoming`;
+          if (d.current_innings) return `Cricket > ${d.current_innings}`;
+          if (d.competition) return `Cricket > ${d.competition}`;
+          return 'Cricket';
+        })();
+        const scores = d.scores || [];
+        const scoreHtml = scores.length ? `
+          <div class="score-card" id="scoreboard" style="${showScoreboard ? '' : 'display:none'}">
+            <div class="score-head">Cricket</div>
+            <div class="score-body">
+              ${scores.map(s => `
+                <div class="score-row">
+                  <img class="team-logo" src="${esc(teamLogoUrl(s.team))}" alt="${esc(teamAbbr(s.team))}" loading="lazy" />
+                  <span class="abbr">${esc(teamAbbr(s.team))}</span>
+                  ${s.batting ? '<span class="bat-dot"></span>' : ''}
+                  <span class="score">${esc(s.score || '0-0')}</span>
+                </div>`).join('')}
+              <div class="score-foot">${esc(d.current_innings || '')}</div>
+            </div>
+          </div>` : '';
+
+        app.innerHTML = `
+          <div class="crumb">${esc(crumb)}</div>
+          <h1 class="title">${esc(d.match_name || 'Match')}</h1>
+          <div class="actions">
+            <button class="icon-btn" id="tvBtn">📺</button>
+            <button class="pill ${showScoreboard ? 'on' : ''}" id="scoreBtn">Scoreboard</button>
+          </div>
+          ${scoreHtml}
+          <div class="section-title">Markets & Odds</div>
+          <div class="filters">
+            <button class="chip ${filter==='main'?'active':''}" data-f="main">Main (${main.length})</button>
+            <button class="chip ${filter==='all'?'active':''}" data-f="all">All (${markets.length})</button>
+            <button class="chip ${filter==='over'?'active':''}" data-f="over">Over by over (${over.length})</button>
+            <button class="chip ${filter==='special'?'active':''}" data-f="special">Special (${special.length})</button>
+          </div>
+          <div class="updated">${d.last_sync || d.updated ? 'Updated ' + esc(d.last_sync || d.updated) : ''}</div>
+          <div id="markets">
+            ${filtered.length ? filtered.map(m => {
+              const sub = [m.period, m.market_type || m.market_name].filter(Boolean).join(' · ');
+              return `<article class="market-card">
+                <h4>${esc(m.market_name)}</h4>
+                <div class="sub">${esc(sub)}</div>
+                ${oddButtons(m.outcomes || [])}
+              </article>`;
+            }).join('') : '<div class="empty">No markets in this filter.</div>'}
+          </div>`;
+
+        document.getElementById('tvBtn').onclick = () => toast('Live stream coming soon');
+        document.getElementById('scoreBtn').onclick = () => {
+          showScoreboard = !showScoreboard;
+          const el = document.getElementById('scoreboard');
+          const btn = document.getElementById('scoreBtn');
+          if (el) el.style.display = showScoreboard ? '' : 'none';
+          btn.classList.toggle('on', showScoreboard);
+        };
+        app.querySelectorAll('.chip').forEach(c => c.onclick = () => {
+          filter = c.dataset.f;
+          load().catch(e => toast(e.message));
+        });
+        app.querySelectorAll('.odd-btn').forEach(btn => {
+          btn.onclick = () => toast(`Bet slip: ${btn.dataset.name} @ ${btn.dataset.price}`);
+        });
+      }
+
+      try {
+        await load();
+        const interval = isPre ? 30000 : 5000;
+        pollTimer = setInterval(() => load().catch(() => {}), interval);
+      } catch (err) {
+        app.innerHTML = `<div class="error">${esc(err.message)}. <a href="javascript:location.reload()">Retry</a></div>`;
+      }
+    }
+
+    backBtn.onclick = () => {
+      if (pollTimer) clearInterval(pollTimer);
+      setQuery({ view: '', event_id: '' });
+      renderList();
+    };
+    document.getElementById('myBets').onclick = () => toast('My bets');
+    document.getElementById('plusBtn').onclick = () => toast('Open wallet in app');
+
+    function boot() {
+      const p = qs();
+      const eventId = p.get('event_id');
+      const view = p.get('view');
+      const pre = p.get('pre');
+      if (pre === '0') listTab = 'live';
+      else if (pre === '1') listTab = 'pre';
+      if ((view === 'match' || eventId) && eventId) {
+        renderMatch(eventId, pre !== '0' && (pre === '1' || listTab === 'pre'));
+      } else {
+        renderList();
+      }
+    }
+    window.addEventListener('popstate', boot);
+    boot();
+  </script>
+</body>
+</html>

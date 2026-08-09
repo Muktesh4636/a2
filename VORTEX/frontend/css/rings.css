@@ -2,7 +2,7 @@
 .board-wrap {
   position: relative;
   flex: 1;
-  min-height: 340px;
+  min-height: 0;
   display: grid;
   place-items: center;
   margin: 0 4px;
@@ -10,9 +10,11 @@
 
 .board-stage {
   position: relative;
-  width: min(98vw, 560px);
+  width: min(100%, 560px);
+  max-width: 100%;
   aspect-ratio: 1;
   max-height: 100%;
+  height: auto;
 }
 
 #board {

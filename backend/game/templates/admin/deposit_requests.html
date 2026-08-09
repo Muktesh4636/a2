@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+{% load format_filters %}<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="utf-8">
@@ -780,7 +780,7 @@
                                 </td>
                                 <td>
                                     {% if request.processed_by %}
-                                        {{ request.processed_by.username }}
+                                        {{ request.processed_by|staff_name:user }}
                                     {% else %}
                                         <span style="color: #a0aec0;">-</span>
                                     {% endif %}

@@ -35,6 +35,7 @@ import time
 
 import requests
 
+from django.shortcuts import render
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
@@ -1740,16 +1741,289 @@ def cricket_sync_status(request):
 
 
 # ---------------------------------------------------------------------------
-# Betting
+# Kokoroko app feed adapters (live-events / pre-events / live-odds / preevent-odds)
 # ---------------------------------------------------------------------------
+
+def _outcome_price_format(outcome: dict) -> str:
+    fmt = outcome.get("price_formatted")
+    if fmt:
+        return str(fmt)
+    dec = outcome.get("price_decimal")
+    if dec is None:
+        return "-"
+    try:
+        return f"{float(dec):.2f}"
+    except (TypeError, ValueError):
+        return "-"
+
+
+def _head_to_head_match_odds(match: dict) -> list:
+    """First Head-To-Head market outcomes for list cards."""
+    for market in (match.get("odds") or {}).get("markets") or []:
+        blob = f"{market.get('description') or ''} {market.get('market_type') or ''}".lower()
+        if "head to head" not in blob:
+            continue
+        odds = []
+        for o in market.get("outcomes") or []:
+            if o.get("withdrawn") or o.get("hidden"):
+                continue
+            odds.append({
+                "team": o.get("description") or "",
+                "price_format": _outcome_price_format(o),
+                "decimal": o.get("price_decimal"),
+            })
+        if odds:
+            return odds
+    return []
+
+
+def _event_card_payload(match: dict) -> dict:
+    clock = match.get("clock") or {}
+    scores = [
+        {
+            "team": s.get("team") or "",
+            "score": s.get("score") or "0-0",
+            "batting": bool(s.get("batting")),
+        }
+        for s in (match.get("scores") or [])
+    ]
+    return {
+        "event_id": match.get("id"),
+        "match_name": match.get("match") or "",
+        "competition": match.get("competition") or "",
+        "current_innings": match.get("period") or "",
+        "clock_status": clock.get("status") or (
+            "NOT_STARTED" if not scores else ""
+        ),
+        "scores": scores,
+        "match_odds": _head_to_head_match_odds(match),
+        "date": match.get("date"),
+    }
+
+
+def _match_odds_detail_payload(match: dict, *, poll_interval: int, last_sync=None) -> dict:
+    """Shape expected by Kokoroko CricketMatchDetailScreen / parseLiveOddsDetail."""
+    clock = match.get("clock") or {}
+    scores = [
+        {
+            "team": s.get("team") or "",
+            "score": s.get("score") or "0-0",
+            "batting": bool(s.get("batting")),
+        }
+        for s in (match.get("scores") or [])
+    ]
+    all_markets = []
+    for market in (match.get("odds") or {}).get("markets") or []:
+        outcomes = []
+        for o in market.get("outcomes") or []:
+            if o.get("withdrawn") or o.get("hidden"):
+                continue
+            outcomes.append({
+                "name": o.get("description") or "",
+                "price_format": _outcome_price_format(o),
+                "status": (market.get("status") or "").lower(),
+                "outcome_id": o.get("id"),
+            })
+        if not outcomes:
+            continue
+        all_markets.append({
+            "market_id": market.get("id") or 0,
+            "market_name": market.get("description") or "",
+            "market_type": market.get("market_type") or "",
+            "period": market.get("period") or "",
+            "market_status": (market.get("status") or "open").lower(),
+            "outcomes": outcomes,
+        })
+    return {
+        "event_id": match.get("id"),
+        "match_name": match.get("match") or "",
+        "competition": match.get("competition") or "",
+        "current_innings": match.get("period") or "",
+        "clock_status": clock.get("status") or (
+            "NOT_STARTED" if not scores else ""
+        ),
+        "scores": scores,
+        "all_markets": all_markets,
+        "poll_interval_seconds": poll_interval,
+        "last_sync": last_sync,
+        "updated": last_sync,
+    }
+
 
 def _find_cached_match(event_id: int) -> dict | None:
     """Find a match by id in live or upcoming Redis caches."""
-    for key in (REDIS_KEY_MATCHES, REDIS_KEY_UPCOMING):
+    found = None
+    for key in (REDIS_KEY_MATCHES, REDIS_KEY_UPCOMING, REDIS_KEY_ODDS):
         for m in (_cache_get(key) or []):
             if m.get("id") == event_id:
-                return m
-    return None
+                found = m
+                break
+        if found is not None:
+            break
+    if found is None:
+        return None
+    # Prefer a copy that still has markets if the primary cache entry is score-only.
+    markets = (found.get("odds") or {}).get("markets") or []
+    if markets:
+        return found
+    for key in (REDIS_KEY_ODDS, REDIS_KEY_MATCHES, REDIS_KEY_UPCOMING):
+        for m in (_cache_get(key) or []):
+            if m.get("id") == event_id and (m.get("odds") or {}).get("markets"):
+                merged = dict(found)
+                merged["odds"] = m.get("odds") or {}
+                return merged
+    return found
+
+
+def cricket_ui(request):
+    """
+    GET /cricket/
+
+    Mobile-style cricket markets UI (browser preview of the Kokoroko screens).
+    """
+    return render(request, "cricket/index.html")
+
+
+@api_view(["GET"])
+@permission_classes([AllowAny])
+def cricket_live_events(request):
+    """
+    GET /api/cricket/live-events/
+
+    Kokoroko cricket list feed: live matches with scores + head-to-head odds.
+    """
+    matches = _cache_get(REDIS_KEY_MATCHES)
+    if matches is None:
+        fetch_and_cache_cricket_data()
+        matches = _cache_get(REDIS_KEY_MATCHES) or []
+    last_sync = _cache_get(REDIS_KEY_SYNC_TS)
+    events = [_event_card_payload(m) for m in matches]
+    return Response({
+        "count": len(events),
+        "last_sync": last_sync,
+        "events": events,
+    })
+
+
+@api_view(["GET"])
+@permission_classes([AllowAny])
+def cricket_pre_events(request):
+    """
+    GET /api/cricket/pre-events/
+
+    Kokoroko cricket list feed: upcoming / pre-match events.
+    """
+    upcoming = _cache_get(REDIS_KEY_UPCOMING)
+    if upcoming is None:
+        fetch_and_cache_upcoming_matches()
+        upcoming = _cache_get(REDIS_KEY_UPCOMING) or []
+    last_sync = _cache_get(REDIS_KEY_SYNC_TS)
+    events = [_event_card_payload(m) for m in upcoming]
+    return Response({
+        "count": len(events),
+        "last_sync": last_sync,
+        "events": events,
+    })
+
+
+@api_view(["GET"])
+@permission_classes([AllowAny])
+def cricket_live_odds(request):
+    """
+    GET /api/cricket/live-odds/?event_id=<id>
+
+    Full markets + scores for one live match (Kokoroko detail screen).
+    """
+    raw = request.GET.get("event_id")
+    if not raw:
+        return Response(
+            {"error": "missing_param", "detail": "Provide ?event_id=<id>"},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    try:
+        event_id = int(raw)
+    except (TypeError, ValueError):
+        return Response(
+            {"error": "invalid_param", "detail": "event_id must be an integer"},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    matches = _cache_get(REDIS_KEY_MATCHES)
+    if matches is None:
+        fetch_and_cache_cricket_data()
+        matches = _cache_get(REDIS_KEY_MATCHES) or []
+
+    match = next((m for m in matches if m.get("id") == event_id), None)
+    # Merge odds from odds/upcoming caches when the live entry is score-only.
+    enriched = _find_cached_match(event_id)
+    if enriched is not None:
+        if match is None:
+            match = enriched
+        elif not (match.get("odds") or {}).get("markets"):
+            match = {**match, "odds": enriched.get("odds") or match.get("odds") or {}}
+    if match is None:
+        return Response(
+            {
+                "error": "not_found",
+                "detail": f"No match with event_id={event_id}",
+            },
+            status=status.HTTP_404_NOT_FOUND,
+        )
+
+    last_sync = _cache_get(REDIS_KEY_SYNC_TS)
+    clock_status = ((match.get("clock") or {}).get("status") or "").upper()
+    poll = 30 if clock_status in ("", "NOT_STARTED") else 5
+    return Response(_match_odds_detail_payload(match, poll_interval=poll, last_sync=last_sync))
+
+
+@api_view(["GET"])
+@permission_classes([AllowAny])
+def cricket_preevent_odds(request):
+    """
+    GET /api/cricket/preevent-odds/?event_id=<id>
+
+    Full markets for one upcoming / pre-match event (Kokoroko detail screen).
+    """
+    raw = request.GET.get("event_id")
+    if not raw:
+        return Response(
+            {"error": "missing_param", "detail": "Provide ?event_id=<id>"},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    try:
+        event_id = int(raw)
+    except (TypeError, ValueError):
+        return Response(
+            {"error": "invalid_param", "detail": "event_id must be an integer"},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    upcoming = _cache_get(REDIS_KEY_UPCOMING)
+    if upcoming is None:
+        fetch_and_cache_upcoming_matches()
+        upcoming = _cache_get(REDIS_KEY_UPCOMING) or []
+
+    match = next((m for m in upcoming if m.get("id") == event_id), None)
+    if match is None:
+        match = _find_cached_match(event_id)
+    if match is None:
+        return Response(
+            {
+                "error": "not_found",
+                "detail": f"No pre-event with event_id={event_id}",
+            },
+            status=status.HTTP_404_NOT_FOUND,
+        )
+
+    last_sync = _cache_get(REDIS_KEY_SYNC_TS)
+    return Response(
+        _match_odds_detail_payload(match, poll_interval=30, last_sync=last_sync)
+    )
+
+
+# ---------------------------------------------------------------------------
+# Betting
+# ---------------------------------------------------------------------------
 
 
 @api_view(["POST"])

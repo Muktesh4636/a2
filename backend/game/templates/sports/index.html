@@ -1,0 +1,682 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0b0f14" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <title>LIVE — Sports</title>
+  <script>
+    (function () {
+      try {
+        var ua = navigator.userAgent || '';
+        var bridge = window.AndroidBridge;
+        var inApp = /GunduAtaApp/i.test(ua) || !!(bridge && typeof bridge.isSystemBarsInsetApplied === 'function');
+        if (inApp) {
+          document.documentElement.classList.add('android-system-bars');
+          document.addEventListener('DOMContentLoaded', function () {
+            document.body.classList.add('in-app', 'android-system-bars');
+          });
+        }
+      } catch (e) {}
+    })();
+  </script>
+  <style>
+    :root {
+      --bg: #0b0f14;
+      --card: #141a22;
+      --card-border: #243041;
+      --gold: #d4af37;
+      --gold-soft: #c9a227;
+      --muted: #8b95a5;
+      --text: #f3f5f7;
+      --live: #d4af37;
+      --pill: #1a222d;
+      --safe-top: env(safe-area-inset-top, 0px);
+    }
+    * { box-sizing: border-box; }
+    html {
+      margin: 0;
+      background: var(--bg);
+    }
+    html, body {
+      margin: 0; min-height: 100%; min-height: 100dvh;
+      background: radial-gradient(1200px 600px at 20% -10%, #1a2433 0%, var(--bg) 45%);
+      color: var(--text);
+      font-family: "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+    body { padding-bottom: calc(20px + env(safe-area-inset-bottom, 0px)); }
+
+    /* Stays on screen while match list scrolls */
+    .sticky-head {
+      position: sticky;
+      top: 0;
+      z-index: 30;
+      background: var(--bg);
+      border-bottom: 1px solid rgba(36, 48, 65, 0.9);
+      box-shadow: 0 8px 20px rgba(0,0,0,.28);
+    }
+    /* Browser/notch only — APK WebView already pads below the status bar */
+    body:not(.android-system-bars):not(.in-app) .sticky-head {
+      padding-top: var(--safe-top);
+    }
+    body.android-system-bars .sticky-head,
+    body.in-app .sticky-head,
+    html.android-system-bars .sticky-head {
+      padding-top: 0;
+    }
+    .sticky-inner {
+      max-width: 520px;
+      margin: 0 auto;
+      padding: 4px 14px 8px;
+    }
+
+    .top {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 0 4px;
+    }
+    .live-title {
+      font-family: Georgia, "Times New Roman", serif;
+      color: var(--gold);
+      font-size: 28px; font-weight: 700; letter-spacing: .02em;
+      margin: 0; line-height: 1;
+    }
+    .wallet {
+      display: flex; align-items: center; gap: 8px;
+      background: var(--pill); border: 1px solid var(--card-border);
+      border-radius: 22px; padding: 8px 12px; font-weight: 700; font-size: 13px;
+    }
+    .wallet .dot {
+      width: 18px; height: 18px; border-radius: 50%;
+      background: linear-gradient(145deg, #f0d57a, var(--gold));
+      color: #111; display: grid; place-items: center; font-size: 11px; font-weight: 800;
+    }
+
+    .wrap { max-width: 520px; margin: 0 auto; padding: 12px 14px 24px; }
+
+    .sport-tabs {
+      display: flex; gap: 8px; overflow-x: auto; padding: 2px 0 8px;
+      scrollbar-width: none;
+      -webkit-overflow-scrolling: touch;
+    }
+    .sport-tabs::-webkit-scrollbar { display: none; }
+    .sport-tab {
+      flex: 0 0 auto; display: flex; align-items: center; gap: 8px;
+      border: 1px solid #3a4556; background: transparent; color: #cfd6e0;
+      border-radius: 999px; padding: 10px 14px; font-size: 13px; font-weight: 700;
+      cursor: pointer; white-space: nowrap;
+    }
+    .sport-tab.active {
+      background: var(--gold); color: #111; border-color: var(--gold);
+    }
+    .sport-tab .ico { font-size: 15px; line-height: 1; }
+
+    .card {
+      background: linear-gradient(180deg, #171e28 0%, var(--card) 100%);
+      border: 1px solid var(--card-border);
+      border-radius: 16px; padding: 14px; margin-bottom: 12px;
+      box-shadow: 0 8px 24px rgba(0,0,0,.25);
+    }
+    .card.clickable { cursor: pointer; }
+    .card-head {
+      display: flex; align-items: center; gap: 8px; margin-bottom: 12px;
+      color: var(--muted); font-size: 12px; font-weight: 600;
+    }
+    .live-pill {
+      color: var(--live); font-weight: 800; letter-spacing: .04em;
+      display: inline-flex; align-items: center; gap: 6px;
+    }
+    .live-pill::before {
+      content: ""; width: 7px; height: 7px; border-radius: 50%;
+      background: var(--live); box-shadow: 0 0 0 0 rgba(212,175,55,.6);
+      animation: pulse 1.4s infinite;
+    }
+    @keyframes pulse {
+      0% { box-shadow: 0 0 0 0 rgba(212,175,55,.55); }
+      70% { box-shadow: 0 0 0 8px rgba(212,175,55,0); }
+      100% { box-shadow: 0 0 0 0 rgba(212,175,55,0); }
+    }
+    .league { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .clock { color: #d7dee8; }
+
+    .team-row {
+      display: flex; align-items: center; gap: 10px;
+      padding: 6px 0; font-size: 15px; font-weight: 700;
+    }
+    .avatar {
+      width: 32px; height: 32px; border-radius: 50%;
+      background: #243041; display: grid; place-items: center;
+      font-size: 11px; color: var(--gold); font-weight: 800; flex: 0 0 auto;
+      overflow: hidden; border: 1px solid #314055;
+    }
+    .avatar img {
+      width: 100%; height: 100%; object-fit: contain; display: block;
+      background: #0f141c;
+    }
+    .team-name { flex: 1; min-width: 0; }
+    .team-name small { display: block; color: var(--muted); font-weight: 500; font-size: 11px; }
+    .score { font-size: 18px; font-variant-numeric: tabular-nums; min-width: 48px; text-align: right; }
+    .need { color: var(--gold); font-size: 12px; font-weight: 600; margin: 6px 0 10px; }
+
+    .market-label {
+      color: var(--muted); font-size: 12px; font-weight: 600; margin: 4px 0 8px;
+    }
+    .odds {
+      display: grid; gap: 8px;
+    }
+    .odds.two { grid-template-columns: 1fr 1fr; }
+    .odds.three { grid-template-columns: 1fr 1fr 1fr; }
+    .odd {
+      border: 1px solid rgba(212,175,55,.55);
+      background: rgba(212,175,55,.06);
+      color: var(--text); border-radius: 10px;
+      padding: 10px 8px; text-align: center; font-weight: 700; font-size: 13px;
+      cursor: pointer;
+    }
+    .odd span { display: block; color: var(--gold); font-size: 15px; margin-top: 2px; }
+
+    .empty, .loading, .error {
+      text-align: center; color: var(--muted); padding: 48px 16px; font-size: 14px;
+    }
+    .error { color: #ef9a9a; }
+    .count-chip {
+      margin-left: 6px; background: rgba(0,0,0,.15); border-radius: 999px;
+      padding: 2px 7px; font-size: 11px;
+    }
+    .sport-tab.active .count-chip { background: rgba(0,0,0,.18); color: #111; }
+
+    .toast {
+      position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%);
+      background: #1e2632; border: 1px solid #3a4556; padding: 10px 14px;
+      border-radius: 10px; font-size: 13px; display: none; z-index: 40;
+      max-width: 90%;
+    }
+    .feed-status {
+      text-align: center; color: var(--muted); font-size: 12px;
+      padding: 14px 8px 8px; min-height: 44px;
+    }
+    .feed-status .spinner {
+      display: inline-block; width: 14px; height: 14px; margin-right: 8px;
+      border: 2px solid #3a4556; border-top-color: var(--gold);
+      border-radius: 50%; vertical-align: -2px;
+      animation: spin .7s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+  <div class="sticky-head">
+    <div class="sticky-inner">
+      <header class="top">
+        <h1 class="live-title">LIVE</h1>
+        <div class="wallet"><span class="dot">₹</span><span id="wallet">—</span></div>
+      </header>
+      <div class="sport-tabs" id="sportTabs">
+        <button class="sport-tab active" data-sport="cricket"><span class="ico">🏏</span>Cricket<span class="count-chip" id="cCricket">0</span></button>
+        <button class="sport-tab" data-sport="soccer"><span class="ico">⚽</span>Football<span class="count-chip" id="cSoccer">0</span></button>
+        <button class="sport-tab" data-sport="tennis"><span class="ico">🎾</span>Tennis<span class="count-chip" id="cTennis">0</span></button>
+      </div>
+    </div>
+  </div>
+
+  <main class="wrap">
+    <div id="feed"><div class="loading">Loading live matches…</div></div>
+  </main>
+
+  <div class="toast" id="toast"></div>
+
+  <script src="/sports/auth-wallet.js"></script>
+  <script>
+    const feedEl = document.getElementById('feed');
+    const toastEl = document.getElementById('toast');
+    let sport = 'cricket';
+    const mode = 'live'; // live-only UI — no upcoming toggle
+    let pollTimer = null;
+
+    // Show logged-in user's wallet (JWT from WebView / query — same as roulette)
+    if (window.GunduSportsAuth) GunduSportsAuth.bootWallet('wallet');
+
+    const CACHE_VER = 'sports_v3';
+    const CACHE_TTL_MS = 3 * 60 * 1000;      // treat as fresh for 3 min
+    const CACHE_MAX_AGE_MS = 30 * 60 * 1000; // still usable offline-ish for 30 min
+    let allEvents = [];       // full normalized list for current sport/mode
+    let feedRequestId = 0;
+    const memCache = new Map(); // sport:mode -> { ts, events, count }
+    let prefetchPromise = null;
+
+    function cacheKey(sportKey, modeKey) {
+      return `${CACHE_VER}:${sportKey}:${modeKey}`;
+    }
+    function readStore(key) {
+      if (memCache.has(key)) return memCache.get(key);
+      try {
+        const raw = localStorage.getItem(key);
+        if (!raw) return null;
+        const parsed = JSON.parse(raw);
+        if (!parsed || !Array.isArray(parsed.events)) return null;
+        memCache.set(key, parsed);
+        return parsed;
+      } catch (_) {
+        return null;
+      }
+    }
+    function writeStore(key, payload) {
+      const entry = {
+        ts: Date.now(),
+        count: payload.count ?? payload.events.length,
+        events: payload.events,
+      };
+      memCache.set(key, entry);
+      try {
+        localStorage.setItem(key, JSON.stringify(entry));
+      } catch (_) {
+        // Quota exceeded — drop oldest sports keys and retry once.
+        try {
+          Object.keys(localStorage)
+            .filter(k => k.startsWith(CACHE_VER + ':'))
+            .sort((a, b) => {
+              try {
+                return (JSON.parse(localStorage.getItem(a)).ts || 0) -
+                       (JSON.parse(localStorage.getItem(b)).ts || 0);
+              } catch { return 0; }
+            })
+            .slice(0, 4)
+            .forEach(k => localStorage.removeItem(k));
+          localStorage.setItem(key, JSON.stringify(entry));
+        } catch (_) {}
+      }
+      return entry;
+    }
+    function getCachedFeed(sportKey, modeKey) {
+      const entry = readStore(cacheKey(sportKey, modeKey));
+      if (!entry) return null;
+      const age = Date.now() - (entry.ts || 0);
+      if (age > CACHE_MAX_AGE_MS) return null;
+      return { ...entry, age, fresh: age <= CACHE_TTL_MS };
+    }
+    function setCachedFeed(sportKey, modeKey, events, count) {
+      // Slim fields only (keep ALL matches — older v2 cache capped at 80).
+      const slim = (events || []).map(e => ({
+        id: e.id,
+        league: e.league,
+        clock: e.clock,
+        live: e.live,
+        teams: e.teams,
+        marketLabel: e.marketLabel,
+        odds: (e.odds || []).slice(0, 3),
+        href: e.href,
+      }));
+      return writeStore(cacheKey(sportKey, modeKey), {
+        events: slim,
+        count: count ?? slim.length,
+      });
+    }
+    function applyCachedCounts() {
+      ['cricket', 'soccer', 'tennis'].forEach(s => {
+        const hit = getCachedFeed(s, 'live');
+        if (!hit) return;
+        const el = document.getElementById(
+          s === 'cricket' ? 'cCricket' : s === 'soccer' ? 'cSoccer' : 'cTennis'
+        );
+        if (el) el.textContent = hit.count ?? hit.events.length;
+      });
+    }
+    function prefetchLogos(events, sportKey, limit = 6) {
+      (events || []).slice(0, limit).forEach(e => {
+        (e.teams || []).forEach(t => {
+          const img = new Image();
+          img.decoding = 'async';
+          img.src = teamLogoUrl(t.name, sportKey);
+        });
+      });
+    }
+    /** Warm top match detail JSON so tapping a card opens instantly. */
+    function prefetchTopMatchDetails(events, sportKey, limit = 2) {
+      if (sportKey === 'cricket') return;
+      (events || []).slice(0, limit).forEach(async (e) => {
+        if (!e?.id) return;
+        const key = `sports_match_v1:${sportKey}:${e.id}`;
+        try {
+          const existing = localStorage.getItem(key);
+          if (existing) {
+            const ts = JSON.parse(existing).ts || 0;
+            if (Date.now() - ts < 45 * 1000) return;
+          }
+          const data = await getJson(`/api/${sportKey}/matches/${e.id}/`);
+          localStorage.setItem(key, JSON.stringify({
+            ts: Date.now(),
+            last_sync: data.last_sync || '',
+            match: data.match || {},
+          }));
+        } catch (_) {}
+      });
+    }
+
+    function toast(msg) {
+      toastEl.textContent = msg;
+      toastEl.style.display = 'block';
+      clearTimeout(toast._t);
+      toast._t = setTimeout(() => (toastEl.style.display = 'none'), 2000);
+    }
+    function esc(s) {
+      return String(s ?? '').replace(/[&<>"']/g, c => ({
+        '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+      }[c]));
+    }
+    function abbr(name) {
+      const p = String(name || '').trim().split(/\s+/).filter(Boolean);
+      if (!p.length) return '?';
+      if (p.length === 1) return p[0].slice(0, 2).toUpperCase();
+      return (p[0][0] + p[p.length - 1][0]).toUpperCase();
+    }
+    function teamLogoUrl(name, sportKey) {
+      const q = new URLSearchParams({
+        name: name || 'Team',
+        sport: sportKey || 'soccer',
+        fallback: '1',
+      });
+      return `/api/sports/team-logo/?${q.toString()}`;
+    }
+    function teamAvatarHtml(name, sportKey) {
+      const label = abbr(name);
+      const src = teamLogoUrl(name, sportKey);
+      return `<div class="avatar" title="${esc(name)}">
+        <img src="${esc(src)}" alt="${esc(label)}" loading="lazy"
+             onerror="this.style.display='none'; this.parentNode.textContent='${esc(label)}';" />
+      </div>`;
+    }
+    function splitTeams(matchName) {
+      const parts = String(matchName || '').split(/\s+vs\s+/i);
+      if (parts.length >= 2) return [parts[0].trim(), parts.slice(1).join(' vs ').trim()];
+      return [matchName || 'Team A', 'Team B'];
+    }
+    function clockLabel(m, sportKey = sport) {
+      const c = m.clock || {};
+      if (sportKey === 'soccer' && (c.minutes != null)) {
+        const sec = String(c.seconds ?? 0).padStart(2, '0');
+        return `${c.minutes}:${sec}`;
+      }
+      return m.period || m.current_innings || m.date || '';
+    }
+    function pickMarket(markets, sportKey) {
+      const list = markets || [];
+      const want = sportKey === 'soccer'
+        ? [/win\/draw\/win/i, /1x2/i, /match result/i]
+        : [/head to head/i, /winner/i, /moneyline/i];
+      for (const re of want) {
+        const hit = list.find(m => re.test(`${m.description || ''} ${m.market_type || ''}`));
+        if (hit && (hit.outcomes || []).length) return hit;
+      }
+      return list.find(m => (m.outcomes || []).length >= 2) || null;
+    }
+    function normalizeEvent(raw, sportKey) {
+      if (sportKey === 'cricket' && raw.event_id != null) {
+        const [a, b] = splitTeams(raw.match_name);
+        const scores = raw.scores || [];
+        return {
+          id: raw.event_id,
+          league: raw.competition || raw.current_innings || 'Cricket',
+          clock: raw.current_innings || '',
+          live: (raw.clock_status || '').toUpperCase() === 'STARTED',
+          teams: [
+            { name: scores[0]?.team || a, score: scores[0]?.score || '—' },
+            { name: scores[1]?.team || b, score: scores[1]?.score || '—' },
+          ],
+          marketLabel: 'Winner (Match)',
+          odds: (raw.match_odds || []).map(o => ({ label: o.team, price: o.price_format })),
+          href: `/cricket/?view=match&event_id=${raw.event_id}&pre=0`,
+        };
+      }
+      const [a, b] = splitTeams(raw.match);
+      const scores = raw.scores || [];
+      const mk = pickMarket((raw.odds || {}).markets || [], sportKey);
+      let odds = [];
+      let marketLabel = sportKey === 'soccer' ? '1X2' : 'Winner (Match)';
+      if (mk) {
+        marketLabel = mk.description || marketLabel;
+        const outs = mk.outcomes || [];
+        if (sportKey === 'soccer' && outs.length >= 3) {
+          odds = [
+            { label: '1', price: outs[0].price_formatted || '—' },
+            { label: 'X', price: outs[1].price_formatted || '—' },
+            { label: '2', price: outs[2].price_formatted || '—' },
+          ];
+        } else {
+          odds = outs.slice(0, 2).map(o => ({
+            label: o.description || '',
+            price: o.price_formatted || '—',
+          }));
+        }
+      }
+      return {
+        id: raw.id,
+        league: raw.competition || sportKey,
+        clock: clockLabel(raw, sportKey),
+        live: true,
+        teams: [
+          { name: scores[0]?.team || a, score: scores[0]?.score ?? '0' },
+          { name: scores[1]?.team || b, score: scores[1]?.score ?? '0' },
+        ],
+        marketLabel,
+        odds,
+        href: sportKey === 'cricket'
+          ? `/cricket/?view=match&event_id=${raw.id}&pre=0`
+          : `/sports/match/?sport=${sportKey}&event_id=${raw.id}`,
+      };
+    }
+
+    async function getJson(url) {
+      const r = await fetch(url, { headers: { Accept: 'application/json' } });
+      if (!r.ok) throw new Error(`Failed (${r.status})`);
+      return r.json();
+    }
+
+    function urlFor(sportKey, modeKey) {
+      if (sportKey === 'cricket') {
+        return modeKey === 'live' ? '/api/cricket/live-events/' : '/api/cricket/pre-events/';
+      }
+      const base = sportKey === 'tennis' ? '/api/tennis' : '/api/soccer';
+      return modeKey === 'live' ? `${base}/live-matches/` : `${base}/upcoming/`;
+    }
+
+    function cardHtml(e) {
+      const grid = e.odds.length === 3 ? 'three' : 'two';
+      const oddsHtml = e.odds.length
+        ? `<div class="market-label">${esc(e.marketLabel)}</div>
+           <div class="odds ${grid}">
+             ${e.odds.map(o => `<button class="odd" type="button" data-l="${esc(o.label)}" data-p="${esc(o.price)}">${esc(o.label)}<span>${esc(o.price)}</span></button>`).join('')}
+           </div>`
+        : `<div class="market-label">Odds updating…</div>`;
+      return `<article class="card clickable" data-id="${esc(e.id)}" data-href="${esc(e.href)}">
+        <div class="card-head">
+          <span class="live-pill">LIVE</span>
+          <span class="league">${esc(e.league)}</span>
+          <span class="clock">${esc(e.clock)}</span>
+          <span>›</span>
+        </div>
+        ${e.teams.map(t => `
+          <div class="team-row">
+            ${teamAvatarHtml(t.name, sport)}
+            <div class="team-name">${esc(t.name)}</div>
+            <div class="score">${esc(t.score)}</div>
+          </div>`).join('')}
+        ${oddsHtml}
+      </article>`;
+    }
+
+    function bindCard(card) {
+      card.addEventListener('click', (ev) => {
+        if (ev.target.closest('.odd')) return;
+        const href = card.dataset.href || '';
+        if (href.startsWith('/')) location.href = href;
+        else toast(`${sport} match detail coming soon`);
+      });
+      card.querySelectorAll('.odd').forEach(btn => {
+        btn.addEventListener('click', (ev) => {
+          ev.stopPropagation();
+          toast(`${btn.dataset.l} @ ${btn.dataset.p}`);
+        });
+      });
+    }
+
+    function setFeedStatus(html) {
+      const el = document.getElementById('feedStatus');
+      if (el) el.innerHTML = html || '';
+    }
+
+    function updateFeedStatus() {
+      if (!allEvents.length) {
+        setFeedStatus('');
+        return;
+      }
+      setFeedStatus(`Showing all ${allEvents.length} matches`);
+    }
+
+    function paintAllMatches() {
+      if (!allEvents.length) {
+        feedEl.innerHTML = `<div class="empty">No ${mode} ${sport} matches right now.</div>`;
+        return;
+      }
+      feedEl.innerHTML = `
+        <div id="cards">${allEvents.map(cardHtml).join('')}</div>
+        <div class="feed-status" id="feedStatus"></div>`;
+      feedEl.querySelectorAll('.card').forEach(bindCard);
+      updateFeedStatus();
+    }
+
+    function buildEventList(raw, sportKey = sport) {
+      return (raw || []).map(m => normalizeEvent(m, sportKey));
+    }
+
+    function paintFeed(events) {
+      allEvents = events || [];
+      paintAllMatches();
+      prefetchLogos(allEvents, sport, Math.min(12, allEvents.length));
+      prefetchTopMatchDetails(allEvents, sport, 2);
+    }
+
+    async function fetchAndCache(sportKey, modeKey) {
+      const data = await getJson(urlFor(sportKey, modeKey));
+      const raw = data.events || data.matches || [];
+      const events = buildEventList(raw, sportKey);
+      const count = data.count ?? events.length;
+      setCachedFeed(sportKey, modeKey, events, count);
+      if (modeKey === 'live') {
+        const el = document.getElementById(
+          sportKey === 'cricket' ? 'cCricket' : sportKey === 'soccer' ? 'cSoccer' : 'cTennis'
+        );
+        if (el) el.textContent = count;
+      }
+      return { events, count };
+    }
+
+    async function refreshCounts({ network = true } = {}) {
+      applyCachedCounts();
+      if (!network) return;
+      // Prefer already-prefetched live caches; fill gaps from network.
+      await Promise.allSettled(
+        ['cricket', 'soccer', 'tennis'].map(async (s) => {
+          const hit = getCachedFeed(s, 'live');
+          if (hit && hit.fresh) {
+            const el = document.getElementById(
+              s === 'cricket' ? 'cCricket' : s === 'soccer' ? 'cSoccer' : 'cTennis'
+            );
+            if (el) el.textContent = hit.count ?? hit.events.length;
+            return;
+          }
+          try { await fetchAndCache(s, 'live'); } catch (_) {}
+        })
+      );
+    }
+
+    async function loadFeed({ soft = false } = {}) {
+      const reqId = ++feedRequestId;
+      const cached = getCachedFeed(sport, mode);
+
+      // Instant paint from phone cache
+      if (cached && cached.events.length) {
+        paintFeed(cached.events);
+        if (!soft) setFeedStatus(cached.fresh ? 'Updated just now (cached)' : 'Showing saved data — refreshing…');
+      } else if (!soft) {
+        allEvents = [];
+        feedEl.innerHTML = `<div class="loading">Loading ${mode} ${sport}…</div>`;
+      }
+
+      try {
+        const { events } = await fetchAndCache(sport, mode);
+        if (reqId !== feedRequestId) return;
+        paintFeed(events);
+        updateFeedStatus();
+      } catch (err) {
+        if (reqId !== feedRequestId) return;
+        if (cached && cached.events.length) {
+          setFeedStatus('Offline — showing saved matches');
+          return;
+        }
+        if (!soft) {
+          feedEl.innerHTML = `<div class="error">${esc(err.message)}. <a href="javascript:location.reload()" style="color:var(--gold)">Retry</a></div>`;
+        }
+      }
+    }
+
+    /** Warm other sports' live feeds so tab switches feel instant. */
+    function prefetchAllSports() {
+      if (prefetchPromise) return prefetchPromise;
+      const jobs = [];
+      ['cricket', 'soccer', 'tennis'].forEach(s => {
+        if (s === sport) return;
+        const hit = getCachedFeed(s, 'live');
+        if (hit && hit.fresh) {
+          prefetchLogos(hit.events, s, 4);
+          return;
+        }
+        jobs.push(
+          fetchAndCache(s, 'live')
+            .then(({ events }) => prefetchLogos(events, s, 4))
+            .catch(() => {})
+        );
+      });
+      prefetchPromise = Promise.allSettled(jobs).finally(() => { prefetchPromise = null; });
+      return prefetchPromise;
+    }
+
+    function setQuery() {
+      const u = new URL(location.href);
+      u.searchParams.set('sport', sport);
+      u.searchParams.set('mode', 'live');
+      history.replaceState({}, '', u);
+    }
+
+    document.querySelectorAll('.sport-tab').forEach(btn => {
+      btn.addEventListener('click', () => {
+        sport = btn.dataset.sport;
+        document.querySelectorAll('.sport-tab').forEach(b => b.classList.toggle('active', b === btn));
+        setQuery();
+        loadFeed({ soft: false });
+      });
+    });
+
+    (function boot() {
+      const p = new URLSearchParams(location.search);
+      if (['cricket','soccer','tennis'].includes(p.get('sport'))) sport = p.get('sport');
+      document.querySelectorAll('.sport-tab').forEach(b => b.classList.toggle('active', b.dataset.sport === sport));
+
+      applyCachedCounts();
+      loadFeed({ soft: false }).then(() => {
+        if (typeof requestIdleCallback === 'function') {
+          requestIdleCallback(() => prefetchAllSports(), { timeout: 1500 });
+        } else {
+          setTimeout(() => prefetchAllSports(), 400);
+        }
+      });
+      refreshCounts({ network: true });
+
+      pollTimer = setInterval(() => {
+        refreshCounts({ network: true });
+        loadFeed({ soft: true });
+        prefetchAllSports();
+      }, 15000);
+    })();
+  </script>
+</body>
+</html>

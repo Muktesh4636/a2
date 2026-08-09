@@ -32,9 +32,35 @@ def _sync_redis_balance(user_id: int, balance: int) -> None:
 
         r = get_redis_client()
         if r:
-            r.set(f"user_balance:{user_id}", str(balance), ex=86400)
+            r.set(f"user_balance:{user_id}", str(int(balance)), ex=86400)
     except Exception:
         pass
+
+
+def _live_balance(user_id: int, wallet) -> int:
+    """Prefer Redis ledger (dice bets deduct Redis first) so Vortex cannot
+    overwrite / ignore open-round exposure by reading a lagging Postgres wallet."""
+    try:
+        from game.utils import get_redis_client
+
+        r = get_redis_client()
+        if r:
+            raw = r.get(f"user_balance:{user_id}")
+            if raw is not None:
+                return int(float(raw))
+    except Exception:
+        pass
+    return int(wallet.balance)
+
+
+def _set_balance(wallet, user_id: int, new_balance: int) -> int:
+    """Update Postgres now; sync Redis only after the DB transaction commits
+    so a rolled-back spin cannot leave Redis permanently deducted."""
+    new_balance = int(new_balance)
+    wallet.balance = new_balance
+    wallet.save(update_fields=["balance", "updated_at"])
+    transaction.on_commit(lambda: _sync_redis_balance(user_id, new_balance))
+    return new_balance
 
 
 def _fill_of(session) -> dict:
@@ -69,7 +95,7 @@ def get_state(user) -> dict:
     if session.busy:
         session.busy = False
         session.save(update_fields=["busy", "updated_at"])
-    return snapshot(session, int(wallet.balance))
+    return snapshot(session, _live_balance(user.id, wallet))
 
 
 @transaction.atomic
@@ -85,7 +111,7 @@ def set_bet(user, bet) -> dict:
         raise GameError(f"Bet must be between {MIN_BET} and {MAX_BET}")
     session.bet = bet
     session.save(update_fields=["bet", "updated_at"])
-    return snapshot(session, int(wallet.balance))
+    return snapshot(session, _live_balance(user.id, wallet))
 
 
 @transaction.atomic
@@ -104,24 +130,19 @@ def spin(user) -> dict:
     bet = int(session.bet)
     if bet < MIN_BET or bet > MAX_BET:
         raise GameError(f"Bet must be between {MIN_BET} and {MAX_BET}")
-    if int(wallet.balance) < bet:
-        snap = snapshot(session, int(wallet.balance), message="Not enough balance")
-        snap["ok"] = False
-        snap["error"] = "Not enough balance"
+    before = _live_balance(user.id, wallet)
+    if before < bet:
         raise GameError("Not enough balance")
 
-    before = int(wallet.balance)
-    wallet.balance = before - bet
-    wallet.save(update_fields=["balance", "updated_at"])
+    after = _set_balance(wallet, user.id, before - bet)
     Txn.objects.create(
         user=user,
         transaction_type="BET",
         amount=bet,
         balance_before=before,
-        balance_after=int(wallet.balance),
+        balance_after=after,
         description=f"Vortex bet ₹{bet}",
     )
-    _sync_redis_balance(user.id, int(wallet.balance))
 
     session.busy = True
     session.save(update_fields=["busy", "updated_at"])
@@ -164,18 +185,18 @@ def spin(user) -> dict:
                 if bonus:
                     win_mult = logic.roll_bonus(key)
                     win = logic.money_rupees(Decimal(str(bet)) * Decimal(str(win_mult)))
+                    # Use wallet.balance (already updated by _set_balance above, bet deducted)
+                    # NOT _live_balance which reads stale Redis until on_commit fires.
                     before_w = int(wallet.balance)
-                    wallet.balance = before_w + win
-                    wallet.save(update_fields=["balance", "updated_at"])
+                    after_w = _set_balance(wallet, user.id, before_w + win)
                     Txn.objects.create(
                         user=user,
                         transaction_type="WIN",
                         amount=win,
                         balance_before=before_w,
-                        balance_after=int(wallet.balance),
+                        balance_after=after_w,
                         description=f"Vortex {logic.RINGS[key]['label']} bonus ₹{win} ({win_mult}X)",
                     )
-                    _sync_redis_balance(user.id, int(wallet.balance))
                     fill[key] = 0
                     extra["bonus"] = {
                         "ring": key,
@@ -194,7 +215,7 @@ def spin(user) -> dict:
         _set_fill(session, fill)
         session.busy = False
         session.save()
-        return snapshot(session, int(wallet.balance), message=message, drop=drop, extra=extra)
+        return snapshot(session, _live_balance(user.id, wallet), message=message, drop=drop, extra=extra)
     except Exception:
         session.busy = False
         session.save(update_fields=["busy", "updated_at"])
@@ -215,23 +236,21 @@ def cashout(user) -> dict:
 
     mult = logic.total_mult(fill)
     amount = logic.money_rupees(Decimal(str(session.bet)) * Decimal(str(mult)))
-    before = int(wallet.balance)
-    wallet.balance = before + amount
-    wallet.save(update_fields=["balance", "updated_at"])
+    before = _live_balance(user.id, wallet)
+    after = _set_balance(wallet, user.id, before + amount)
     Txn.objects.create(
         user=user,
         transaction_type="WIN",
         amount=amount,
         balance_before=before,
-        balance_after=int(wallet.balance),
+        balance_after=after,
         description=f"Vortex cash out ₹{amount} ({mult}X)",
     )
-    _sync_redis_balance(user.id, int(wallet.balance))
     _set_fill(session, {"water": 0, "earth": 0, "fire": 0})
     session.save()
     return snapshot(
         session,
-        int(wallet.balance),
+        after,
         message=f"Cash Out +₹{amount} ({mult}X)",
         extra={"cashed": amount},
     )
@@ -253,23 +272,21 @@ def part(user) -> dict:
     for key in ("water", "earth", "fire"):
         if fill[key] >= 2:
             fill[key] -= 1
-    before = int(wallet.balance)
-    wallet.balance = before + amount
-    wallet.save(update_fields=["balance", "updated_at"])
+    before = _live_balance(user.id, wallet)
+    after = _set_balance(wallet, user.id, before + amount)
     Txn.objects.create(
         user=user,
         transaction_type="WIN",
         amount=amount,
         balance_before=before,
-        balance_after=int(wallet.balance),
+        balance_after=after,
         description=f"Vortex part payout ₹{amount}",
     )
-    _sync_redis_balance(user.id, int(wallet.balance))
     _set_fill(session, fill)
     session.save()
     return snapshot(
         session,
-        int(wallet.balance),
+        after,
         message=f"Part Payout +₹{amount}",
         extra={"cashed": amount},
     )

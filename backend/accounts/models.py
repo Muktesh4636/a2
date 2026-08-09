@@ -13,15 +13,27 @@ class User(AbstractUser):
     """Custom User model with additional fields"""
 
     ROLE_PLAYER = 'PLAYER'
+    ROLE_GOD = 'GOD'
     ROLE_SUPER_ADMIN = 'SUPER_ADMIN'
     ROLE_ADMIN = 'ADMIN'
     ROLE_AGENT = 'AGENT'
     STAFF_ROLE_CHOICES = [
         (ROLE_PLAYER, 'Player'),
+        (ROLE_GOD, 'God Admin'),
         (ROLE_SUPER_ADMIN, 'Super Admin'),
         (ROLE_ADMIN, 'Admin'),
         (ROLE_AGENT, 'Agent'),
     ]
+
+    # God > Super Admin > Admin > Agent > Player. Players may sit under any
+    # staff level except God.
+    ROLE_RANK = {
+        ROLE_GOD: 0,
+        ROLE_SUPER_ADMIN: 1,
+        ROLE_ADMIN: 2,
+        ROLE_AGENT: 3,
+        ROLE_PLAYER: 4,
+    }
 
     phone_number = models.CharField(max_length=15, unique=True, null=True, blank=True)
     profile_photo = models.ImageField(upload_to='profile_photos/', null=True, blank=True)
@@ -43,7 +55,7 @@ class User(AbstractUser):
         choices=STAFF_ROLE_CHOICES,
         default=ROLE_PLAYER,
         db_index=True,
-        help_text='Hierarchy role: PLAYER, SUPER_ADMIN, ADMIN (franchise), or AGENT.',
+        help_text='Hierarchy role: GOD, SUPER_ADMIN, ADMIN (franchise), AGENT, or PLAYER.',
     )
 
     worker = models.ForeignKey(
@@ -53,9 +65,10 @@ class User(AbstractUser):
         blank=True,
         related_name='clients',
         limit_choices_to={'is_staff': True},
-        help_text='For players: ownership parent (Super Admin, Admin, or Agent) for deposit/withdraw scoping.',
+        help_text='For players: ownership parent (Super Admin, Admin, or Agent) for deposit/withdraw scoping. Never God.',
     )
-    # For Agents: the franchise Admin they belong under. (Legacy name works_under; alias parent_admin.)
+    # Staff chain: Super Admin → God, Admin → Super Admin, Agent → Admin.
+    # (Legacy name works_under; alias parent_admin.)
     works_under = models.ForeignKey(
         'self',
         on_delete=models.SET_NULL,
@@ -63,7 +76,7 @@ class User(AbstractUser):
         blank=True,
         related_name='assigned_workers',
         limit_choices_to={'is_staff': True},
-        help_text='For Agents: the Admin under whom this Agent joined.',
+        help_text='Staff parent one level up: Agent→Admin, Admin→Super Admin, Super Admin→God.',
     )
 
     @property
@@ -359,6 +372,14 @@ class AutoDepositTransaction(models.Model):
         blank=True,
         on_delete=models.SET_NULL,
         related_name='auto_deposit_transactions',
+    )
+    # Staff account that ran PhonePe Sync (e.g. muktesh) — SVS Pay can show per-account
+    synced_by = models.ForeignKey(
+        User,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='phonepe_synced_transactions',
     )
     status = models.CharField(max_length=16, choices=STATUS_CHOICES, default='CREDITED', db_index=True)
     payment_time = models.DateTimeField(db_index=True)
@@ -701,4 +722,77 @@ class FranchiseBalanceLog(models.Model):
     def __str__(self):
         return f"{self.user.username} {self.get_action_display()} ₹{self.amount} at {self.created_at}"
 
+
+class SvsPayBankAccount(models.Model):
+    """Owner bank account for SVS Pay settlements (middleman payouts)."""
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='svs_pay_bank_accounts')
+    account_holder = models.CharField(max_length=120)
+    account_number = models.CharField(max_length=32)
+    ifsc = models.CharField(max_length=16)
+    bank_name = models.CharField(max_length=120, blank=True)
+    is_primary = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-is_primary', '-id']
+        verbose_name = 'SVS Pay bank account'
+        verbose_name_plural = 'SVS Pay bank accounts'
+
+    def __str__(self):
+        return f"{self.user.username} · {self.bank_name or 'Bank'} · ****{self.account_number[-4:]}"
+
+    def masked_number(self):
+        n = (self.account_number or '').strip()
+        if len(n) <= 4:
+            return n
+        return ('X' * (len(n) - 4)) + n[-4:]
+
+
+class SvsPaySettlement(models.Model):
+    """
+    Owner requests payout of collected UPI/PhonePe funds to their bank.
+    SVS acts as middleman: money lands in SVS collection account; settlement
+    moves available balance to the owner's registered bank (processed from backend).
+    """
+    STATUS_CHOICES = [
+        ('PENDING', 'Pending'),
+        ('APPROVED', 'Approved'),
+        ('PAID', 'Paid'),
+        ('REJECTED', 'Rejected'),
+    ]
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='svs_pay_settlements')
+    bank_account = models.ForeignKey(
+        SvsPayBankAccount,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='settlements',
+    )
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    status = models.CharField(max_length=16, choices=STATUS_CHOICES, default='PENDING', db_index=True)
+    note = models.CharField(max_length=255, blank=True)
+    # Snapshot of bank details at request time
+    account_holder = models.CharField(max_length=120, blank=True)
+    account_number = models.CharField(max_length=32, blank=True)
+    ifsc = models.CharField(max_length=16, blank=True)
+    bank_name = models.CharField(max_length=120, blank=True)
+    processed_by = models.ForeignKey(
+        User,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='svs_pay_settlements_processed',
+    )
+    processed_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+        verbose_name = 'SVS Pay settlement'
+        verbose_name_plural = 'SVS Pay settlements'
+
+    def __str__(self):
+        return f"#{self.id} {self.user.username} ₹{self.amount} {self.status}"
 

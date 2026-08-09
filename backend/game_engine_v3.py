@@ -232,6 +232,20 @@ class GameEngine:
         self._sent_game_start = False
         logger.info(f"New Round Started: {self.round_id} (round_end={round_end}s, betting_close={self.settings['betting_close_time']}s, dice_result={self.settings['dice_result_time']}s)")
 
+        # Initialize exposure / bet counters so REST exposure APIs never read stale keys
+        # from a previous round id collision and always have a deterministic baseline.
+        try:
+            rid = self.round_id
+            pipe = self.redis.pipeline()
+            pipe.set(f"round_total_bets:{rid}", "0", ex=3600, nx=True)
+            pipe.set(f"round_total_amount:{rid}", "0.00", ex=3600, nx=True)
+            pipe.set(f"round:{rid}:bet_count", "0", ex=3600, nx=True)
+            pipe.set(f"round:{rid}:total_exposure", "0.00", ex=3600, nx=True)
+            pipe.delete(f"round:{rid}:user_exposure")
+            await pipe.execute()
+        except Exception as e:
+            logger.warning(f"Failed to init Redis exposure keys for {self.round_id}: {e}")
+
         # Persist the round start event so DB-backed APIs (frequency, recent results, etc.) keep updating.
         # This is consumed by `manage.py process_bet_queue` (event_worker_group).
         try:
@@ -372,8 +386,9 @@ class GameEngine:
             # Keep Redis hot-keys updated for betting APIs (single pipeline round-trip)
             # NOTE: These keys are relied upon by REST `POST /api/game/bet/` and WS `place_bet`.
             now_ts = int(time.time())
-            # Round end epoch (updated each tick; consumers use it as a safety guard)
-            end_time_epoch = now_ts + max(0, int(round_end) - int(timer_count_up))
+            # Betting-close epoch (not round-end). place_bet/WS use this as a hard stop
+            # so bets cannot slip through after the betting window even if status lags.
+            end_time_epoch = now_ts + max(0, int(betting_close) - int(timer_count_up))
 
             pipe = self.redis.pipeline()
             pipe.set(GAME_STATE_KEY, state_json, ex=120)

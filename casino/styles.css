@@ -40,7 +40,7 @@ button {
   max-width: 480px;
   margin: 0 auto;
   padding:
-    calc(56px + var(--safe-top))
+    max(8px, var(--safe-top))
     var(--pad-x)
     calc(12px + var(--safe-bottom));
   background: #000;
@@ -170,22 +170,26 @@ button {
   }
 }
 
-/* Extra top inset when opened inside the APK WebView (safe-area often 0 there). */
-body.in-app .app {
-  padding-top: calc(56px + var(--safe-top));
+/* Old APKs with no system-bar padding needed a little room; keep it tight. */
+body.in-app:not(.android-system-bars) .app {
+  padding-top: max(8px, var(--safe-top));
 }
-/* New APK already pads below status bar */
+/* New APK already pads the WebView below the status bar — no extra strip */
 body.android-system-bars .app,
 html.android-system-bars .app {
-  padding-top: 16px;
+  padding-top: 4px;
 }
 
 @media (max-height: 700px) {
   .app {
-    padding-top: calc(48px + var(--safe-top));
+    padding-top: max(6px, var(--safe-top));
   }
-  body.in-app .app {
-    padding-top: calc(64px + var(--safe-top));
+  body.in-app:not(.android-system-bars) .app {
+    padding-top: max(6px, var(--safe-top));
+  }
+  body.android-system-bars .app,
+  html.android-system-bars .app {
+    padding-top: 2px;
   }
   .topbar {
     flex-basis: 40px;

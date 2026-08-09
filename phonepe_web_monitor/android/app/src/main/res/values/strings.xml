@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">PhonePe Web Monitor</string>
+    <string name="accessibility_description">Reads PhonePe History every minute and uploads new credit transactions to the Pride Casino server for automatic deposits.</string>
+</resources>

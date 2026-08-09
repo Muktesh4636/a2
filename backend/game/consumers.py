@@ -6,6 +6,7 @@ import redis.asyncio as redis
 from channels.generic.websocket import AsyncWebsocketConsumer
 from django.conf import settings
 from django.utils import timezone
+from asgiref.sync import sync_to_async
 from .utils import get_game_setting
 
 logger = logging.getLogger('game.websocket')
@@ -81,7 +82,15 @@ redis.call('EXPIRE', KEYS[5], ttl)
 local legacy_bets = tonumber(redis.call('INCR', KEYS[6]))
 redis.call('EXPIRE', KEYS[6], ttl)
 
--- 4) Queue bet event in Redis Stream
+-- 4) Track per-number bets (same as HTTP place path)
+local nb_key = 'round:' .. tostring(round_id) .. ':number_bets'
+local nu_key = 'round:' .. tostring(round_id) .. ':number:' .. tostring(number) .. ':users'
+redis.call('HINCRBYFLOAT', nb_key, tostring(number), amount)
+redis.call('EXPIRE', nb_key, ttl)
+redis.call('SADD', nu_key, tostring(user_id))
+redis.call('EXPIRE', nu_key, ttl)
+
+-- 5) Queue bet event in Redis Stream
 local msg_id = redis.call(
   'XADD', KEYS[7],
   'MAXLEN', '~', 10000,
@@ -95,8 +104,10 @@ local msg_id = redis.call(
   'timestamp', ts
 )
 
--- 5) Push to per-user stack for "remove last bet"
-redis.call('LPUSH', KEYS[8], msg_id)
+-- 6) Push FULL bet JSON for undo (must match HTTP place_bet stack format).
+-- Older WS code pushed bare msg_id only — undo could not find round_id/amount.
+local bet_json = '{"msg_id":"' .. tostring(msg_id) .. '","round_id":"' .. tostring(round_id) .. '","number":' .. tostring(number) .. ',"chip_amount":' .. tostring(amount) .. '}'
+redis.call('LPUSH', KEYS[8], bet_json)
 redis.call('EXPIRE', KEYS[8], ttl)
 
 return {true, tostring(new_balance), msg_id, tostring(legacy_bets), tostring(legacy_amount)}
@@ -527,8 +538,17 @@ class GameConsumer(AsyncWebsocketConsumer):
                     pass
 
                 if bal_raw is None:
-                    await self.send(text_data=json.dumps({'type': 'place_bet_result', 'request_id': request_id, 'ok': False, 'error': 'Balance cache syncing, retry'}))
-                    return
+                    # DB fallback: warm Redis from Postgres when balance key is missing
+                    try:
+                        from accounts.models import Wallet
+                        wallet_obj = await sync_to_async(Wallet.objects.get)(user_id=user_id)
+                        bal_raw = str(wallet_obj.balance)
+                        await redis_client.set(balance_key, bal_raw, ex=3600)
+                        logger.info(f"[WS bet] Warmed Redis balance from DB for user {user_id}: {bal_raw}")
+                    except Exception as db_err:
+                        logger.error(f"[WS bet] DB balance fallback failed for user {user_id}: {db_err}")
+                        await self.send(text_data=json.dumps({'type': 'place_bet_result', 'request_id': request_id, 'ok': False, 'error': 'Balance unavailable, retry'}))
+                        return
 
                 # 2) Atomic place + queue (Lua)
                 keys = [
@@ -576,6 +596,29 @@ class GameConsumer(AsyncWebsocketConsumer):
                             'total_amount': "{:.2f}".format(float(legacy_amount) if legacy_amount is not None else 0.0),
                         }
                     }))
+
+                    # Also send a balance_update event so the client immediately
+                    # reflects the new balance even if it polls exposure separately.
+                    await self.send(text_data=json.dumps({
+                        'type': 'balance_update',
+                        'wallet_balance': "{:.2f}".format(float(new_balance)),
+                    }))
+
+                    # Bust the exposure cache so the next exposure poll returns
+                    # fresh data (200ms cache would otherwise serve stale totals).
+                    try:
+                        uid = str(user_id)
+                        bust_keys = [
+                            f"api_cache:exposure:{round_id}:{uid}",
+                            f"api_cache:exposure:{round_id}:{uid}:filter:{uid}",
+                            f"api_cache:exposure:{round_id}:{uid}:admin:all",
+                            f"api_cache:exposure:{round_id}:{uid}:admin:{uid}",
+                            f"api_cache:exposure:{round_id}:{uid}:admin:None",
+                        ]
+                        await redis_client.delete(*bust_keys)
+                    except Exception:
+                        pass
+
                 except Exception as e:
                     logger.error(f"[WS bet] Redis eval failed: {e}")
                     await self.send(text_data=json.dumps({'type': 'place_bet_result', 'request_id': request_id, 'ok': False, 'error': 'Betting service unavailable'}))

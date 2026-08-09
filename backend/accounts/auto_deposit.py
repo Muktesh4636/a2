@@ -301,6 +301,7 @@ def _credit_pending_session(
     txn_type: str,
     payment_time,
     raw_payload: dict,
+    synced_by=None,
 ) -> bool:
     """Credit wallet for a locked PENDING session. Caller must be in atomic + select_for_update."""
     if session.status != 'PENDING':
@@ -352,17 +353,20 @@ def _credit_pending_session(
     session.credited_at = timezone.now()
     session.save(update_fields=['status', 'utr', 'credited_at', 'updated_at'])
 
+    defaults = {
+        'amount': phonepe_amount,
+        'party_name': (party_name or '')[:255],
+        'txn_type': (txn_type or 'Received from')[:64],
+        'user': session.user,
+        'status': 'CREDITED',
+        'payment_time': payment_time or timezone.now(),
+        'raw_payload': raw_payload or {},
+    }
+    if synced_by is not None:
+        defaults['synced_by'] = synced_by
     AutoDepositTransaction.objects.update_or_create(
         utr=utr,
-        defaults={
-            'amount': phonepe_amount,
-            'party_name': (party_name or '')[:255],
-            'txn_type': (txn_type or 'Received from')[:64],
-            'user': session.user,
-            'status': 'CREDITED',
-            'payment_time': payment_time or timezone.now(),
-            'raw_payload': raw_payload or {},
-        },
+        defaults=defaults,
     )
 
     # Referral + journey (best-effort)
@@ -417,10 +421,11 @@ def _credit_pending_session(
     return True
 
 
-def ingest_phonepe_transactions(items: list[dict]) -> dict:
+def ingest_phonepe_transactions(items: list[dict], synced_by=None) -> dict:
     """
     Process PhonePe companion sync payload.
     Matches PENDING sessions by unique_amount; credits wallet; records unmatched UTRs.
+    synced_by: staff User who ran PhonePe Sync (shown in SVS Pay per account).
     """
     expire_stale_sessions()
     credited = 0
@@ -454,6 +459,9 @@ def ingest_phonepe_transactions(items: list[dict]) -> dict:
         # Prefer already-credited UTR — idempotent
         existing = AutoDepositTransaction.objects.filter(utr=utr).first()
         if existing and existing.status == 'CREDITED':
+            # Still attach synced_by if missing
+            if synced_by is not None and not existing.synced_by_id:
+                AutoDepositTransaction.objects.filter(pk=existing.pk).update(synced_by=synced_by)
             skipped += 1
             continue
 
@@ -475,23 +483,27 @@ def ingest_phonepe_transactions(items: list[dict]) -> dict:
                         txn_type=txn_type,
                         payment_time=payment_time,
                         raw_payload=raw,
+                        synced_by=synced_by,
                     )
                     if ok:
                         credited += 1
                     else:
                         skipped += 1
                 else:
+                    defaults = {
+                        'amount': amount,
+                        'party_name': party[:255],
+                        'txn_type': (txn_type or 'Received from')[:64],
+                        'user': None,
+                        'status': 'UNMATCHED',
+                        'payment_time': payment_time,
+                        'raw_payload': raw,
+                    }
+                    if synced_by is not None:
+                        defaults['synced_by'] = synced_by
                     AutoDepositTransaction.objects.update_or_create(
                         utr=utr,
-                        defaults={
-                            'amount': amount,
-                            'party_name': party[:255],
-                            'txn_type': (txn_type or 'Received from')[:64],
-                            'user': None,
-                            'status': 'UNMATCHED',
-                            'payment_time': payment_time,
-                            'raw_payload': raw,
-                        },
+                        defaults=defaults,
                     )
                     unmatched += 1
         except Exception as exc:
@@ -636,5 +648,37 @@ def today_credit_utrs() -> list[dict]:
             'status': t.status,
             'username': t.user.username if t.user_id else '—',
             'payment_time': t.payment_time.isoformat(),
+        })
+    return rows
+
+
+def list_auto_deposit_transactions(day=None, limit: int = 500, synced_by_id=None, account_username=None) -> list[dict]:
+    """
+    SVS Pay ledger: PhonePe-synced AutoDepositTransaction rows.
+    day=None → today; synced_by_id / account_username filter by PhonePe Sync account.
+    """
+    qs = AutoDepositTransaction.objects.all().select_related('user', 'synced_by').order_by('-payment_time', '-id')
+    if day is not None:
+        qs = qs.filter(payment_time__date=day)
+    else:
+        qs = qs.filter(payment_time__date=timezone.now().date())
+    if synced_by_id:
+        qs = qs.filter(synced_by_id=synced_by_id)
+    if account_username:
+        qs = qs.filter(synced_by__username__iexact=account_username)
+    rows = []
+    for t in qs[: max(1, min(int(limit or 500), 2000))]:
+        rows.append({
+            'id': t.id,
+            'utr': t.utr,
+            'amount': str(t.amount),
+            'party_name': t.party_name or '—',
+            'txn_type': t.txn_type or 'Received from',
+            'status': t.status,
+            'username': t.user.username if t.user_id else '—',
+            'account': t.synced_by.username if t.synced_by_id else '—',
+            'synced_by': t.synced_by.username if t.synced_by_id else None,
+            'payment_time': t.payment_time.isoformat() if t.payment_time else '',
+            'created_at': t.created_at.isoformat() if t.created_at else '',
         })
     return rows

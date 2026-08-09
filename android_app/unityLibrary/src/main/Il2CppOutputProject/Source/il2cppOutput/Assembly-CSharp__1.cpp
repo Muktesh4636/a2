@@ -18473,6 +18473,10 @@ IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR void GameplayUIManager_U3COnResetButtonClicke
 		}
 	}
 	{
+		// Drop the undone chip locally first (merged-per-number visual), then
+		// refresh from server. Previously only refetch ran — if round/bets lagged
+		// or missed query round_id, the chip stayed on the number.
+		GameplayUIManager_RemoveLastBet_mF25CE61A6C3B7CC2D798A551B96B68EB96F640F3(__this, NULL);
 		GameManager_tFE129A0017AF5BBD30FDCD4403B9CCEAE064C6B6* L_1;
 		L_1 = GameManager_get_Instance_m076FE4D98E785B5AEE0B4C360C7857F824E7FBD0_inline(NULL);
 		NullCheck(L_1);

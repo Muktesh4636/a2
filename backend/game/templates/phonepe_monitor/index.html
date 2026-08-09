@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>PhonePe Web Monitor</title>
+  <style>
+    :root {
+      --bg:#0b1220; --card:#111827; --line:#1f2937; --text:#e5e7eb; --muted:#94a3b8;
+      --ok:#22c55e; --bad:#ef4444; --accent:#38bdf8;
+    }
+    *{box-sizing:border-box}
+    body{margin:0;font-family:"Segoe UI",system-ui,sans-serif;background:radial-gradient(1200px 600px at 10% -10%,#123 0%,var(--bg) 55%);color:var(--text);min-height:100vh;padding:16px}
+    h1{font-size:1.35rem;margin:0 0 4px}
+    .sub{color:var(--muted);font-size:.9rem;margin-bottom:18px}
+    .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;margin-bottom:14px}
+    label{display:block;font-size:12px;color:var(--muted);margin-bottom:6px;font-weight:700}
+    input{width:100%;padding:11px 12px;border-radius:10px;border:1px solid var(--line);background:#0a0f1a;color:var(--text);margin-bottom:12px;font-size:14px}
+    .row{display:flex;flex-wrap:wrap;gap:8px}
+    button{border:0;border-radius:10px;padding:11px 14px;font-weight:700;cursor:pointer;font-size:14px}
+    .btn-primary{background:var(--ok);color:#052e16}
+    .btn-secondary{background:#1e293b;color:var(--text);border:1px solid var(--line)}
+    .btn-danger{background:#7f1d1d;color:#fecaca}
+    .btn-accent{background:#0c4a6e;color:#bae6fd}
+    .pill{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;font-size:12px;font-weight:700;border:1px solid var(--line);background:#0a0f1a}
+    .pill.on{color:var(--ok);border-color:#14532d}
+    .pill.off{color:var(--bad);border-color:#7f1d1d}
+    .status{font-size:14px;line-height:1.45;color:#cbd5e1;min-height:1.4em}
+    table{width:100%;border-collapse:collapse;font-size:13px}
+    th,td{text-align:left;padding:8px 6px;border-bottom:1px solid var(--line);vertical-align:top}
+    th{color:var(--muted);font-size:11px;text-transform:uppercase}
+    .empty{color:var(--muted);padding:12px 0}
+    .meta{font-size:12px;color:var(--muted)}
+    .bridge-warn{background:#422006;border:1px solid #854d0e;color:#fde68a;padding:12px;border-radius:12px;margin-bottom:14px;font-size:13px}
+    .err{color:#fecaca;font-size:13px;margin-top:8px;min-height:1.2em}
+    .hidden{display:none!important}
+  </style>
+</head>
+<body>
+  <h1>PhonePe Web Monitor</h1>
+  <p class="sub">Staff login required · first sync: today + yesterday · then latest new credits every 1 minute</p>
+
+  <div id="loginView" class="card">
+    <label>Username</label>
+    <input id="loginUser" autocomplete="username" placeholder="Staff username" />
+    <label>Password</label>
+    <input id="loginPass" type="password" autocomplete="current-password" placeholder="Password" />
+    <button class="btn-primary" style="width:100%" onclick="doLogin()">Login</button>
+    <div class="err" id="loginErr"></div>
+    <p class="meta" style="margin-top:10px;">Use Super Admin / Franchise Admin / Agent staff account.</p>
+  </div>
+
+  <div id="appView" class="hidden">
+    <div id="bridgeWarn" class="bridge-warn">
+      <strong>Required:</strong> Settings → Accessibility → Installed apps → turn ON <em>PhonePe Web Monitor</em>.
+    </div>
+
+    <div class="card" style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
+      <div class="meta">Signed in as <strong id="who">—</strong></div>
+      <button class="btn-danger" onclick="doLogout()">Logout</button>
+    </div>
+
+    <div class="card">
+      <div class="row" style="margin-bottom:12px;">
+        <span id="pillMonitor" class="pill off">Monitor OFF</span>
+        <span id="pillAccess" class="pill off">Accessibility OFF</span>
+        <span id="pillBridge" class="pill off">Native bridge OFF</span>
+      </div>
+      <div class="status" id="statusText">Waiting…</div>
+      <div class="meta" id="metaText" style="margin-top:8px;"></div>
+    </div>
+
+    <div class="card">
+      <div class="row">
+        <button class="btn-accent" onclick="openAccessibility()">Enable Accessibility</button>
+        <button class="btn-primary" onclick="startMonitor()">Start 1‑min monitor</button>
+        <button class="btn-danger" onclick="stopMonitor()">Stop</button>
+        <button class="btn-secondary" onclick="checkNow()">Check now</button>
+        <button class="btn-secondary" onclick="reloadUtrs()">Refresh UTRs</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2 style="margin:0 0 10px;font-size:1rem;">Today’s synced credits</h2>
+      <div id="utrBox" class="empty">Loading…</div>
+    </div>
+  </div>
+
+  <script>
+    const hasBridge = !!(window.PhonePeMonitor && typeof window.PhonePeMonitor.getStatus === 'function');
+    const KEY_ACCESS = 'ppm_access';
+    const KEY_SYNC = 'ppm_sync';
+    const KEY_USER = 'ppm_user';
+    const KEY_SERVER = 'ppm_server';
+
+    function setPill(id, on, onText, offText) {
+      const el = document.getElementById(id);
+      el.className = 'pill ' + (on ? 'on' : 'off');
+      el.textContent = on ? onText : offText;
+    }
+    function escapeHtml(s) {
+      return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    }
+    function serverBase() {
+      if (hasBridge) {
+        try {
+          const s = JSON.parse(window.PhonePeMonitor.getStatus());
+          if (s.serverUrl) return String(s.serverUrl).replace(/\/$/, '');
+        } catch (e) {}
+      }
+      return (localStorage.getItem(KEY_SERVER) || location.origin).replace(/\/$/, '');
+    }
+    function authHeaders() {
+      const h = { 'Content-Type': 'application/json' };
+      const a = localStorage.getItem(KEY_ACCESS) || '';
+      const sync = localStorage.getItem(KEY_SYNC) || '';
+      if (a) h['Authorization'] = 'Bearer ' + a;
+      if (sync) h['X-Sync-Token'] = sync;
+      return h;
+    }
+
+    function showApp(user) {
+      document.getElementById('loginView').classList.add('hidden');
+      document.getElementById('appView').classList.remove('hidden');
+      document.getElementById('who').textContent = (user && user.username) || 'staff';
+      setPill('pillBridge', hasBridge, 'Native bridge ON', 'Native bridge OFF');
+      if (hasBridge) {
+        try { applyStatus(window.PhonePeMonitor.getStatus()); } catch (e) {}
+      }
+      reloadUtrs();
+    }
+    function showLogin() {
+      document.getElementById('appView').classList.add('hidden');
+      document.getElementById('loginView').classList.remove('hidden');
+    }
+
+    async function doLogin() {
+      const username = document.getElementById('loginUser').value.trim();
+      const password = document.getElementById('loginPass').value;
+      const err = document.getElementById('loginErr');
+      err.textContent = '';
+      if (!username || !password) { err.textContent = 'Enter username and password'; return; }
+      try {
+        const res = await fetch(serverBase() + '/api/companion/login/', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, password, app: 'phonepe_monitor' }),
+        });
+        const data = await res.json();
+        if (!res.ok || !data.ok) throw new Error(data.error || ('HTTP ' + res.status));
+        localStorage.setItem(KEY_ACCESS, data.access || '');
+        localStorage.setItem(KEY_SYNC, data.sync_token || '');
+        localStorage.setItem(KEY_USER, JSON.stringify(data.user || {}));
+        localStorage.setItem(KEY_SERVER, serverBase());
+        if (hasBridge) {
+          try {
+            window.PhonePeMonitor.saveSession(data.access || '', data.sync_token || '', JSON.stringify(data.user || {}));
+          } catch (e) {}
+        }
+        showApp(data.user);
+      } catch (e) {
+        err.textContent = e.message || String(e);
+      }
+    }
+
+    function doLogout() {
+      localStorage.removeItem(KEY_ACCESS);
+      localStorage.removeItem(KEY_SYNC);
+      localStorage.removeItem(KEY_USER);
+      if (hasBridge) {
+        try { window.PhonePeMonitor.clearSession(); window.PhonePeMonitor.stopMonitor(); } catch (e) {}
+      }
+      showLogin();
+    }
+
+    function applyStatus(raw) {
+      let s = raw;
+      if (typeof raw === 'string') { try { s = JSON.parse(raw); } catch (e) { s = {}; } }
+      if (!s || typeof s !== 'object') return;
+      setPill('pillMonitor', !!s.monitorEnabled, 'Monitor ON', 'Monitor OFF');
+      setPill('pillAccess', !!s.accessibilityEnabled, 'Accessibility ON', 'Accessibility OFF');
+      document.getElementById('bridgeWarn').style.display = s.accessibilityEnabled ? 'none' : 'block';
+      document.getElementById('statusText').textContent = s.lastStatus || '—';
+      const lastCheck = s.lastCheckAt ? new Date(s.lastCheckAt).toLocaleString() : 'never';
+      document.getElementById('metaText').textContent =
+        `Device ${s.deviceId || '—'} · App ${s.appVersion || '—'} · Last check ${lastCheck}`;
+    }
+
+    window.onPhonePeMonitorEvent = function(name, payload) {
+      applyStatus(payload);
+      if (name === 'status' && payload && payload.message) {
+        document.getElementById('statusText').textContent = payload.message;
+      }
+      if (name === 'monitorStarted' || name === 'checkNow' || name === 'ready') reloadUtrs();
+    };
+
+    function startMonitor() {
+      if (!localStorage.getItem(KEY_ACCESS) && !localStorage.getItem(KEY_SYNC)) { showLogin(); return; }
+      if (hasBridge) window.PhonePeMonitor.startMonitor();
+      else alert('Open inside the PhonePe Web Monitor app.');
+    }
+    function stopMonitor() { if (hasBridge) window.PhonePeMonitor.stopMonitor(); }
+    function checkNow() {
+      if (!localStorage.getItem(KEY_ACCESS) && !localStorage.getItem(KEY_SYNC)) { showLogin(); return; }
+      if (hasBridge) window.PhonePeMonitor.checkNow();
+      else alert('Check now only works inside the Android app.');
+    }
+    function openAccessibility() {
+      if (hasBridge) window.PhonePeMonitor.openAccessibility();
+      else alert('Open Settings → Accessibility on the phone.');
+    }
+
+    async function reloadUtrs() {
+      const box = document.getElementById('utrBox');
+      if (!localStorage.getItem(KEY_ACCESS) && !localStorage.getItem(KEY_SYNC)) return;
+      box.innerHTML = '<div class="empty">Loading…</div>';
+      try {
+        const res = await fetch(serverBase() + '/api/svs-pay/transactions/?limit=100', { headers: authHeaders() });
+        const data = await res.json();
+        if (res.status === 401) { doLogout(); return; }
+        if (!res.ok || !data.ok) throw new Error(data.error || ('HTTP ' + res.status));
+        const rows = data.transactions || [];
+        if (!rows.length) { box.innerHTML = '<div class="empty">No credits synced yet today.</div>'; return; }
+        let html = '<table><thead><tr><th>Amount</th><th>Party</th><th>UTR</th><th>When</th></tr></thead><tbody>';
+        rows.slice(0, 80).forEach(r => {
+          html += `<tr>
+            <td>${escapeHtml(r.amount || '—')}</td>
+            <td>${escapeHtml(r.party_name || '—')}</td>
+            <td>${escapeHtml(r.utr || '—')}</td>
+            <td>${escapeHtml((r.payment_time || '').replace('T',' ').slice(0,19))}</td>
+          </tr>`;
+        });
+        html += '</tbody></table>';
+        box.innerHTML = html;
+      } catch (e) {
+        box.innerHTML = '<div class="empty">Failed: ' + escapeHtml(e.message || String(e)) + '</div>';
+      }
+    }
+
+    (async function init() {
+      if (hasBridge) {
+        try {
+          const s = JSON.parse(window.PhonePeMonitor.getStatus());
+          if (s.accessToken) localStorage.setItem(KEY_ACCESS, s.accessToken);
+          if (s.syncToken) localStorage.setItem(KEY_SYNC, s.syncToken);
+          if (s.userJson) localStorage.setItem(KEY_USER, s.userJson);
+          if (s.serverUrl) localStorage.setItem(KEY_SERVER, s.serverUrl);
+        } catch (e) {}
+      }
+      const access = localStorage.getItem(KEY_ACCESS);
+      if (!access) { showLogin(); return; }
+      try {
+        const res = await fetch(serverBase() + '/api/companion/me/', { headers: authHeaders() });
+        const data = await res.json();
+        if (!res.ok || !data.ok) { doLogout(); return; }
+        let user = data.user;
+        if (!user) { try { user = JSON.parse(localStorage.getItem(KEY_USER) || '{}'); } catch (e) { user = {}; } }
+        showApp(user);
+      } catch (e) {
+        showLogin();
+      }
+    })();
+
+    setInterval(() => {
+      if (!document.getElementById('appView').classList.contains('hidden')) {
+        if (hasBridge) { try { applyStatus(window.PhonePeMonitor.getStatus()); } catch (e) {} }
+        reloadUtrs();
+      }
+    }, 20000);
+  </script>
+</body>
+</html>

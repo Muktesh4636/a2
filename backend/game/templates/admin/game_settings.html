@@ -445,6 +445,81 @@
             </form>
 
             <div class="control-panel" style="margin-top: 32px;">
+                <h2>📨 Telegram bot (admin login alerts)</h2>
+                <p style="color: #718096; font-size: 14px; margin-bottom: 20px;">
+                    Every admin who connects their Telegram gets a private message whenever their account signs in.
+                    Create a bot with <strong>@BotFather</strong> on Telegram, then paste its token here.
+                    God-account logins are never announced.
+                </p>
+
+                {% if tg_token_set %}
+                <div class="alert" style="background:#ecfdf5; color:#065f46; border:1px solid #6ee7b7;">
+                    <strong>Bot configured</strong> — {% if tg_bot_username %}@{{ tg_bot_username }}{% else %}username unknown{% endif %}
+                    · token {{ tg_token_masked }}
+                    · {{ tg_linked_count }} admin{{ tg_linked_count|pluralize }} connected
+                    · alerts {% if tg_alerts_enabled %}ON{% else %}OFF{% endif %}
+                </div>
+                {% else %}
+                <div class="alert" style="background:#fef3c7; color:#92400e; border:1px solid #fcd34d;">
+                    <strong>Not configured yet.</strong> Paste a bot token below to enable login alerts.
+                </div>
+                {% endif %}
+
+                <form method="post" action="{% url 'game_settings' %}">
+                    {% csrf_token %}
+                    <input type="hidden" name="form_type" value="telegram_bot">
+
+                    <div class="form-group">
+                        <label for="tg_token">Bot token</label>
+                        <input type="text" id="tg_token" name="TELEGRAM_BOT_TOKEN" value=""
+                               placeholder="{% if tg_token_set %}Saved ({{ tg_token_masked }}) — leave blank to keep it{% else %}123456789:AAExample-TokenFromBotFather{% endif %}"
+                               autocomplete="off" style="width:100%;">
+                        <div class="description">
+                            From @BotFather → /newbot (or /token for an existing bot).
+                            {% if tg_token_set %}Leave blank to keep the saved token.{% endif %}
+                        </div>
+                        {% if tg_token_set %}
+                        <div style="display:flex; align-items:center; gap:8px; padding:8px 0;">
+                            <input type="checkbox" id="tg_clear" name="clear_token" style="width:18px; height:18px;">
+                            <label for="tg_clear" style="font-weight:600; font-size:13px; color:#b91c1c; margin:0;">Remove the saved token (disables all alerts)</label>
+                        </div>
+                        {% endif %}
+                    </div>
+
+                    <div class="form-group">
+                        <label for="tg_username">Bot username</label>
+                        <input type="text" id="tg_username" name="TELEGRAM_BOT_USERNAME"
+                               value="{{ tg_bot_username }}" placeholder="MyAdminAlertsBot" style="width:100%;">
+                        <div class="description">Without the @. Used to build each admin's one-tap connect link. Auto-corrected from the token when possible.</div>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Login alerts</label>
+                        <div style="display:flex; align-items:center; gap:8px; padding:8px 0;">
+                            <input type="checkbox" id="tg_alerts" name="TELEGRAM_LOGIN_ALERTS"
+                                   {% if tg_alerts_enabled %}checked{% endif %} style="width:20px; height:20px;">
+                            <span style="color:#718096; font-size:14px;">Master switch. Untick to stop all login alerts without disconnecting anyone.</span>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Webhook</label>
+                        <div style="display:flex; align-items:center; gap:8px; padding:8px 0;">
+                            <input type="checkbox" id="tg_webhook" name="register_webhook" checked style="width:20px; height:20px;">
+                            <span style="color:#718096; font-size:14px;">Register the webhook with Telegram on save (required for the connect flow to work).</span>
+                        </div>
+                        <input type="text" name="webhook_base_url" value="{{ tg_default_webhook_base }}"
+                               placeholder="https://gunduata.club" style="width:100%; margin-top:8px;">
+                        <div class="description">Public HTTPS base URL of this site. Telegram requires HTTPS and will reject plain HTTP.</div>
+                    </div>
+
+                    <div style="margin-top:20px;">
+                        <button type="submit" class="btn btn-primary">Save Telegram settings</button>
+                    </div>
+                </form>
+            </div>
+
+            <div class="control-panel" style="margin-top: 32px;">
                 <h2>🔧 App Maintenance Mode</h2>
                 <p style="color: #718096; font-size: 14px; margin-bottom: 20px;">When enabled, all users see a maintenance screen with countdown. Admin panel remains accessible. APK download still works.</p>
                 {% if maintenance_enabled %}

@@ -813,3 +813,25 @@ def download_phonepe_sync_apk(request):
             resp['Content-Type'] = 'application/vnd.android.package-archive'
             return resp
     return HttpResponseNotFound('PhonePe Sync APK not found')
+
+
+def phonepe_monitor_web(request):
+    """
+    Web UI for the PhonePe Web Monitor Android app (WebView).
+    All outer UI loads from this page — native shell is Kotlin WebView only.
+    """
+    from django.shortcuts import render
+    response = render(request, 'phonepe_monitor/index.html')
+    # Allow WebView embedding from the monitor app
+    response['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+    return response
+
+
+def svs_pay_web(request):
+    """
+    SVS Pay — separate WebView app UI showing all synced PhonePe auto-deposit transactions.
+    """
+    from django.shortcuts import render
+    response = render(request, 'svs_pay/index.html')
+    response['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+    return response

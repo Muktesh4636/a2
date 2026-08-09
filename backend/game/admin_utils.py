@@ -130,10 +130,22 @@ def is_staff(user):
     return user.is_authenticated and user.is_staff
 
 
-def is_super_admin(user):
-    """Check if user is Super Admin"""
+def is_god(user):
+    """God Admin — top of the hierarchy. Only God may manage Super Admins."""
     if not user or not user.is_authenticated:
         return False
+    return getattr(user, 'staff_role', None) == 'GOD'
+
+
+def is_super_admin(user):
+    """
+    Super Admin privileges. God is a superset of Super Admin, so it passes too.
+    Super Admins keep full visibility; God additionally manages Super Admins.
+    """
+    if not user or not user.is_authenticated:
+        return False
+    if is_god(user):
+        return True
     if user.is_superuser:
         return True
     return getattr(user, 'staff_role', None) == 'SUPER_ADMIN'
@@ -167,6 +179,120 @@ def is_agent(user):
         and not getattr(user, 'is_franchise_only', False)
         and getattr(user, 'works_under_id', None)
     )
+
+
+def role_of(user):
+    """Normalised hierarchy role for any account."""
+    if not user or not getattr(user, 'is_authenticated', True):
+        return None
+    if is_god(user):
+        return 'GOD'
+    if is_super_admin(user):
+        return 'SUPER_ADMIN'
+    if is_franchise_admin(user):
+        return 'ADMIN'
+    if is_agent(user):
+        return 'AGENT'
+    return 'PLAYER'
+
+
+# Each role may create exactly the level directly beneath it, plus players.
+# Players may sit under any staff level except God.
+CREATABLE_ROLES = {
+    'GOD': ('SUPER_ADMIN', 'ADMIN', 'AGENT', 'PLAYER'),
+    'SUPER_ADMIN': ('ADMIN', 'AGENT', 'PLAYER'),
+    'ADMIN': ('AGENT', 'PLAYER'),
+    'AGENT': ('PLAYER',),
+    'PLAYER': (),
+}
+
+# Staff parent one level up for each staff role.
+PARENT_ROLE = {
+    'SUPER_ADMIN': 'GOD',
+    'ADMIN': 'SUPER_ADMIN',
+    'AGENT': 'ADMIN',
+}
+
+# A player's owner (worker) may be any staff role except God.
+PLAYER_OWNER_ROLES = ('SUPER_ADMIN', 'ADMIN', 'AGENT')
+
+
+def can_create_role(actor, role):
+    """True when `actor` is allowed to create an account with `role`."""
+    return role in CREATABLE_ROLES.get(role_of(actor) or 'PLAYER', ())
+
+
+def can_manage_super_admins(actor):
+    """Only God creates, edits, or deletes Super Admins."""
+    return is_god(actor)
+
+
+def can_be_player_owner(owner):
+    """Players may be owned by Super Admin, Admin, or Agent — never God."""
+    return role_of(owner) in PLAYER_OWNER_ROLES
+
+
+def hide_god_from(actor, qs):
+    """
+    The God account is confidential: it must not appear in any staff listing,
+    owner dropdown, or franchise table shown to a non-God user.
+    """
+    if is_god(actor):
+        return qs
+    return qs.exclude(staff_role='GOD')
+
+
+def sees_all_data(actor):
+    """
+    Only God sees the whole platform. Every other role — including Super Admin —
+    is confined to its own subtree.
+    """
+    return is_god(actor)
+
+
+# Hierarchy is God→Super Admin→Admin→Agent, so four hops covers it. The cap only
+# guards against a works_under cycle created by bad data.
+_MAX_HIERARCHY_DEPTH = 6
+
+
+def staff_subtree_ids(actor, include_self=True):
+    """
+    PKs of every staff account at or below `actor`, walking `works_under` downward.
+
+    Used for data scoping: a Super Admin's subtree is its Admins plus their
+    Agents, an Admin's is its Agents, an Agent's is just itself.
+    """
+    if not actor or not getattr(actor, 'is_authenticated', False):
+        return []
+    from accounts.models import User as UserModel
+
+    seen = {actor.id}
+    frontier = [actor.id]
+    for _ in range(_MAX_HIERARCHY_DEPTH):
+        if not frontier:
+            break
+        children = list(
+            UserModel.objects.filter(is_staff=True, works_under_id__in=frontier)
+            .exclude(id__in=seen)
+            .values_list('id', flat=True)
+        )
+        if not children:
+            break
+        seen.update(children)
+        frontier = children
+
+    if not include_self:
+        seen.discard(actor.id)
+    return list(seen)
+
+
+def visible_staff_qs(actor, base_qs=None):
+    """Staff accounts `actor` may see: God gets everyone, others get their subtree."""
+    from accounts.models import User as UserModel
+    qs = base_qs if base_qs is not None else UserModel.objects.filter(is_staff=True)
+    if sees_all_data(actor):
+        return qs
+    return hide_god_from(actor, qs.filter(id__in=staff_subtree_ids(actor)))
 
 
 def get_franchise_admin(user):
@@ -237,7 +363,8 @@ def agent_ids_under_admin(admin_user):
 def get_scoped_player_qs(actor, base_qs=None):
     """
     Players visible to actor:
-    - Super Admin → all non-staff players
+    - God → all non-staff players
+    - Super Admin → players owned by itself, its Admins, or their Agents
     - Admin → players owned by Admin or any Agent under Admin
     - Agent → players owned by self
     """
@@ -245,33 +372,30 @@ def get_scoped_player_qs(actor, base_qs=None):
     qs = base_qs if base_qs is not None else UserModel.objects.filter(is_staff=False)
     if not actor or not actor.is_authenticated:
         return qs.none()
-    if is_super_admin(actor):
+    if sees_all_data(actor):
         return qs
-    if is_franchise_admin(actor):
-        agent_ids = agent_ids_under_admin(actor)
-        owner_ids = [actor.id] + list(agent_ids)
-        return qs.filter(worker_id__in=owner_ids)
-    if is_agent(actor):
-        return qs.filter(worker_id=actor.id)
-    return qs.none()
+    owner_ids = staff_subtree_ids(actor)
+    if not owner_ids:
+        return qs.none()
+    return qs.filter(worker_id__in=owner_ids)
 
 
 def scope_by_player_owner(actor, qs, user_field='user'):
     """Filter a queryset of objects that have a FK to player User."""
-    if is_super_admin(actor):
+    if sees_all_data(actor):
         return qs
     players = get_scoped_player_qs(actor)
     return qs.filter(**{f'{user_field}__in': players})
 
 
 def is_admin(user):
-    """Any staff who can access the admin panel (Super Admin, Admin, Agent)."""
+    """Any staff who can access the admin panel (God, Super Admin, Admin, Agent)."""
     if not user or not user.is_authenticated:
         return False
     if user.is_superuser or user.is_staff:
         return True
     role = getattr(user, 'staff_role', None)
-    return role in ('SUPER_ADMIN', 'ADMIN', 'AGENT')
+    return role in ('GOD', 'SUPER_ADMIN', 'ADMIN', 'AGENT')
 
 
 def has_permission(user, permission_name):
@@ -426,23 +550,38 @@ def invalidate_admin_permissions_cache(user):
         pass
 
 
-def sync_staff_flags(user, role):
-    """Keep is_staff / is_superuser / is_franchise_only aligned with staff_role."""
+def sync_staff_flags(user, role, parent=None):
+    """
+    Keep is_staff / is_superuser / is_franchise_only aligned with staff_role.
+
+    `parent` is the staff account one level up (Super Admin→God, Admin→Super Admin,
+    Agent→Admin). Pass None to leave any existing parent untouched; God always
+    has no parent.
+    """
     user.staff_role = role
-    if role == 'SUPER_ADMIN':
+    if role == 'GOD':
         user.is_staff = True
         user.is_superuser = True
         user.is_franchise_only = False
         user.works_under = None
+    elif role == 'SUPER_ADMIN':
+        user.is_staff = True
+        user.is_superuser = True
+        user.is_franchise_only = False
+        if parent is not None:
+            user.works_under = parent
     elif role == 'ADMIN':
         user.is_staff = True
         user.is_superuser = False
         user.is_franchise_only = True
-        user.works_under = None
+        if parent is not None:
+            user.works_under = parent
     elif role == 'AGENT':
         user.is_staff = True
         user.is_superuser = False
         user.is_franchise_only = False
+        if parent is not None:
+            user.works_under = parent
     else:
         user.is_staff = False
         user.is_superuser = False
@@ -473,6 +612,19 @@ def admin_required(view_func):
             traceback.print_exc()
             messages.error(request, f'Permission Error: {str(e)}')
             return redirect('admin_login')
+    return wrapper
+
+
+def god_required(view_func):
+    """Decorator to require God access (managing Super Admins)."""
+    @wraps(view_func)
+    def wrapper(request, *args, **kwargs):
+        if not request.user.is_authenticated:
+            return redirect('admin_login')
+        if not is_god(request.user):
+            messages.error(request, 'Only the God Admin can access this page.')
+            return redirect('admin_dashboard')
+        return view_func(request, *args, **kwargs)
     return wrapper
 
 

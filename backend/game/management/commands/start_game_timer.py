@@ -290,6 +290,7 @@ class Command(BaseCommand):
                             pipe.set(f"round_total_bets:{round_obj.round_id}", "0", ex=3600, nx=True)
                             pipe.set(f"round_total_amount:{round_obj.round_id}", "0.00", ex=3600, nx=True)
                             pipe.set(f"round:{round_obj.round_id}:bet_count", "0", ex=3600, nx=True)
+                            pipe.set(f"round:{round_obj.round_id}:total_exposure", "0.00", ex=3600, nx=True)
                             # For the Hash, we still delete to ensure it's empty
                             pipe.delete(f"round:{round_obj.round_id}:user_exposure")
                             pipe.execute()  # Execute all writes in one round trip

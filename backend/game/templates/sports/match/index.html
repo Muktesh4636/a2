@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0d1117" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <title>Match — Sports</title>
+  <script>
+    (function () {
+      try {
+        var ua = navigator.userAgent || '';
+        var bridge = window.AndroidBridge;
+        var inApp = /GunduAtaApp/i.test(ua) || !!(bridge && typeof bridge.isSystemBarsInsetApplied === 'function');
+        if (inApp) {
+          document.documentElement.classList.add('android-system-bars');
+          document.addEventListener('DOMContentLoaded', function () {
+            document.body.classList.add('in-app', 'android-system-bars');
+          });
+        }
+      } catch (e) {}
+    })();
+  </script>
+  <style>
+    :root {
+      --bg: #0d1117;
+      --card: #161b22;
+      --elevated: #1c222e;
+      --gold: #d4af37;
+      --gold-bright: #ffd54f;
+      --blue: #76c7ed;
+      --pink: #e57373;
+      --muted: #9aa3af;
+      --border: #3a4556;
+      --on-odd: #0a0a0a;
+      --safe-top: env(safe-area-inset-top, 0px);
+    }
+    * { box-sizing: border-box; }
+    html { margin: 0; background: var(--bg); }
+    html, body {
+      margin: 0; min-height: 100%; min-height: 100dvh;
+      background: var(--bg); color: #fff;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+    body { padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px)); }
+    .nav { display: none !important; }
+    a { color: inherit; text-decoration: none; }
+
+    .top {
+      display: flex; align-items: center; gap: 8px;
+      padding: 6px 14px 8px;
+      position: sticky; top: 0; z-index: 20;
+      background: var(--bg);
+      border-bottom: 1px solid rgba(58, 69, 86, 0.45);
+    }
+    body:not(.android-system-bars):not(.in-app) .top {
+      padding-top: max(6px, var(--safe-top));
+    }
+    body.android-system-bars .top,
+    body.in-app .top,
+    html.android-system-bars .top {
+      padding-top: 4px;
+    }
+    .back {
+      background: none; border: 0; color: var(--gold); font-size: 20px;
+      cursor: pointer; padding: 0 4px 0 0; line-height: 1;
+    }
+    .brand-icon {
+      width: 22px; height: 22px; border-radius: 50%;
+      background: var(--gold); display: grid; place-items: center;
+      font-size: 12px; color: #111; font-weight: 800;
+    }
+    .brand { color: var(--gold); font-weight: 800; letter-spacing: .06em; font-size: 18px; }
+    .spacer { flex: 1; }
+    .my-bets { color: var(--gold-bright); font-size: 13px; font-weight: 600; margin-right: 6px; cursor: pointer; }
+    .wallet {
+      background: var(--elevated); border: 1px solid #2a3340;
+      border-radius: 20px; padding: 6px 10px; font-size: 13px; font-weight: 700;
+    }
+    .plus {
+      width: 30px; height: 30px; border-radius: 50%;
+      background: var(--gold-bright); color: #111;
+      display: grid; place-items: center; font-weight: 800; font-size: 18px;
+      margin-left: 8px; cursor: pointer;
+    }
+
+    .wrap { padding: 0 14px 20px; max-width: 480px; margin: 0 auto; }
+    .crumb { color: var(--muted); font-size: 12px; margin-bottom: 8px; }
+    .title {
+      font-size: 20px; font-weight: 800; line-height: 1.3;
+      text-transform: uppercase; margin: 0 0 12px;
+    }
+    .actions { display: flex; gap: 10px; align-items: center; margin-bottom: 14px; }
+    .icon-btn, .pill {
+      background: var(--elevated); border: 1px solid var(--border);
+      color: var(--muted); border-radius: 10px; padding: 10px 12px; cursor: pointer;
+      font-size: 13px; font-weight: 600;
+    }
+    .pill { border-radius: 20px; }
+    .pill.on { color: var(--blue); border-color: var(--blue); background: #1a2836; }
+
+    .score-card { background: var(--card); border-radius: 12px; padding: 0; overflow: hidden; margin-bottom: 12px; border: 1px solid #2a3340; }
+    .score-head {
+      background: rgba(118,199,237,.85); color: #0a1a24;
+      font-weight: 700; font-size: 13px; padding: 8px 12px;
+    }
+    .score-body { padding: 12px 14px; }
+    .score-row {
+      display: flex; align-items: center; gap: 8px;
+      padding: 6px 0; font-weight: 700; font-size: 15px;
+    }
+    .team-logo {
+      width: 26px; height: 26px; border-radius: 50%; object-fit: contain;
+      background: #0f141c; border: 1px solid #314055; flex: 0 0 auto;
+    }
+    .score-row .name { flex: 1; min-width: 0; }
+    .score-row .score { margin-left: auto; font-size: 18px; }
+    .score-foot { color: var(--muted); font-size: 12px; margin-top: 8px; }
+
+    .section-title { font-size: 18px; font-weight: 700; margin: 8px 0 10px; }
+    .filters {
+      display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px;
+      scrollbar-width: none;
+    }
+    .filters::-webkit-scrollbar { display: none; }
+    .chip {
+      flex: 0 0 auto; border: 1px solid var(--border); background: transparent;
+      color: var(--muted); border-radius: 10px; padding: 8px 12px;
+      font-size: 12px; font-weight: 600; cursor: pointer;
+    }
+    .chip.active { border-color: var(--blue); background: var(--elevated); color: #fff; }
+    .updated { color: var(--muted); font-size: 11px; margin: 8px 0 12px; }
+
+    .market-card {
+      background: var(--card); border-radius: 12px; padding: 14px;
+      margin-bottom: 12px; border: 1px solid #2a3340;
+    }
+    .market-card h4 { margin: 0 0 4px; font-size: 15px; }
+    .market-card .sub { color: var(--muted); font-size: 12px; margin-bottom: 12px; }
+    .odds-row { display: flex; flex-wrap: wrap; gap: 10px; }
+    .odd-btn {
+      flex: 1 1 120px; border: 0; border-radius: 10px; padding: 12px 10px;
+      cursor: pointer; text-align: center; color: var(--on-odd);
+    }
+    .odd-btn.blue { background: var(--blue); }
+    .odd-btn.pink { background: var(--pink); }
+    .odd-btn .name { font-size: 13px; font-weight: 600; line-height: 1.25; margin-bottom: 6px; }
+    .odd-btn .price { font-size: 20px; font-weight: 800; }
+
+    .empty, .loading, .error {
+      text-align: center; color: var(--muted); padding: 40px 16px; font-size: 14px;
+    }
+    .error { color: #ef9a9a; }
+
+    .nav {
+      position: fixed; left: 0; right: 0; bottom: 0; height: 64px;
+      background: #12161d; border-top: 1px solid #2a3340;
+      display: flex; align-items: center; justify-content: space-around;
+      max-width: 480px; margin: 0 auto;
+    }
+    .nav a {
+      color: var(--gold); font-size: 10px; font-weight: 700;
+      display: flex; flex-direction: column; align-items: center; gap: 4px; opacity: .75;
+    }
+    .nav a.active { opacity: 1; }
+    .nav .mid {
+      width: 48px; height: 48px; border-radius: 50%;
+      background: var(--gold); color: #111;
+      display: grid; place-items: center; font-size: 18px;
+      margin-top: -18px; box-shadow: 0 4px 12px rgba(212,175,55,.35);
+    }
+    .toast {
+      position: fixed; left: 50%; bottom: 80px; transform: translateX(-50%);
+      background: #222; border: 1px solid #444; padding: 10px 14px;
+      border-radius: 10px; font-size: 13px; display: none; z-index: 50; max-width: 90%;
+    }
+  </style>
+</head>
+<body>
+  <header class="top">
+    <button class="back" id="backBtn" aria-label="Back">←</button>
+    <div class="brand-icon" id="sportIcon">⚽</div>
+    <div class="brand" id="sportBrand">SOCCER</div>
+    <div class="spacer"></div>
+    <div class="my-bets" id="myBets">My bets</div>
+    <div class="wallet" id="wallet">₹ —</div>
+    <div class="plus" id="plusBtn" title="Add funds">+</div>
+  </header>
+
+  <main class="wrap" id="app">
+    <div class="loading">Loading match…</div>
+  </main>
+
+  <nav class="nav">
+    <a href="/sports/"><span>⌂</span><span>HOME</span></a>
+    <a href="/sports/?mode=upcoming"><span>🗓</span><span>UPCOMING</span></a>
+    <a class="active" id="navSport" href="/sports/?sport=soccer"><span class="mid" id="navMid">⚽</span><span id="navLabel">SOCCER</span></a>
+    <a href="/"><span>🎲</span><span>CASINO</span></a>
+    <a href="/"><span>👤</span><span>PROFILE</span></a>
+  </nav>
+  <div class="toast" id="toast"></div>
+
+  <script src="/sports/auth-wallet.js"></script>
+  <script>
+    const app = document.getElementById('app');
+    const toastEl = document.getElementById('toast');
+    if (window.GunduSportsAuth) GunduSportsAuth.bootWallet('wallet');
+    const params = new URLSearchParams(location.search);
+    const sport = (params.get('sport') || 'soccer').toLowerCase();
+    const eventId = params.get('event_id') || params.get('id');
+    const META = {
+      soccer: { label: 'SOCCER', icon: '⚽', api: 'soccer', logoSport: 'soccer' },
+      tennis: { label: 'TENNIS', icon: '🎾', api: 'tennis', logoSport: 'tennis' },
+      cricket: { label: 'CRICKET', icon: '🏏', api: 'cricket', logoSport: 'cricket' },
+    };
+    const meta = META[sport] || META.soccer;
+
+    document.getElementById('sportIcon').textContent = meta.icon;
+    document.getElementById('sportBrand').textContent = meta.label;
+    document.getElementById('navMid').textContent = meta.icon;
+    document.getElementById('navLabel').textContent = meta.label;
+    document.getElementById('navSport').href = `/sports/?sport=${sport}`;
+    document.title = `${meta.label} Match`;
+
+    let filter = 'all';
+    let showScoreboard = true;
+    let pollTimer = null;
+    let lastMatch = null;
+    let lastSyncCached = '';
+    const MATCH_CACHE_VER = 'sports_match_v1';
+    const MATCH_TTL_MS = 45 * 1000;
+    const MATCH_MAX_AGE_MS = 15 * 60 * 1000;
+
+    function matchCacheKey() {
+      return `${MATCH_CACHE_VER}:${sport}:${eventId}`;
+    }
+    function readMatchCache() {
+      try {
+        const raw = localStorage.getItem(matchCacheKey());
+        if (!raw) return null;
+        const parsed = JSON.parse(raw);
+        if (!parsed || !parsed.match) return null;
+        const age = Date.now() - (parsed.ts || 0);
+        if (age > MATCH_MAX_AGE_MS) return null;
+        return { ...parsed, age, fresh: age <= MATCH_TTL_MS };
+      } catch (_) {
+        return null;
+      }
+    }
+    function writeMatchCache(match, lastSync) {
+      try {
+        localStorage.setItem(matchCacheKey(), JSON.stringify({
+          ts: Date.now(),
+          last_sync: lastSync || '',
+          match,
+        }));
+      } catch (_) {}
+    }
+
+    function toast(msg) {
+      toastEl.textContent = msg;
+      toastEl.style.display = 'block';
+      clearTimeout(toast._t);
+      toast._t = setTimeout(() => (toastEl.style.display = 'none'), 2200);
+    }
+    function esc(s) {
+      return String(s ?? '').replace(/[&<>"']/g, c => ({
+        '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+      }[c]));
+    }
+    function teamAbbr(name) {
+      const parts = String(name || '').trim().split(/\s+/).filter(Boolean);
+      if (!parts.length) return '?';
+      if (parts.length === 1) return parts[0].slice(0, 3).toUpperCase();
+      return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+    }
+    function logoUrl(name) {
+      return '/api/sports/team-logo/?' + new URLSearchParams({
+        name: name || 'Team', sport: meta.logoSport, fallback: '1'
+      }).toString();
+    }
+    async function getJson(url) {
+      const r = await fetch(url, { headers: { Accept: 'application/json' } });
+      if (!r.ok) throw new Error(`Failed (${r.status})`);
+      return r.json();
+    }
+
+    function isMainMarket(q) {
+      q = q.toLowerCase();
+      if (sport === 'soccer') {
+        return /win\/draw\/win|1x2|match result|draw no bet|double chance|both teams|asian handicap|over\/under(?!.*corner)/i.test(q)
+          && !/player|scorer|corner|card|special/i.test(q);
+      }
+      return /head to head|winner|match/i.test(q) && !/point|game \d|set \d/i.test(q);
+    }
+    function isSpecialMarket(q) {
+      q = q.toLowerCase();
+      return /special|player|scorer|corner|card|exact|method|penalty|ace|break/i.test(q);
+    }
+    function filterMarkets(markets, tab) {
+      return (markets || []).filter(m => {
+        const q = `${m.description || ''} ${m.market_type || ''} ${m.period || ''}`;
+        if (tab === 'all') return true;
+        if (tab === 'special') return isSpecialMarket(q);
+        if (tab === 'main') return isMainMarket(q) && !isSpecialMarket(q);
+        // period / extras
+        return !isMainMarket(q) && !isSpecialMarket(q);
+      });
+    }
+
+    function clockText(m) {
+      const c = m.clock || {};
+      if (sport === 'soccer' && c.minutes != null) {
+        return `${c.minutes}:${String(c.seconds ?? 0).padStart(2, '0')}`;
+      }
+      return m.period || '';
+    }
+
+    function oddButtons(outcomes) {
+      const outs = outcomes || [];
+      if (!outs.length) return '<div class="sub">No odds</div>';
+      return `<div class="odds-row">${outs.map((o, i) => `
+        <button class="odd-btn ${i % 2 === 0 ? 'blue' : 'pink'}"
+          data-name="${esc(o.description || '')}"
+          data-price="${esc(o.price_formatted || '-')}">
+          <div class="name">${esc(o.description || '')}</div>
+          <div class="price">${esc(o.price_formatted || '-')}</div>
+        </button>`).join('')}</div>`;
+    }
+
+    function render(match, lastSync) {
+      lastMatch = match;
+      const scores = match.scores || [];
+      const markets = (match.odds || {}).markets || [];
+      const main = filterMarkets(markets, 'main');
+      const special = filterMarkets(markets, 'special');
+      const other = filterMarkets(markets, 'other');
+      const filtered = filterMarkets(markets, filter);
+      const status = ((match.clock || {}).status || '').toUpperCase();
+      const live = status === 'STARTED';
+      const crumb = [
+        meta.label.charAt(0) + meta.label.slice(1).toLowerCase(),
+        match.competition || '',
+        live ? (match.period || 'Live') : 'Upcoming',
+      ].filter(Boolean).join(' > ');
+
+      const scoreHtml = scores.length ? `
+        <div class="score-card" id="scoreboard" style="${showScoreboard ? '' : 'display:none'}">
+          <div class="score-head">${esc(meta.label.charAt(0) + meta.label.slice(1).toLowerCase())}</div>
+          <div class="score-body">
+            ${scores.map(s => `
+              <div class="score-row">
+                <img class="team-logo" src="${esc(logoUrl(s.team))}" alt="" loading="lazy" />
+                <span class="name">${esc(s.team)}</span>
+                <span class="score">${esc(s.score ?? '—')}</span>
+              </div>`).join('')}
+            <div class="score-foot">${esc([match.period, clockText(match)].filter(Boolean).join(' · '))}</div>
+          </div>
+        </div>` : '';
+
+      app.innerHTML = `
+        <div class="crumb">${esc(crumb)}</div>
+        <h1 class="title">${esc(match.match || 'Match')}</h1>
+        <div class="actions">
+          <button class="icon-btn" id="tvBtn">📺</button>
+          <button class="pill ${showScoreboard ? 'on' : ''}" id="scoreBtn">Scoreboard</button>
+          ${live ? '<span style="color:var(--gold);font-size:12px;font-weight:700">● LIVE</span>' : ''}
+        </div>
+        ${scoreHtml}
+        <div class="section-title">Markets & Odds</div>
+        <div class="filters">
+          <button class="chip ${filter==='main'?'active':''}" data-f="main">Main (${main.length})</button>
+          <button class="chip ${filter==='all'?'active':''}" data-f="all">All (${markets.length})</button>
+          <button class="chip ${filter==='other'?'active':''}" data-f="other">More (${other.length})</button>
+          <button class="chip ${filter==='special'?'active':''}" data-f="special">Special (${special.length})</button>
+        </div>
+        <div class="updated">${lastSync ? 'Updated ' + esc(lastSync) : ''}</div>
+        <div id="markets">
+          ${filtered.length ? filtered.map(m => {
+            const sub = [m.period, m.market_type || m.description].filter(Boolean).join(' · ');
+            return `<article class="market-card">
+              <h4>${esc(m.description || 'Market')}</h4>
+              <div class="sub">${esc(sub)}</div>
+              ${oddButtons(m.outcomes || [])}
+            </article>`;
+          }).join('') : '<div class="empty">No markets in this filter.</div>'}
+        </div>`;
+
+      document.getElementById('tvBtn').onclick = () => toast('Live stream coming soon');
+      document.getElementById('scoreBtn').onclick = () => {
+        showScoreboard = !showScoreboard;
+        const el = document.getElementById('scoreboard');
+        const btn = document.getElementById('scoreBtn');
+        if (el) el.style.display = showScoreboard ? '' : 'none';
+        btn.classList.toggle('on', showScoreboard);
+      };
+      app.querySelectorAll('.chip').forEach(c => {
+        c.onclick = () => { filter = c.dataset.f; render(lastMatch, lastSync); };
+      });
+      app.querySelectorAll('.odd-btn').forEach(btn => {
+        btn.onclick = () => toast(`Bet slip: ${btn.dataset.name} @ ${btn.dataset.price}`);
+      });
+    }
+
+    async function load({ fromPoll = false } = {}) {
+      if (!eventId) {
+        app.innerHTML = `<div class="error">Missing match id. <a href="/sports/?sport=${sport}" style="color:var(--gold)">Back to sports</a></div>`;
+        return;
+      }
+
+      // Instant paint from phone cache
+      if (!lastMatch) {
+        const cached = readMatchCache();
+        if (cached) {
+          lastMatch = cached.match;
+          lastSyncCached = cached.last_sync || '';
+          render(cached.match, lastSyncCached);
+        } else {
+          app.innerHTML = `<div class="loading">Loading match…</div>`;
+        }
+      }
+
+      try {
+        const data = await getJson(`/api/${meta.api}/matches/${eventId}/`);
+        const match = data.match || {};
+        writeMatchCache(match, data.last_sync);
+        // Warm team logos for this match
+        (match.scores || []).forEach(s => {
+          const img = new Image();
+          img.src = logoUrl(s.team);
+        });
+        render(match, data.last_sync);
+      } catch (err) {
+        if (!lastMatch && !fromPoll) {
+          app.innerHTML = `<div class="error">${esc(err.message)}. <a href="/sports/?sport=${sport}" style="color:var(--gold)">Back</a></div>`;
+        } else if (lastMatch && !fromPoll) {
+          toast('Showing saved match — reconnecting…');
+        }
+      }
+    }
+
+    document.getElementById('backBtn').onclick = () => {
+      if (history.length > 1) history.back();
+      else location.href = `/sports/?sport=${sport}`;
+    };
+    document.getElementById('myBets').onclick = () => toast('My bets');
+    document.getElementById('plusBtn').onclick = () => toast('Open wallet in app');
+
+    load({ fromPoll: false });
+    pollTimer = setInterval(() => load({ fromPoll: true }), 8000);
+  </script>
+</body>
+</html>

@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+{% load format_filters %}<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="utf-8">
@@ -1093,7 +1093,7 @@
                                     </td>
                                     <td>
                                         {% if deposit.processed_by %}
-                                            {{ deposit.processed_by.username }}
+                                            {{ deposit.processed_by|staff_name:user }}
                                         {% else %}
                                             <span style="color: #a0aec0;">-</span>
                                         {% endif %}
@@ -1143,7 +1143,7 @@
                                     </td>
                                     <td>
                                         {% if withdrawal.processed_by %}
-                                            {{ withdrawal.processed_by.username }}
+                                            {{ withdrawal.processed_by|staff_name:user }}
                                         {% else %}
                                             <span style="color: #a0aec0;">-</span>
                                         {% endif %}

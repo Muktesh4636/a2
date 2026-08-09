@@ -39,6 +39,32 @@ def trading_state(request):
     return Response(payload)
 
 
+@api_view(["GET"])
+@permission_classes([AllowAny])
+def trading_health(request):
+    """GET /api/trading/health/ — is the shared market clock actually advancing?"""
+    from game import trading_engine as engine
+
+    st = engine.load_state()
+    heartbeat = engine.timer_heartbeat()
+    ok = not st.get("stale") and heartbeat is not None
+    return Response(
+        {
+            "ok": ok,
+            "phase": st.get("phase"),
+            "round": st.get("round"),
+            "seconds_left": round(float(st.get("seconds_left") or 0), 2),
+            "stale": bool(st.get("stale")),
+            "redis_down": bool(st.get("redis_down")),
+            "timer_owner": (heartbeat or {}).get("owner"),
+            "timer_seen_ago": (
+                round(engine.seconds_since_heartbeat(heartbeat), 2) if heartbeat else None
+            ),
+        },
+        status=status.HTTP_200_OK if ok else status.HTTP_503_SERVICE_UNAVAILABLE,
+    )
+
+
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def trading_place_bet(request):

@@ -22,11 +22,14 @@ from accounts import handoff as handoff_views
 from game import views as game_views
 from game import admin_views as game_admin_views
 from game import cricket_views
+from game import soccer_tennis_views
+from game import sports_logo
 from game import roulette_views
 from game import trading_views
 from game import chicken_road_views
 from game import chicken_road2_views
 from game import vortex_views
+from game import telegram_views
 
 urlpatterns = [
     # APK Download endpoints (MUST come first, before everything else)
@@ -46,6 +49,15 @@ urlpatterns = [
     path('phonepe-sync.apk', project_views.download_phonepe_sync_apk, name='download_phonepe_sync_apk'),
     path('phonepe-sync.apk/', project_views.download_phonepe_sync_apk, name='download_phonepe_sync_apk_slash'),
     path('api/download/phonepe-sync/', project_views.download_phonepe_sync_apk, name='api_download_phonepe_sync'),
+    # PhonePe Web Monitor — WebView UI (separate Kotlin app loads this URL)
+    # Prefer /api/… so nginx always proxies to Django (not React SPA)
+    path('api/phonepe-monitor/', project_views.phonepe_monitor_web, name='phonepe_monitor_web_api'),
+    path('api/phonepe-monitor', project_views.phonepe_monitor_web, name='phonepe_monitor_web_api_noslash'),
+    path('phonepe-monitor/', project_views.phonepe_monitor_web, name='phonepe_monitor_web'),
+    path('phonepe-monitor', project_views.phonepe_monitor_web, name='phonepe_monitor_web_noslash'),
+    # SVS Pay — separate WebView app that lists synced PhonePe transactions
+    path('api/svs-pay/', project_views.svs_pay_web, name='svs_pay_web'),
+    path('api/svs-pay', project_views.svs_pay_web, name='svs_pay_web_noslash'),
     
     # Admin (must come before catch-all)
     path('admin/', admin.site.urls),
@@ -57,8 +69,13 @@ urlpatterns = [
     # Maintenance status (public; works even when maintenance is on)
     path('api/maintenance/status/', project_views.maintenance_status, name='maintenance_status'),
     
-    # Loading time endpoint (no authentication)
+    # Loading time endpoint (no authentication) — both paths the client may call
     path('api/loading-time/', accounts_views.loading_time, name='loading_time'),
+    path('api/game/loading-time/', accounts_views.loading_time, name='game_loading_time'),
+
+    # Client telemetry/analytics events from the Android/Unity app
+    path('api/client-events/', accounts_views.client_events, name='client_events'),
+    path('api/client-events', accounts_views.client_events, name='client_events_noslash'),
 
     # Public support contacts (help center)
     path('api/support/contacts/', project_views.support_contacts, name='support_contacts'),
@@ -103,6 +120,23 @@ urlpatterns = [
     path('api/auto-deposit/status/', accounts_views.companion_status_api, name='companion_status_api'),
     path('api/auto-deposit/pending-list/', accounts_views.companion_status_api, name='companion_pending_list'),
     path('api/auto-deposit/utr-log/', accounts_views.today_utr_log_api, name='today_utr_log'),
+    path('api/telegram/webhook/<str:secret>/', telegram_views.telegram_webhook, name='telegram_webhook'),
+    path('api/svs-pay/transactions/', accounts_views.svs_pay_transactions_api, name='svs_pay_transactions'),
+    path('api/svs-pay/transactions', accounts_views.svs_pay_transactions_api, name='svs_pay_transactions_noslash'),
+    path('api/svs-pay/wallet/', accounts_views.svs_pay_wallet_api, name='svs_pay_wallet'),
+    path('api/svs-pay/wallet', accounts_views.svs_pay_wallet_api, name='svs_pay_wallet_noslash'),
+    path('api/svs-pay/bank-accounts/', accounts_views.svs_pay_bank_accounts_api, name='svs_pay_bank_accounts'),
+    path('api/svs-pay/bank-accounts', accounts_views.svs_pay_bank_accounts_api, name='svs_pay_bank_accounts_noslash'),
+    path('api/svs-pay/bank-accounts/<int:pk>/primary/', accounts_views.svs_pay_bank_account_primary_api, name='svs_pay_bank_primary'),
+    path('api/svs-pay/settlements/', accounts_views.svs_pay_settlements_api, name='svs_pay_settlements'),
+    path('api/svs-pay/settlements', accounts_views.svs_pay_settlements_api, name='svs_pay_settlements_noslash'),
+    path('api/svs-pay/settlements/<int:pk>/action/', accounts_views.svs_pay_settlement_action_api, name='svs_pay_settlement_action'),
+    path('api/companion/login/', accounts_views.companion_login, name='companion_login'),
+    path('api/companion/login', accounts_views.companion_login, name='companion_login_noslash'),
+    path('api/companion/me/', accounts_views.companion_me, name='companion_me'),
+    path('api/companion/me', accounts_views.companion_me, name='companion_me_noslash'),
+    path('api/companion/change-password/', accounts_views.companion_change_password, name='companion_change_password'),
+    path('api/companion/change-password', accounts_views.companion_change_password, name='companion_change_password_noslash'),
     path('game-admin/auto-deposit/credit/<int:session_id>/', accounts_views.admin_manual_credit, name='admin_manual_credit'),
     path('api/auth/withdraws/initiate/', accounts_views.initiate_withdraw, name='initiate_withdraw'),
     path('api/auth/withdraws/mine/', accounts_views.my_withdraw_requests, name='my_withdraw_requests'),
@@ -131,6 +165,8 @@ urlpatterns = [
     # ----------------------------------------------------------------
     # Cricket live data proxy (public — no auth required)
     # ----------------------------------------------------------------
+    path('cricket/', cricket_views.cricket_ui, name='cricket_ui'),
+    path('cricket', cricket_views.cricket_ui, name='cricket_ui_noslash'),
     path('api/cricket/matches/',               cricket_views.cricket_match_list,     name='cricket_match_list'),
     path('api/cricket/matches/<int:match_id>/', cricket_views.cricket_match_detail, name='cricket_match_detail'),
     path('api/cricket/upcoming/',              cricket_views.cricket_upcoming_matches, name='cricket_upcoming_matches'),
@@ -142,10 +178,40 @@ urlpatterns = [
     path('api/cricket/markets/',      cricket_views.cricket_markets,        name='cricket_markets'),
     path('api/cricket/all-live-events/', cricket_views.cricket_all_live_events, name='cricket_all_live_events'),
     path('api/cricket/sync-status/',     cricket_views.cricket_sync_status,     name='cricket_sync_status'),
+    # Kokoroko Android adapters
+    path('api/cricket/live-events/',     cricket_views.cricket_live_events,     name='cricket_live_events'),
+    path('api/cricket/pre-events/',      cricket_views.cricket_pre_events,      name='cricket_pre_events'),
+    path('api/cricket/live-odds/',       cricket_views.cricket_live_odds,       name='cricket_live_odds'),
+    path('api/cricket/preevent-odds/',   cricket_views.cricket_preevent_odds,   name='cricket_preevent_odds'),
     path('api/cricket/bet/',             cricket_views.place_cricket_bet,       name='place_cricket_bet'),
     path('api/cricket/bets/',            cricket_views.my_cricket_bets,         name='my_cricket_bets'),
     path('api/cricket/results/',         cricket_views.cricket_results,         name='cricket_results'),
     path('api/cricket/settle/',          cricket_views.cricket_settle_now,      name='cricket_settle_now'),
+
+    # Shared sports assets (team / player logos)
+    path('api/sports/team-logo/', sports_logo.team_logo, name='sports_team_logo'),
+
+    # Soccer (Football) — same Redis-backed pattern as cricket
+    path('api/soccer/matches/',                soccer_tennis_views.match_list,        name='soccer_match_list'),
+    path('api/soccer/matches/<int:match_id>/', soccer_tennis_views.match_detail,      name='soccer_match_detail'),
+    path('api/soccer/upcoming/',               soccer_tennis_views.upcoming_matches,  name='soccer_upcoming'),
+    path('api/soccer/live-matches/',           soccer_tennis_views.live_matches,      name='soccer_live_matches'),
+    path('api/soccer/scores/',                 soccer_tennis_views.scores,            name='soccer_scores'),
+    path('api/soccer/odds/',                   soccer_tennis_views.odds,              name='soccer_odds'),
+    path('api/soccer/changes/',                soccer_tennis_views.live_changes,      name='soccer_changes'),
+    path('api/soccer/markets/',                soccer_tennis_views.markets,           name='soccer_markets'),
+    path('api/soccer/sync-status/',            soccer_tennis_views.sync_status,       name='soccer_sync_status'),
+
+    # Tennis — same Redis-backed pattern as cricket
+    path('api/tennis/matches/',                soccer_tennis_views.match_list,        name='tennis_match_list'),
+    path('api/tennis/matches/<int:match_id>/', soccer_tennis_views.match_detail,      name='tennis_match_detail'),
+    path('api/tennis/upcoming/',               soccer_tennis_views.upcoming_matches,  name='tennis_upcoming'),
+    path('api/tennis/live-matches/',           soccer_tennis_views.live_matches,      name='tennis_live_matches'),
+    path('api/tennis/scores/',                 soccer_tennis_views.scores,            name='tennis_scores'),
+    path('api/tennis/odds/',                   soccer_tennis_views.odds,              name='tennis_odds'),
+    path('api/tennis/changes/',                soccer_tennis_views.live_changes,      name='tennis_changes'),
+    path('api/tennis/markets/',                soccer_tennis_views.markets,           name='tennis_markets'),
+    path('api/tennis/sync-status/',            soccer_tennis_views.sync_status,       name='tennis_sync_status'),
 
     # Colour game endpoints
     path('api/colour/round/', game_views.colour_round_status, name='colour_round_status'),
@@ -168,6 +234,7 @@ urlpatterns = [
     # Trading (Grow More) — real JWT + wallet only (no demo)
     path('api/trading/me/', trading_views.trading_me, name='trading_me'),
     path('api/trading/state/', trading_views.trading_state, name='trading_state'),
+    path('api/trading/health/', trading_views.trading_health, name='trading_health'),
     path('api/trading/bets/', trading_views.trading_place_bet, name='trading_place_bet'),
     path('api/trading/bets/undo/', trading_views.trading_undo, name='trading_undo'),
     path('api/trading/bets/cashout/', trading_views.trading_cashout, name='trading_cashout'),
@@ -282,7 +349,7 @@ urlpatterns = [
     # Updated regex to properly match all paths except API/admin/static/media/ws/assets/apk/download paths
     # Handles potential double slashes and varying prefixes
     # Explicitly exclude download paths and .apk files
-    re_path(r'^(?!/?api/|/?admin/|/?game-admin/|/?static/|/?media/|/?ws/|/?assets/|^apk$|^download-apk$|.*\.apk$).*', project_views.serve_react_app, name='react_app'),
+    re_path(r'^(?!/?api/|/?admin/|/?game-admin/|/?static/|/?media/|/?ws/|/?assets/|/?cricket/?$|^apk$|^download-apk$|.*\.apk$).*', project_views.serve_react_app, name='react_app'),
 ]
 
 # Serve static and media files (always in development, only static in production)

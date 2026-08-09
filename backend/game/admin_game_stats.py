@@ -55,10 +55,20 @@ def _period_from_agg(agg, bets_key='bets', wager_key='wagered', payout_key='payo
     }
 
 
+def _owner_ids(effective_admin):
+    """Player-owner PKs in the viewer's subtree (itself, its Admins, their Agents)."""
+    from .admin_utils import staff_subtree_ids
+    return staff_subtree_ids(effective_admin)
+
+
 def _scope_qs(qs, effective_admin, is_super):
+    """`is_super` here means God — the only role that sees every game row."""
     if is_super:
         return qs
-    return qs.filter(user__worker=effective_admin)
+    owner_ids = _owner_ids(effective_admin)
+    if not owner_ids:
+        return qs.none()
+    return qs.filter(user__worker_id__in=owner_ids)
 
 
 def parse_ist_date(date_str, end_of_day=False):
@@ -204,9 +214,9 @@ def _chicken_stats(model, effective_admin, is_super, start, end=None):
 
 
 def _vortex_stats(effective_admin, is_super, start, end=None):
-    qs = Transaction.objects.filter(description__istartswith='Vortex')
-    if not is_super:
-        qs = qs.filter(user__worker=effective_admin)
+    qs = _scope_qs(
+        Transaction.objects.filter(description__istartswith='Vortex'), effective_admin, is_super
+    )
     if start:
         qs = qs.filter(created_at__gte=start)
     if end:
@@ -427,8 +437,7 @@ def activity_queryset(slug, effective_admin, is_super, search='', date_from=None
 
     if slug == 'vortex':
         qs = Transaction.objects.filter(description__istartswith='Vortex').select_related('user').order_by('-created_at')
-        if not is_super:
-            qs = qs.filter(user__worker=effective_admin)
+        qs = _scope_qs(qs, effective_admin, is_super)
         if date_from:
             qs = qs.filter(created_at__gte=date_from)
         if date_to:
@@ -611,7 +620,7 @@ def lookup_round_detail(slug, round_id, effective_admin, is_super):
             r = RouletteRound.objects.select_related('user').get(pk=int(round_id))
         except (ValueError, RouletteRound.DoesNotExist):
             return {'error': f'Roulette round #{round_id} not found'}
-        if not is_super and r.user.worker_id != effective_admin.id:
+        if not is_super and r.user.worker_id not in _owner_ids(effective_admin):
             return {'error': 'Round not in your franchise'}
         settled = list(RouletteSettledBet.objects.filter(round=r).order_by('id'))
         return {
@@ -692,7 +701,7 @@ def lookup_round_detail(slug, round_id, effective_admin, is_super):
         r = ChickenRoadRound.objects.select_related('user').filter(id=round_id).first()
         if not r:
             return {'error': f'Session “{round_id}” not found'}
-        if not is_super and r.user.worker_id != effective_admin.id:
+        if not is_super and r.user.worker_id not in _owner_ids(effective_admin):
             return {'error': 'Session not in your franchise'}
         return {
             'title': f'Chicken Road Session',
@@ -722,7 +731,7 @@ def lookup_round_detail(slug, round_id, effective_admin, is_super):
         r = ChickenRoad2Round.objects.select_related('user').filter(id=round_id).first()
         if not r:
             return {'error': f'Session “{round_id}” not found'}
-        if not is_super and r.user.worker_id != effective_admin.id:
+        if not is_super and r.user.worker_id not in _owner_ids(effective_admin):
             return {'error': 'Session not in your franchise'}
         return {
             'title': f'Chicken Road 2 Session',
@@ -765,9 +774,8 @@ def list_recent_games(slug, effective_admin, is_super, limit=30):
             round_bets_amount=Coalesce(Sum('bets__chip_amount'), Value(0)),
         ).order_by('-start_time')[:limit]
         if not is_super:
-            # Only rounds that have bets from this franchise tree
-            from game.admin_utils import agent_ids_under_admin
-            owner_ids = [effective_admin.id] + list(agent_ids_under_admin(effective_admin))
+            # Only rounds that have bets from this viewer's tree
+            owner_ids = _owner_ids(effective_admin)
             qs = GameRound.objects.filter(
                 bets__user__worker_id__in=owner_ids
             ).annotate(
@@ -888,18 +896,14 @@ def list_recent_games(slug, effective_admin, is_super, limit=30):
 
 
 def _owner_ids_for_actor(actor):
-    """None = Super Admin (unscoped). Else worker PKs whose players are visible."""
-    from .admin_utils import is_super_admin, is_franchise_admin, is_agent, agent_ids_under_admin
+    """None = God (unscoped). Else worker PKs in the actor's subtree."""
+    from .admin_utils import sees_all_data, staff_subtree_ids
 
     if not actor:
         return []
-    if is_super_admin(actor):
+    if sees_all_data(actor):
         return None
-    if is_franchise_admin(actor):
-        return [actor.id] + list(agent_ids_under_admin(actor))
-    if is_agent(actor):
-        return [actor.id]
-    return []
+    return staff_subtree_ids(actor)
 
 
 def _apply_owner_ids(qs, owner_ids):
@@ -923,7 +927,8 @@ def build_owner_filter_options(actor):
         return options
 
     if is_super_admin(actor):
-        for a in User.objects.filter(is_staff=True, is_active=True).filter(
+        from .admin_utils import visible_staff_qs
+        for a in visible_staff_qs(actor).filter(is_active=True).filter(
             Q(staff_role=User.ROLE_ADMIN) | Q(is_franchise_only=True)
         ).exclude(is_superuser=True).exclude(staff_role=User.ROLE_AGENT).order_by('username'):
             options.append({'id': str(a.id), 'label': f'Admin: {a.username}'})

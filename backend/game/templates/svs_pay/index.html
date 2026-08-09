@@ -1,0 +1,786 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>SVS Pay</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #ffffff;
+      --surface: #ffffff;
+      --ink: #0f172a;
+      --muted: #64748b;
+      --line: #e8eef6;
+      --blue: #2563eb;
+      --blue-deep: #1d4ed8;
+      --blue-soft: #eff6ff;
+      --green: #059669;
+      --amber: #d97706;
+      --red: #dc2626;
+      --nav-h: 66px;
+      --safe-b: env(safe-area-inset-bottom, 0px);
+    }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
+    body {
+      margin: 0;
+      font-family: "Plus Jakarta Sans", sans-serif;
+      color: var(--ink);
+      background: var(--bg);
+      -webkit-font-smoothing: antialiased;
+    }
+    .hidden { display: none !important; }
+    button { font-family: inherit; cursor: pointer; border: 0; background: none; }
+    input {
+      width: 100%; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--line);
+      background: #f8fafc; color: var(--ink); font: 500 14px/1.3 "Plus Jakarta Sans", sans-serif;
+      margin-bottom: 10px;
+    }
+    label { display:block; font-size: 12px; font-weight: 700; color: var(--muted); margin: 0 0 6px; }
+    .err { color: var(--red); font-size: 13px; min-height: 1.2em; margin-top: 8px; }
+    .okmsg { color: var(--green); font-size: 13px; margin-top: 8px; }
+
+    /* LOGIN */
+    #loginView {
+      min-height: 100%; display: flex; flex-direction: column; justify-content: center;
+      padding: 28px 20px 40px; max-width: 420px; margin: 0 auto;
+      background: linear-gradient(180deg, #eff6ff 0%, #fff 42%);
+    }
+    .login-hero { text-align: center; margin-bottom: 28px; }
+    .login-hero img { width: 76px; height: 76px; object-fit: contain; }
+    .login-hero h1 { margin: 12px 0 4px; font-size: 1.85rem; font-weight: 800; letter-spacing: -0.03em; color: var(--blue); }
+    .login-hero p { margin: 0; color: var(--muted); font-size: 0.95rem; }
+    .login-card {
+      background: #fff; border: 1px solid var(--line); border-radius: 18px;
+      padding: 20px; box-shadow: 0 12px 32px rgba(37, 99, 235, 0.08);
+    }
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+      width: 100%; padding: 13px 16px; border-radius: 14px; font-weight: 700; font-size: 14px;
+    }
+    .btn-primary { background: var(--blue); color: #fff; box-shadow: 0 8px 20px rgba(37,99,235,.25); }
+    .btn-outline {
+      background: #fff; color: var(--blue); border: 1.5px solid #bfdbfe;
+    }
+    .btn-ghost { background: var(--blue-soft); color: var(--blue); }
+    .btn-danger { background: #fef2f2; color: var(--red); width: auto; padding: 8px 12px; font-size: 12px; border-radius: 10px; }
+    .btn:disabled { opacity: .55; }
+
+    #appView { min-height: 100%; padding-bottom: calc(var(--nav-h) + var(--safe-b) + 10px); background: #fff; }
+    .topbar {
+      position: sticky; top: 0; z-index: 20; background: rgba(255,255,255,.94); backdrop-filter: blur(10px);
+      padding: 14px 16px 10px; display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    }
+    .brand-row { display: flex; align-items: center; gap: 10px; }
+    .brand-row img { width: 36px; height: 36px; object-fit: contain; }
+    .brand-row .t { font-weight: 800; font-size: 1.2rem; letter-spacing: -0.03em; color: var(--blue); }
+    .brand-row .s { font-size: 11px; color: var(--muted); font-weight: 600; }
+    .top-profile {
+      width: 40px; height: 40px; border-radius: 50%; padding: 0;
+      display: flex; align-items: center; justify-content: center;
+      background: transparent;
+    }
+    .top-avatar {
+      width: 38px; height: 38px; border-radius: 50%;
+      background: linear-gradient(145deg, #3b82f6, #1d4ed8); color: #fff;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 13px; font-weight: 800;
+      box-shadow: 0 4px 12px rgba(37,99,235,.28);
+      border: 2px solid #dbeafe;
+    }
+    .page { padding: 8px 16px 20px; max-width: 560px; margin: 0 auto; }
+
+    .balance-card {
+      background: linear-gradient(145deg, #3b82f6 0%, #1d4ed8 55%, #1e40af 100%);
+      color: #fff; border-radius: 22px; padding: 22px 20px 18px; position: relative; overflow: hidden;
+      box-shadow: 0 18px 40px rgba(37, 99, 235, 0.28);
+    }
+    .balance-card .wm {
+      position: absolute; right: 8px; top: 18px; opacity: .14; pointer-events: none;
+      font-size: 64px; font-weight: 900; letter-spacing: -8px; line-height: 1;
+    }
+    .balance-card .label { font-size: 13px; opacity: .9; font-weight: 600; position: relative; }
+    .balance-card .amt {
+      font-size: 2.15rem; font-weight: 800; letter-spacing: -0.04em; margin: 8px 0 18px; position: relative;
+    }
+    .balance-meta { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; position: relative; }
+    .balance-meta .box {
+      background: rgba(255,255,255,.14); border-radius: 14px; padding: 12px;
+      border: 1px solid rgba(255,255,255,.1);
+    }
+    .balance-meta .box .k { font-size: 11px; opacity: .85; font-weight: 600; }
+    .balance-meta .box .v { font-size: 15px; font-weight: 800; margin-top: 4px; }
+    .balance-meta .box .d { font-size: 10px; opacity: .75; margin-top: 2px; }
+
+    .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 16px 0 20px; }
+
+    .section-title {
+      display: flex; align-items: center; justify-content: space-between;
+      margin: 4px 0 12px; font-size: 15px; font-weight: 800; color: var(--ink);
+    }
+    .section-title button.link { color: var(--blue); font-size: 13px; font-weight: 700; padding: 0; }
+
+    .list-card {
+      background: var(--surface); border: 1px solid var(--line); border-radius: 18px; overflow: hidden;
+    }
+    .txn {
+      display: flex; gap: 12px; padding: 14px 14px; border-bottom: 1px solid var(--line); align-items: flex-start;
+    }
+    .txn:last-child { border-bottom: 0; }
+    .txn .avatar {
+      width: 42px; height: 42px; border-radius: 50%; background: var(--blue-soft); color: var(--blue);
+      display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 13px; flex-shrink: 0;
+      position: relative;
+    }
+    .txn .avatar::after {
+      content: ""; position: absolute; right: -1px; bottom: -1px; width: 12px; height: 12px;
+      border-radius: 50%; background: #f97316; border: 2px solid #fff;
+    }
+    .txn .mid { flex: 1; min-width: 0; }
+    .txn .mid .name { font-weight: 700; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .txn .mid .sub { color: var(--muted); font-size: 12px; margin-top: 2px; }
+    .txn .mid .utr { color: var(--ink); font-size: 12px; font-weight: 700; margin-top: 4px; letter-spacing: .01em; }
+    .txn .right { text-align: right; flex-shrink: 0; }
+    .txn .right .money { font-weight: 800; color: var(--green); font-size: 14px; }
+    .txn .right .when { font-size: 11px; color: var(--muted); margin-top: 4px; font-weight: 600; }
+    .st.ok { color: var(--green); }
+    .st.warn { color: var(--amber); }
+    .st.bad { color: var(--red); }
+    .empty { color: var(--muted); padding: 28px 14px; text-align: center; font-size: 14px; }
+
+    .filters { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
+    .chip {
+      padding: 8px 12px; border-radius: 999px; background: #f8fafc; border: 1px solid var(--line);
+      font-size: 12px; font-weight: 700; color: var(--muted);
+    }
+    .chip.on { background: var(--blue-soft); border-color: #bfdbfe; color: var(--blue); }
+
+    .panel {
+      background: #fff; border: 1px solid var(--line); border-radius: 18px; padding: 16px; margin-bottom: 12px;
+    }
+    .panel h3 { margin: 0 0 6px; font-size: 1rem; }
+    .panel p.hint { margin: 0 0 14px; color: var(--muted); font-size: 13px; line-height: 1.45; }
+    .bank-row {
+      display: flex; justify-content: space-between; gap: 10px; align-items: center;
+      padding: 12px 0; border-bottom: 1px solid var(--line);
+    }
+    .bank-row:last-child { border-bottom: 0; }
+    .pill {
+      display: inline-block; font-size: 10px; font-weight: 800; padding: 2px 8px; border-radius: 999px;
+      background: var(--blue-soft); color: var(--blue); margin-left: 6px; vertical-align: middle;
+    }
+    .mini-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px; }
+    .mini-stats .box { background: var(--blue-soft); border-radius: 14px; padding: 12px; }
+    .mini-stats .box.warn { background: #fff7ed; }
+    .mini-stats .k { font-size: 11px; color: var(--muted); font-weight: 700; }
+    .mini-stats .v { font-size: 16px; font-weight: 800; margin-top: 4px; color: var(--ink); }
+
+    .bottom-nav {
+      position: fixed; left: 0; right: 0; bottom: 0; z-index: 30;
+      height: calc(var(--nav-h) + var(--safe-b));
+      padding: 0 8px var(--safe-b);
+      background: rgba(255,255,255,.97); backdrop-filter: blur(12px);
+      border-top: 1px solid var(--line);
+      display: grid; grid-template-columns: repeat(4, 1fr);
+      box-shadow: 0 -8px 24px rgba(15, 23, 42, 0.04);
+    }
+    .nav-btn {
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: 4px; color: #94a3b8; font-size: 11px; font-weight: 700;
+    }
+    .nav-btn svg { width: 22px; height: 22px; }
+    .nav-btn.on { color: var(--blue); }
+
+    .profile-hero {
+      text-align: center; padding: 8px 0 18px;
+    }
+    .profile-hero .big-avatar {
+      width: 72px; height: 72px; border-radius: 50%; margin: 0 auto 12px;
+      background: linear-gradient(145deg, #3b82f6, #1d4ed8); color: #fff;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.4rem; font-weight: 800; box-shadow: 0 10px 24px rgba(37,99,235,.25);
+    }
+    .profile-hero .uname { font-size: 1.25rem; font-weight: 800; letter-spacing: -0.02em; }
+    .profile-hero .role {
+      display: inline-block; margin-top: 8px; padding: 4px 10px; border-radius: 999px;
+      background: var(--blue-soft); color: var(--blue); font-size: 11px; font-weight: 800;
+    }
+    .menu-list { background: #fff; border: 1px solid var(--line); border-radius: 18px; overflow: hidden; margin-bottom: 12px; }
+    .menu-item {
+      width: 100%; display: flex; align-items: center; gap: 12px; text-align: left;
+      padding: 14px 16px; border-bottom: 1px solid var(--line); color: var(--ink); font-weight: 700; font-size: 14px;
+    }
+    .menu-item:last-child { border-bottom: 0; }
+    .menu-item .ico {
+      width: 36px; height: 36px; border-radius: 10px; background: var(--blue-soft); color: var(--blue);
+      display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: 14px;
+    }
+    .menu-item .meta { flex: 1; }
+    .menu-item .meta .sub { font-size: 12px; color: var(--muted); font-weight: 600; margin-top: 2px; }
+    .menu-item .chev { color: #94a3b8; font-weight: 800; }
+    .menu-item.danger .ico { background: #fef2f2; color: var(--red); }
+    .menu-item.danger { color: var(--red); }
+    .pwd-box { display: none; margin-top: 0; }
+    .pwd-box.open { display: block; }
+  </style>
+</head>
+<body>
+  <div id="loginView">
+    <div class="login-hero">
+      <img src="/media/svs-pay-logo.png" alt="SVS Pay" onerror="this.style.display='none'" />
+      <h1>SVS Pay</h1>
+      <p>Collections · Settlements · History</p>
+    </div>
+    <div class="login-card">
+      <label>Username</label>
+      <input id="loginUser" autocomplete="username" placeholder="Staff username" />
+      <label>Password</label>
+      <input id="loginPass" type="password" autocomplete="current-password" placeholder="Password" />
+      <button class="btn btn-primary" onclick="doLogin()">Sign in</button>
+      <div class="err" id="loginErr"></div>
+    </div>
+  </div>
+
+  <div id="appView" class="hidden">
+    <div class="topbar">
+      <div class="brand-row">
+        <img src="/media/svs-pay-logo.png" alt="" onerror="this.style.display='none'" />
+        <div>
+          <div class="t">SVS Pay</div>
+          <div class="s" id="who">—</div>
+        </div>
+      </div>
+      <button class="top-profile" onclick="goTab('profile')" title="Profile" aria-label="Profile">
+        <span class="top-avatar" id="topAvatar">P</span>
+      </button>
+    </div>
+
+    <div id="tabHome" class="page">
+      <div class="balance-card">
+        <div class="wm">↗↗↗</div>
+        <div class="label">Available to settle</div>
+        <div class="amt" id="availAmt">₹0.00</div>
+        <div class="balance-meta">
+          <div class="box">
+            <div class="k">Collected</div>
+            <div class="v" id="collectedAmt">₹0</div>
+            <div class="d">Total</div>
+          </div>
+          <div class="box">
+            <div class="k">Paid out</div>
+            <div class="v" id="paidAmt">₹0</div>
+            <div class="d">Settled</div>
+          </div>
+        </div>
+      </div>
+      <div class="actions">
+        <button class="btn btn-primary" onclick="goTab('settle')">Settle now</button>
+        <button class="btn btn-outline" onclick="goTab('history')">View history</button>
+      </div>
+      <div class="section-title">
+        <span>Recent payments</span>
+        <button class="link" onclick="goTab('history')">View all</button>
+      </div>
+      <div class="list-card" id="homeTxns"><div class="empty">Loading…</div></div>
+    </div>
+
+    <div id="tabHistory" class="page hidden">
+      <div class="section-title"><span>Payment history</span></div>
+      <div class="filters">
+        <button class="chip on" data-day="last2" onclick="setDay(this)">Last 2 days</button>
+        <button class="chip" data-day="today" onclick="setDay(this)">Today</button>
+        <button class="chip" data-day="yesterday" onclick="setDay(this)">Yesterday</button>
+        <button class="chip" data-day="all" onclick="setDay(this)">All</button>
+      </div>
+      <div class="list-card" id="histTxns"><div class="empty">Loading…</div></div>
+    </div>
+
+    <div id="tabSettle" class="page hidden">
+      <div class="panel">
+        <h3>Settlement</h3>
+        <p class="hint">Customers pay into the SVS collection account. Request a settlement anytime — we transfer to your bank from the backend.</p>
+        <div class="mini-stats">
+          <div class="box"><div class="k">Available</div><div class="v" id="settleAvail">₹0</div></div>
+          <div class="box warn"><div class="k">Pending</div><div class="v" id="settlePending">₹0</div></div>
+        </div>
+        <label>Amount (₹)</label>
+        <input id="settleAmount" type="number" min="1" step="0.01" placeholder="Enter amount" />
+        <button class="btn btn-primary" onclick="requestSettlement()">Request settlement</button>
+        <div class="err" id="settleErr"></div>
+        <div class="okmsg" id="settleOk"></div>
+      </div>
+
+      <div class="panel">
+        <h3>Bank account</h3>
+        <p class="hint">Add the account where settlements should be paid.</p>
+        <div id="bankList"><div class="empty">No bank account yet</div></div>
+        <div style="height:10px"></div>
+        <label>Account holder</label>
+        <input id="baHolder" placeholder="Name as per bank" />
+        <label>Account number</label>
+        <input id="baNumber" inputmode="numeric" placeholder="Bank account number" />
+        <label>IFSC</label>
+        <input id="baIfsc" placeholder="e.g. HDFC0001234" style="text-transform:uppercase" />
+        <label>Bank name</label>
+        <input id="baBank" placeholder="Bank name (optional)" />
+        <button class="btn btn-ghost" onclick="addBank()">Save bank account</button>
+        <div class="err" id="bankErr"></div>
+        <div class="okmsg" id="bankOk"></div>
+      </div>
+
+      <div class="section-title"><span>Settlement requests</span></div>
+      <div class="list-card" id="settleList"><div class="empty">None yet</div></div>
+    </div>
+
+    <div id="tabProfile" class="page hidden">
+      <div class="profile-hero">
+        <div class="big-avatar" id="profAvatar">SV</div>
+        <div class="uname" id="profName">—</div>
+        <div class="role" id="profRole">STAFF</div>
+      </div>
+
+      <div class="mini-stats" style="margin-bottom:14px;">
+        <div class="box"><div class="k">Available</div><div class="v" id="profAvail">₹0</div></div>
+        <div class="box warn"><div class="k">Paid out</div><div class="v" id="profPaid">₹0</div></div>
+      </div>
+
+      <div class="menu-list">
+        <button class="menu-item" onclick="goTab('settle')">
+          <div class="ico">🏦</div>
+          <div class="meta">Bank accounts<div class="sub">Add or manage settlement bank</div></div>
+          <div class="chev">›</div>
+        </button>
+        <button class="menu-item" onclick="goTab('settle')">
+          <div class="ico">💸</div>
+          <div class="meta">Settlements<div class="sub">Request payout & view status</div></div>
+          <div class="chev">›</div>
+        </button>
+        <button class="menu-item" onclick="goTab('history')">
+          <div class="ico">📜</div>
+          <div class="meta">Payment history<div class="sub">UTR ledger for last days</div></div>
+          <div class="chev">›</div>
+        </button>
+        <button class="menu-item" onclick="togglePwdBox()">
+          <div class="ico">🔒</div>
+          <div class="meta">Change password<div class="sub">Update your login password</div></div>
+          <div class="chev">›</div>
+        </button>
+      </div>
+
+      <div class="panel pwd-box" id="pwdBox">
+        <h3>Change password</h3>
+        <label>Current password</label>
+        <input id="pwdCurrent" type="password" autocomplete="current-password" />
+        <label>New password</label>
+        <input id="pwdNew" type="password" autocomplete="new-password" />
+        <label>Confirm new password</label>
+        <input id="pwdConfirm" type="password" autocomplete="new-password" />
+        <button class="btn btn-primary" onclick="changePassword()">Update password</button>
+        <div class="err" id="pwdErr"></div>
+        <div class="okmsg" id="pwdOk"></div>
+      </div>
+
+      <div class="menu-list">
+        <button class="menu-item" onclick="alert('SVS Pay support\\nEmail: support@gunduata.tech')">
+          <div class="ico">💬</div>
+          <div class="meta">Support<div class="sub">Help with settlements & sync</div></div>
+          <div class="chev">›</div>
+        </button>
+        <div class="menu-item" style="cursor:default;">
+          <div class="ico">ℹ️</div>
+          <div class="meta">App version<div class="sub" id="profVersion">SVS Pay</div></div>
+        </div>
+        <button class="menu-item danger" onclick="doLogout()">
+          <div class="ico">⎋</div>
+          <div class="meta">Logout<div class="sub">Sign out of this device</div></div>
+          <div class="chev">›</div>
+        </button>
+      </div>
+    </div>
+
+    <nav class="bottom-nav">
+      <button class="nav-btn on" data-tab="home" onclick="goTab('home')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 10.5 12 4l8 6.5V20a1 1 0 0 1-1 1h-5v-6H10v6H5a1 1 0 0 1-1-1v-9.5z"/></svg>
+        Home
+      </button>
+      <button class="nav-btn" data-tab="history" onclick="goTab('history')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/></svg>
+        History
+      </button>
+      <button class="nav-btn" data-tab="settle" onclick="goTab('settle')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2 11 13"/><path d="M22 2 15 22 11 13 2 9l20-7z"/></svg>
+        Settle
+      </button>
+      <button class="nav-btn" data-tab="profile" onclick="goTab('profile')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="3.5"/><path d="M5 19.5c1.8-3.2 4.2-4.8 7-4.8s5.2 1.6 7 4.8"/></svg>
+        Profile
+      </button>
+    </nav>
+  </div>
+
+  <script>
+    const hasBridge = !!(window.SvsPay && typeof window.SvsPay.getConfig === 'function');
+    const KEY_ACCESS = 'svs_pay_access';
+    const KEY_USER = 'svs_pay_user';
+    const KEY_SYNC = 'svs_pay_sync';
+    let dayMode = 'last2';
+    let walletCache = null;
+    let currentUser = null;
+    let currentTab = 'home';
+
+    function escapeHtml(s) {
+      return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    }
+    function roleLabel(user) {
+      if (!user) return 'STAFF';
+      if (user.is_superuser || user.staff_role === 'SUPER_ADMIN') return 'SUPER ADMIN';
+      return String(user.staff_role || 'STAFF').replace(/_/g, ' ');
+    }
+    function appVersion() {
+      try {
+        if (hasBridge) {
+          const cfg = JSON.parse(window.SvsPay.getConfig());
+          if (cfg.appVersion) return 'SVS Pay v' + cfg.appVersion;
+        }
+      } catch (e) {}
+      return 'SVS Pay';
+    }
+    function money(n) {
+      const v = Number(n || 0);
+      return '₹' + v.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+    function initials(name) {
+      const parts = String(name || 'UPI').trim().split(/\s+/).filter(Boolean);
+      if (!parts.length) return 'UP';
+      if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+      return (parts[0][0] + parts[1][0]).toUpperCase();
+    }
+    function formatWhen(iso) {
+      if (!iso) return '';
+      try {
+        const d = new Date(iso);
+        if (Number.isNaN(d.getTime())) return String(iso).replace('T', ' ').slice(0, 16);
+        const now = new Date();
+        const sameDay = d.toDateString() === now.toDateString();
+        const y = new Date(now); y.setDate(now.getDate() - 1);
+        const label = sameDay ? 'Today' : (d.toDateString() === y.toDateString() ? 'Yesterday' : d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }));
+        const t = d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
+        return label + ', ' + t;
+      } catch (e) {
+        return String(iso).replace('T', ' ').slice(0, 16);
+      }
+    }
+    function baseUrl() {
+      if (hasBridge && window.SvsPay.getServerUrl) return (window.SvsPay.getServerUrl() || location.origin).replace(/\/$/, '');
+      return location.origin.replace(/\/$/, '');
+    }
+    function getAccess() { return localStorage.getItem(KEY_ACCESS) || ''; }
+    function authHeaders() {
+      const h = { 'Content-Type': 'application/json' };
+      const a = getAccess();
+      if (a) h['Authorization'] = 'Bearer ' + a;
+      const sync = localStorage.getItem(KEY_SYNC) || '';
+      if (sync) h['X-Sync-Token'] = sync;
+      return h;
+    }
+    function showLogin() {
+      document.getElementById('appView').classList.add('hidden');
+      document.getElementById('loginView').classList.remove('hidden');
+    }
+    function showApp(user) {
+      currentUser = user || {};
+      document.getElementById('loginView').classList.add('hidden');
+      document.getElementById('appView').classList.remove('hidden');
+      document.getElementById('who').textContent = (user && user.username) || 'staff';
+      const av = initials((user && user.username) || 'P');
+      document.getElementById('topAvatar').textContent = av;
+      goTab('home');
+      refreshHome();
+    }
+    function goTab(name, pushHist) {
+      currentTab = name;
+      ['home', 'history', 'settle', 'profile'].forEach(t => {
+        document.getElementById('tab' + t[0].toUpperCase() + t.slice(1)).classList.toggle('hidden', t !== name);
+      });
+      document.querySelectorAll('.nav-btn').forEach(b => b.classList.toggle('on', b.dataset.tab === name));
+      if (pushHist !== false) {
+        try { history.pushState({ tab: name }, '', '#' + name); } catch (e) {}
+      }
+      if (name === 'home') refreshHome();
+      if (name === 'history') loadHistory();
+      if (name === 'settle') refreshSettle();
+      if (name === 'profile') refreshProfile();
+    }
+
+    /** Android back / swipe-back: return true if handled inside the web UI. */
+    window.__svsPayHandleBack = function () {
+      const pwd = document.getElementById('pwdBox');
+      if (pwd && pwd.classList.contains('open')) {
+        pwd.classList.remove('open');
+        return true;
+      }
+      const appVisible = !document.getElementById('appView').classList.contains('hidden');
+      if (appVisible && currentTab !== 'home') {
+        goTab('home');
+        return true;
+      }
+      // On home / login: let Android minimize (do not close)
+      return false;
+    };
+
+    window.addEventListener('popstate', (ev) => {
+      const tab = (ev.state && ev.state.tab) || (location.hash || '#home').replace('#', '') || 'home';
+      if (['home', 'history', 'settle', 'profile'].includes(tab)) {
+        goTab(tab, false);
+      }
+    });
+    function togglePwdBox() {
+      document.getElementById('pwdBox').classList.toggle('open');
+      document.getElementById('pwdErr').textContent = '';
+      document.getElementById('pwdOk').textContent = '';
+    }
+    function refreshProfile() {
+      const u = currentUser || {};
+      const name = u.username || 'staff';
+      document.getElementById('profAvatar').textContent = initials(name);
+      document.getElementById('profName').textContent = name;
+      document.getElementById('profRole').textContent = roleLabel(u);
+      document.getElementById('profVersion').textContent = appVersion();
+      if (walletCache) {
+        document.getElementById('profAvail').textContent = money(walletCache.available);
+        document.getElementById('profPaid').textContent = money(walletCache.paid_out);
+      }
+      api('/api/svs-pay/wallet/').then(w => {
+        paintWallet(w.wallet || {});
+      }).catch(() => {});
+    }
+    async function changePassword() {
+      document.getElementById('pwdErr').textContent = '';
+      document.getElementById('pwdOk').textContent = '';
+      try {
+        const data = await api('/api/companion/change-password/', {
+          method: 'POST',
+          body: JSON.stringify({
+            current_password: document.getElementById('pwdCurrent').value,
+            new_password: document.getElementById('pwdNew').value,
+            confirm_password: document.getElementById('pwdConfirm').value,
+          }),
+        });
+        document.getElementById('pwdOk').textContent = data.message || 'Password updated';
+        ['pwdCurrent', 'pwdNew', 'pwdConfirm'].forEach(id => document.getElementById(id).value = '');
+      } catch (e) {
+        document.getElementById('pwdErr').textContent = e.message || String(e);
+      }
+    }
+    function setDay(el) {
+      document.querySelectorAll('.chip').forEach(c => c.classList.remove('on'));
+      el.classList.add('on');
+      dayMode = el.dataset.day;
+      loadHistory();
+    }
+    function renderTxns(box, rows, emptyText) {
+      if (!rows.length) { box.innerHTML = '<div class="empty">' + escapeHtml(emptyText) + '</div>'; return; }
+      box.innerHTML = rows.map(r => {
+        const name = r.party_name || 'UPI payment';
+        const utr = (r.utr || '').trim() || '—';
+        return `<div class="txn">
+          <div class="avatar">${escapeHtml(initials(name))}</div>
+          <div class="mid">
+            <div class="name">${escapeHtml(name)}</div>
+            <div class="sub">UPI payment</div>
+            <div class="utr">UTR: ${escapeHtml(utr)}</div>
+          </div>
+          <div class="right">
+            <div class="money">+ ${escapeHtml(money(r.amount))}</div>
+            <div class="when">${escapeHtml(formatWhen(r.payment_time))}</div>
+          </div>
+        </div>`;
+      }).join('');
+    }
+    async function api(path, opts) {
+      const res = await fetch(baseUrl() + path, Object.assign({ headers: authHeaders() }, opts || {}));
+      const data = await res.json().catch(() => ({}));
+      if (res.status === 401) { doLogout(); throw new Error('Session expired'); }
+      if (!res.ok || data.ok === false) throw new Error(data.error || ('HTTP ' + res.status));
+      return data;
+    }
+    function paintWallet(w) {
+      walletCache = w;
+      document.getElementById('availAmt').textContent = money(w.available);
+      document.getElementById('collectedAmt').textContent = money(w.collected);
+      document.getElementById('paidAmt').textContent = money(w.paid_out);
+      document.getElementById('settleAvail').textContent = money(w.available);
+      document.getElementById('settlePending').textContent = money(w.pending_settlement);
+      const pa = document.getElementById('profAvail');
+      const pp = document.getElementById('profPaid');
+      if (pa) pa.textContent = money(w.available);
+      if (pp) pp.textContent = money(w.paid_out);
+      if (!document.getElementById('settleAmount').value) {
+        document.getElementById('settleAmount').value = w.available > 0 ? String(w.available) : '';
+      }
+    }
+    async function refreshHome() {
+      try {
+        const w = await api('/api/svs-pay/wallet/');
+        paintWallet(w.wallet || {});
+        const tx = await api('/api/svs-pay/transactions/?day=last2&limit=8');
+        renderTxns(document.getElementById('homeTxns'), tx.transactions || [], 'No payments in last 2 days');
+      } catch (e) {
+        document.getElementById('homeTxns').innerHTML = '<div class="empty">' + escapeHtml(e.message) + '</div>';
+      }
+    }
+    async function loadHistory() {
+      const box = document.getElementById('histTxns');
+      box.innerHTML = '<div class="empty">Loading…</div>';
+      try {
+        const tx = await api('/api/svs-pay/transactions/?day=' + encodeURIComponent(dayMode) + '&limit=200');
+        renderTxns(box, tx.transactions || [], 'No payments for this range');
+      } catch (e) {
+        box.innerHTML = '<div class="empty">' + escapeHtml(e.message) + '</div>';
+      }
+    }
+    async function refreshSettle() {
+      document.getElementById('settleErr').textContent = '';
+      document.getElementById('settleOk').textContent = '';
+      try {
+        const w = await api('/api/svs-pay/wallet/');
+        paintWallet(w.wallet || {});
+        const banks = await api('/api/svs-pay/bank-accounts/');
+        const list = banks.bank_accounts || [];
+        const bl = document.getElementById('bankList');
+        if (!list.length) bl.innerHTML = '<div class="empty">Add a bank account below to enable settlement</div>';
+        else bl.innerHTML = list.map(b => `<div class="bank-row">
+          <div>
+            <strong>${escapeHtml(b.account_holder)}</strong>
+            ${b.is_primary ? '<span class="pill">PRIMARY</span>' : ''}
+            <div style="color:var(--muted);font-size:12px;margin-top:2px;">
+              ${escapeHtml(b.bank_name || 'Bank')} · ${escapeHtml(b.account_number_masked)} · ${escapeHtml(b.ifsc)}
+            </div>
+          </div>
+          ${b.is_primary ? '' : `<button class="btn-danger" onclick="makePrimary(${b.id})">Set primary</button>`}
+        </div>`).join('');
+
+        const st = await api('/api/svs-pay/settlements/');
+        const rows = st.settlements || [];
+        const box = document.getElementById('settleList');
+        if (!rows.length) box.innerHTML = '<div class="empty">No settlement requests yet</div>';
+        else box.innerHTML = rows.map(s => {
+          const cls = s.status === 'PAID' ? 'ok' : (s.status === 'REJECTED' ? 'bad' : 'warn');
+          return `<div class="txn">
+            <div class="avatar">S</div>
+            <div class="mid">
+              <div class="name">Settlement #${s.id}</div>
+              <div class="sub">${escapeHtml(formatWhen(s.created_at))} · ${escapeHtml(s.bank_name || s.ifsc || '')}</div>
+            </div>
+            <div class="right">
+              <div class="money" style="color:var(--ink)">${escapeHtml(money(s.amount))}</div>
+              <div class="when st ${cls}">${escapeHtml(s.status)}</div>
+            </div>
+          </div>`;
+        }).join('');
+      } catch (e) {
+        document.getElementById('settleErr').textContent = e.message || String(e);
+      }
+    }
+    async function addBank() {
+      document.getElementById('bankErr').textContent = '';
+      document.getElementById('bankOk').textContent = '';
+      try {
+        await api('/api/svs-pay/bank-accounts/', {
+          method: 'POST',
+          body: JSON.stringify({
+            account_holder: document.getElementById('baHolder').value.trim(),
+            account_number: document.getElementById('baNumber').value.trim(),
+            ifsc: document.getElementById('baIfsc').value.trim(),
+            bank_name: document.getElementById('baBank').value.trim(),
+            is_primary: true,
+          }),
+        });
+        document.getElementById('bankOk').textContent = 'Bank account saved';
+        ['baHolder','baNumber','baIfsc','baBank'].forEach(id => document.getElementById(id).value = '');
+        refreshSettle();
+      } catch (e) {
+        document.getElementById('bankErr').textContent = e.message || String(e);
+      }
+    }
+    async function makePrimary(id) {
+      try {
+        await api('/api/svs-pay/bank-accounts/' + id + '/primary/', { method: 'POST', body: '{}' });
+        refreshSettle();
+      } catch (e) {
+        document.getElementById('bankErr').textContent = e.message || String(e);
+      }
+    }
+    async function requestSettlement() {
+      document.getElementById('settleErr').textContent = '';
+      document.getElementById('settleOk').textContent = '';
+      try {
+        const data = await api('/api/svs-pay/settlements/', {
+          method: 'POST',
+          body: JSON.stringify({ amount: document.getElementById('settleAmount').value }),
+        });
+        document.getElementById('settleOk').textContent = data.message || 'Settlement requested';
+        paintWallet(data.wallet || {});
+        refreshSettle();
+      } catch (e) {
+        document.getElementById('settleErr').textContent = e.message || String(e);
+      }
+    }
+    async function doLogin() {
+      const username = document.getElementById('loginUser').value.trim();
+      const password = document.getElementById('loginPass').value;
+      const err = document.getElementById('loginErr');
+      err.textContent = '';
+      if (!username || !password) { err.textContent = 'Enter username and password'; return; }
+      try {
+        const res = await fetch(baseUrl() + '/api/companion/login/', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, password, app: 'svs_pay' }),
+        });
+        const data = await res.json();
+        if (!res.ok || !data.ok) throw new Error(data.error || ('HTTP ' + res.status));
+        localStorage.setItem(KEY_ACCESS, data.access || '');
+        localStorage.setItem(KEY_SYNC, data.sync_token || '');
+        localStorage.setItem(KEY_USER, JSON.stringify(data.user || {}));
+        if (hasBridge) {
+          try { window.SvsPay.saveSession(data.access || '', data.sync_token || '', JSON.stringify(data.user || {})); } catch (e) {}
+        }
+        showApp(data.user);
+      } catch (e) {
+        err.textContent = e.message || String(e);
+      }
+    }
+    function doLogout() {
+      currentUser = null;
+      localStorage.removeItem(KEY_ACCESS);
+      localStorage.removeItem(KEY_SYNC);
+      localStorage.removeItem(KEY_USER);
+      if (hasBridge) { try { window.SvsPay.clearSession(); } catch (e) {} }
+      showLogin();
+    }
+    (async function init() {
+      if (hasBridge) {
+        try {
+          const cfg = JSON.parse(window.SvsPay.getConfig());
+          if (cfg.access) localStorage.setItem(KEY_ACCESS, cfg.access);
+          if (cfg.syncToken) localStorage.setItem(KEY_SYNC, cfg.syncToken);
+          if (cfg.userJson) localStorage.setItem(KEY_USER, cfg.userJson);
+        } catch (e) {}
+      }
+      if (!getAccess()) { showLogin(); return; }
+      try {
+        const data = await api('/api/companion/me/');
+        let user = data.user;
+        if (!user) { try { user = JSON.parse(localStorage.getItem(KEY_USER) || '{}'); } catch (e) { user = {}; } }
+        showApp(user);
+      } catch (e) {
+        showLogin();
+      }
+    })();
+  </script>
+</body>
+</html>

@@ -166,6 +166,10 @@ const state = {
   hitLane: -1,
   hitCar: null,
   pendingDeath: false,
+  /** Server already paid the final pad — don't cash out / credit again */
+  roundCompleted: false,
+  /** Lane the hen stands on / is hopping to — traffic must not drive through it */
+  landingLane: -1,
   /** User is dragging the road to preview multipliers */
   panning: false,
   panPointerId: null,
@@ -492,6 +496,8 @@ function resetWorld() {
   state.hitLane = -1;
   state.hitCar = null;
   state.pendingDeath = false;
+  state.roundCompleted = false;
+  state.landingLane = -1;
   state.panning = false;
   state.panPointerId = null;
   state.cars = spawnCars(mults().length);
@@ -522,12 +528,17 @@ function placeHenAtStep(step) {
   } else {
     state.cameraX = clampCamera(state.chickenX - state.viewW * 0.28);
   }
-  // Park traffic on cleared lanes so it doesn't look mid-chaos
-  const parkAt = carParkY(state.viewH);
+  // Park traffic on cleared lanes above the gate (nose never under the stopper)
   for (let i = 0; i < state.step; i++) {
     for (const car of carsOnLane(i)) {
       if (car.rush || car.hitCue) continue;
-      car.y = parkAt;
+      if (carPastClosedGate(car)) {
+        car.stopped = false;
+        car.exiting = true;
+        car.parking = false;
+        continue;
+      }
+      car.y = carParkY(state.viewH, car);
       car.stopped = true;
       car.parking = false;
       car.exiting = false;
@@ -577,9 +588,7 @@ async function onPlay() {
     softResetTraffic();
     state.barriers = [];
     setPlayingUI(true);
-    await new Promise((resolve) => {
-      attemptStep(state.crashAt === 1, resolve);
-    });
+    await attemptStep(state.crashAt === 1);
     return;
   }
 
@@ -620,7 +629,7 @@ async function onGo() {
     try {
       const next = state.step + 1;
       const dies = state.crashAt != null && state.crashAt === next;
-      await new Promise((resolve) => attemptStep(dies, resolve));
+      await attemptStep(dies);
     } finally {
       state.pendingRequest = false;
     }
@@ -638,7 +647,8 @@ async function onGo() {
 }
 
 async function onCash() {
-  if (state.phase !== "playing" || state.step <= 0 || state.pendingRequest) return;
+  if (state.step <= 0 || state.pendingRequest) return;
+  if (state.phase !== "playing" && state.phase !== "animating") return;
 
   // Local demo cash-out
   if (!state.roundId) {
@@ -675,15 +685,12 @@ async function serverStep() {
     // Clear round id before animating death so collision/rush kill can finish
     state.roundId = null;
   }
-  await new Promise((resolve) => {
-    attemptStep(dies, () => {
-      if (data.completed) state.roundId = null;
-      if (data.completed && data.payout) {
-        // survive() already advanced step; balance already updated
-      }
-      resolve();
-    });
-  });
+  if (data.completed) {
+    // Final pad already paid on the server — don't cash out again
+    state.roundId = null;
+    state.roundCompleted = true;
+  }
+  await attemptStep(dies);
 }
 
 function padY(h) {
@@ -695,9 +702,24 @@ function barrierY(h) {
   return h * 0.22;
 }
 
-/** Parked car center — above the barricade, nose pointing into it. */
-function carParkY(h) {
-  return barrierY(h) - 28;
+/**
+ * Face of the closed gate — a car's nose (front) must stay above this when queued.
+ * Using a fixed center park Y left tall trucks visually under/through the stopper.
+ */
+function barrierFaceY(h) {
+  return barrierY(h) - 8;
+}
+
+/** Parked car center so this vehicle's nose stops just above the barricade. */
+function carParkY(h, car) {
+  const half = car ? carHalfH(car) : 52;
+  return barrierFaceY(h) - half - 6;
+}
+
+/** True when the car has already crossed the closed gate (must leave, not park). */
+function carPastClosedGate(car, h = state.viewH) {
+  if (!car || car.gone) return false;
+  return car.y + carHalfH(car) > barrierFaceY(h) + 2;
 }
 
 function carsOnLane(lane) {
@@ -742,6 +764,185 @@ function carOverlapsHen(car) {
   const lo = Math.min(prev, car.y) - halfH;
   const hi = Math.max(prev, car.y) + halfH;
   return hi >= henY - 28 && lo <= henY + 32;
+}
+
+function carHalfH(car) {
+  const fr = OBJ[car.key];
+  return fr ? (fr.h * car.scale) * 0.5 : 60;
+}
+
+/** True when this car's column is close enough to cover the hen right now. */
+function carSharesHenColumn(car) {
+  const fr = OBJ[car.key];
+  const halfW = fr ? (fr.w * car.scale) * 0.5 : 45;
+  const carX = state.sidewalk + car.lane * state.laneW + state.laneW / 2;
+  return Math.abs(carX - state.chickenX) <= halfW + 28;
+}
+
+/**
+ * True when this car has to give way to the hen.
+ *
+ * Three lanes are held. The one she is standing on or hopping to, obviously.
+ * The one she will step to next (`state.step`), claimed early so the pad is
+ * already empty by the time she commits — waiting until the hop begins leaves a
+ * car mid-pad with nowhere to go but through her. And whichever column covers
+ * her right now, so a car released behind her cannot clip her as she leaves.
+ *
+ * The crash truck is exempt — it is the one car allowed to reach her.
+ */
+function mustYieldToHen(car) {
+  if (car.rush || car.hitCue) return false;
+  if (state.phase === "idle" || state.phase === "ended") return false;
+  return (
+    car.lane === state.landingLane ||
+    car.lane === state.step ||
+    carSharesHenColumn(car)
+  );
+}
+
+// Hen hit box, matching carOverlapsHen, plus the height she gains mid-hop —
+// a car parked level with her landing spot still clips her at the top of the arc.
+const HEN_HOP_LIFT = 34;
+const HEN_BODY_TOP = 28;
+const HEN_BODY_BOTTOM = 32;
+const HEN_YIELD_MARGIN = 10;
+// Mild push for cars already past her — the overlap itself is never drawn
+// (see vaultPastHen). Keep this close to natural traffic so exits don't look
+// like a highway rush.
+const HEN_CLEAR_SPEED = 280;
+const EXIT_SPEED_MIN = 160;
+const EXIT_SPEED_MAX = 280;
+const APPROACH_GATE_SPEED = 120;
+
+/** Cap exit/clear boosts so a previous hurry can't stick as a permanent rocket. */
+function cappedExitSpeed(car, min = EXIT_SPEED_MIN) {
+  const base = Math.max(car.speed || min, min);
+  return Math.min(base, EXIT_SPEED_MAX);
+}
+
+/** Top of the vertical band a car body must not enter (hen + hop lift). */
+function henBlockedFrom(car) {
+  return henWorldY() - HEN_BODY_TOP - carHalfH(car) - HEN_YIELD_MARGIN;
+}
+
+/** Bottom of that band — car is fully clear once past here. */
+function henClearPast(car) {
+  return henWorldY() + HEN_BODY_BOTTOM + carHalfH(car) + HEN_YIELD_MARGIN;
+}
+
+/**
+ * How far down a car may drive this frame. The server decides life and death,
+ * so on a surviving step traffic must never be seen rolling over the hen.
+ *
+ * Cars still behind the yield line stop short. Cars already past it are free
+ * (or vaultPastHen jumps them clear of the band in one frame).
+ */
+function laneHardCap(car) {
+  if (!mustYieldToHen(car)) return Infinity;
+  const stopShort = henBlockedFrom(car);
+  return car.y <= stopShort ? stopShort : Infinity;
+}
+
+/**
+ * Never paint a truck on top of the hen on a safe step.
+ *
+ * Approaching cars are held by laneHardCap. Anything that is already inside her
+ * band (closed-lane exit used to crawl through her at Infinity) is jumped just
+ * past her in one frame — a flash of motion beats a body through her.
+ * Death trucks (rush / hitCue) are left alone.
+ */
+function vaultPastHen(car) {
+  if (!mustYieldToHen(car)) return false;
+  const top = henBlockedFrom(car);
+  const bot = henClearPast(car);
+  if (car.y <= top || car.y >= bot) return false;
+  car.y = bot;
+  car._prevY = bot;
+  car.approaching = false;
+  car.parking = false;
+  car.stopped = false;
+  car.exiting = true;
+  car.speed = cappedExitSpeed(car, HEN_CLEAR_SPEED);
+  return true;
+}
+
+/**
+ * True when this car's body (especially the rear) still covers the pad the hen
+ * is about to cross — hopping now would clip the bumper.
+ */
+function carBlocksCrossing(car, lane) {
+  if (!car || car.gone || car.lane !== lane) return false;
+  if (car.rush || car.hitCue) return false;
+  if (car.stopped || car.parking) return false;
+  if (car.y < -80) return false;
+  const halfH = carHalfH(car);
+  const henY = padY(state.viewH);
+  // Extra margin so the rear is fully past before the hop starts
+  const CLEAR = 48;
+  const front = car.y + halfH;
+  const rear = car.y - halfH;
+  if (front < henY - CLEAR) return false; // still approaching, far enough
+  if (rear > henY + CLEAR) return false; // fully past the pad
+  return true;
+}
+
+function laneBlockedForHop(lane) {
+  return carsOnLane(lane).some((c) => carBlocksCrossing(c, lane));
+}
+
+/**
+ * Briefly hold the hop so any car whose end would touch the hen can clear.
+ * Traffic keeps animating during the wait (draw loop).
+ */
+function waitForSafeCrossing(lane, maxMs = 700) {
+  // Claim the lane early so yield / hurry kick in while we wait
+  state.landingLane = lane;
+  for (const car of carsOnLane(lane)) {
+    if (carBlocksCrossing(car, lane)) {
+      car.approaching = false;
+      car.parking = false;
+      car.stopped = false;
+      car.exiting = true;
+      car.speed = cappedExitSpeed(car, HEN_CLEAR_SPEED);
+    }
+  }
+  if (!laneBlockedForHop(lane)) return Promise.resolve();
+  const start = performance.now();
+  return new Promise((resolve) => {
+    function tick(now) {
+      for (const car of carsOnLane(lane)) {
+        if (carBlocksCrossing(car, lane)) {
+          car.exiting = true;
+          car.stopped = false;
+          car.speed = cappedExitSpeed(car, HEN_CLEAR_SPEED);
+        }
+      }
+      if (!laneBlockedForHop(lane) || now - start >= maxMs) {
+        resolve();
+        return;
+      }
+      requestAnimationFrame(tick);
+    }
+    requestAnimationFrame(tick);
+  });
+}
+
+/**
+ * Drains the exit side of a lane the hen needs.
+ *
+ * Cars already inside her band are vaulted clear. Cars past the band but still
+ * on the exit run get a mild speed bump so they don't dam up the ones behind.
+ */
+function hurryPastHen(car) {
+  if (!mustYieldToHen(car)) return;
+  if (car.stopped || car.parking) return;
+  if (vaultPastHen(car)) return;
+  if (car.y < henClearPast(car)) return;
+  car.approaching = false;
+  car.parking = false;
+  car.stopped = false;
+  car.exiting = true;
+  car.speed = cappedExitSpeed(car, HEN_CLEAR_SPEED);
 }
 
 /** Hen dies the moment a car passes over her (same as original local game). */
@@ -801,8 +1002,9 @@ function checkHenCarHits() {
       !car.hitCue &&
       !car.rush
     ) {
+      vaultPastHen(car);
       car.exiting = true;
-      car.speed = Math.max(car.speed, 160);
+      car.speed = cappedExitSpeed(car, HEN_CLEAR_SPEED);
       continue;
     }
     killFromCollision(car);
@@ -827,13 +1029,13 @@ function cueHitCar(lane) {
   state.hitLane = lane;
 }
 
-function attemptStep(diesOverride, onDone) {
+async function attemptStep(diesOverride) {
   const next = state.step + 1;
-  if (next > mults().length) {
-    onDone?.();
-    return;
-  }
-  state.phase = "animating";
+  if (next > mults().length) return;
+
+  const lane = next - 1;
+  const dies = diesOverride != null ? !!diesOverride : state.crashAt === next;
+
   els.diffSelect.hidden = true;
   els.playBtn.hidden = true;
   els.cashBtn.hidden = state.step === 0;
@@ -842,13 +1044,18 @@ function attemptStep(diesOverride, onDone) {
   els.goBtn.disabled = true;
   els.cashBtn.disabled = true;
 
+  // If a car's rear would clip the hen, hold Go a moment while it clears
+  await waitForSafeCrossing(lane);
+  if (state.phase === "ended" || state.hitAnim > 0) return;
+
+  state.phase = "animating";
+
   // Snap to expected pad so a resume/desync never teleports across the road
   state.chickenX = expectedHenX(state.step);
   state.hopFrom = state.chickenX;
-  state.hopTo = laneX(next - 1);
+  state.hopTo = laneX(lane);
   state.hopT = 0;
-  const dies = diesOverride != null ? !!diesOverride : state.crashAt === next;
-  const lane = next - 1;
+  state.landingLane = lane;
 
   if (dies) {
     cueHitCar(lane);
@@ -858,45 +1065,47 @@ function attemptStep(diesOverride, onDone) {
   // First hop is sidewalk → road: a bit longer so it feels planted
   const hopMs = state.step === 0 ? 640 : 480;
 
-  function frame(now) {
-    // Collision may have already killed the hen mid-hop
-    if (state.phase === "ended" || state.hitAnim > 0) {
-      onDone?.();
-      return;
+  await new Promise((resolve) => {
+    function frame(now) {
+      // Collision may have already killed the hen mid-hop
+      if (state.phase === "ended" || state.hitAnim > 0) {
+        resolve();
+        return;
+      }
+      const t = Math.min(1, (now - start) / hopMs);
+      state.hopT = t;
+      const e = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+      state.chickenX = state.hopFrom + (state.hopTo - state.hopFrom) * e;
+      // Keep sidewalk in view on the first hop; later hops follow the hen
+      const focus =
+        state.step === 0
+          ? Math.max(0, state.chickenX - state.viewW * 0.38)
+          : state.chickenX - state.viewW * 0.28;
+      state.cameraX += (focus - state.cameraX) * 0.28;
+      state.cameraX = clampCamera(state.cameraX);
+      if (t < 1) {
+        requestAnimationFrame(frame);
+        return;
+      }
+      state.chickenX = state.hopTo;
+      state.hopT = 1;
+      state.cameraX = clampCamera(
+        state.step === 0
+          ? Math.max(0, state.chickenX - state.viewW * 0.38)
+          : state.chickenX - state.viewW * 0.28
+      );
+      els.goBtn.disabled = false;
+      els.cashBtn.disabled = false;
+      if (state.phase === "ended" || state.hitAnim > 0) {
+        resolve();
+        return;
+      }
+      if (dies) kill();
+      else survive(next);
+      resolve();
     }
-    const t = Math.min(1, (now - start) / hopMs);
-    state.hopT = t;
-    const e = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
-    state.chickenX = state.hopFrom + (state.hopTo - state.hopFrom) * e;
-    // Keep sidewalk in view on the first hop; later hops follow the hen
-    const focus =
-      state.step === 0
-        ? Math.max(0, state.chickenX - state.viewW * 0.38)
-        : state.chickenX - state.viewW * 0.28;
-    state.cameraX += (focus - state.cameraX) * 0.28;
-    state.cameraX = clampCamera(state.cameraX);
-    if (t < 1) {
-      requestAnimationFrame(frame);
-      return;
-    }
-    state.chickenX = state.hopTo;
-    state.hopT = 1;
-    state.cameraX = clampCamera(
-      state.step === 0
-        ? Math.max(0, state.chickenX - state.viewW * 0.38)
-        : state.chickenX - state.viewW * 0.28
-    );
-    els.goBtn.disabled = false;
-    els.cashBtn.disabled = false;
-    if (state.phase === "ended" || state.hitAnim > 0) {
-      onDone?.();
-      return;
-    }
-    if (dies) kill();
-    else survive(next);
-    onDone?.();
-  }
-  requestAnimationFrame(frame);
+    requestAnimationFrame(frame);
+  });
 }
 
 /** True when a car body actually covers the pad the hen just landed on. */
@@ -914,7 +1123,6 @@ function carUnderLandingPad(car) {
 function survive(step) {
   const lane = step - 1;
   state.step = step;
-  const parkAt = carParkY(state.viewH);
 
   // Landed on a car → hen dies. Never delete / yank that car to the barricade.
   for (const car of carsOnLane(lane)) {
@@ -922,9 +1130,10 @@ function survive(step) {
     if (carUnderLandingPad(car) || carOverlapsHen(car)) {
       // Live round: server already said survive — clear the pad, don't turbo-kill
       if (state.roundId) {
+        vaultPastHen(car);
         car.exiting = true;
         car.stopped = false;
-        car.speed = Math.max(car.speed, 160);
+        car.speed = cappedExitSpeed(car, HEN_CLEAR_SPEED);
         continue;
       }
       killFromCollision(car);
@@ -932,32 +1141,27 @@ function survive(step) {
     }
   }
 
-  // Safe land — close the lane. Keep approaching cars visible at/above the gate.
-  // Never wipe the car the player was watching on lane 1 when Play starts.
-  const henY = padY(state.viewH);
+  // Safe land — close the lane. Only queue cars still fully above the gate;
+  // anyone whose nose already crossed must exit (never freeze under the stopper).
   for (const car of carsOnLane(lane)) {
     if (car.rush || car.hitCue || car.gone) continue;
     car.approaching = false;
     car.parking = false;
     car.safePass = false;
 
-    if (car.y < henY - 36) {
-      // Still above the hen — stop / queue (stay on screen)
-      car.exiting = false;
-      car.stopped = true;
-      if (car.y <= parkAt + 28) {
-        car.stopY = parkAt;
-        if (car.y > parkAt) car.y = parkAt;
-      } else {
-        // Slightly past the gate line but still above the hen — freeze in place
-        car.stopY = car.y;
-      }
+    if (carPastClosedGate(car)) {
+      car.stopped = false;
+      car.exiting = true;
+      car.speed = cappedExitSpeed(car, EXIT_SPEED_MIN);
       continue;
     }
-    // Already at/past the hen — finish leaving the bottom of the screen
-    car.stopped = false;
-    car.exiting = true;
-    car.speed = Math.max(car.speed, 180);
+
+    const parkAt = carParkY(state.viewH, car);
+    car.exiting = false;
+    car.stopped = true;
+    car.speed = naturalSpeed(car.lane);
+    car.stopY = parkAt;
+    if (car.y > parkAt) car.y = parkAt;
   }
 
   state.barriers.push({ lane, life: 0 });
@@ -973,7 +1177,17 @@ function survive(step) {
     });
   }
   if (step >= mults().length) {
-    onCash();
+    // Was stuck here: phase was still "animating" so onCash() no-op'd
+    state.phase = "playing";
+    setPlayingUI(true);
+    if (state.roundCompleted) {
+      state.roundCompleted = false;
+      setPlayingUI(false);
+      els.playBtn.hidden = false;
+      scheduleReset(1200);
+      return;
+    }
+    void onCash();
     return;
   }
   state.phase = "playing";
@@ -1204,6 +1418,8 @@ function drawManhole(cx, cy, mult, cleared, isNext) {
 }
 
 function drawOneCar(car, roadTop) {
+  // Last resort: never paint a truck on the hen during a safe live step
+  if (mustYieldToHen(car)) vaultPastHen(car);
   const x = state.sidewalk + car.lane * state.laneW + state.laneW / 2;
   const y = roadTop + car.y;
   const fr = OBJ[car.key];
@@ -1258,6 +1474,7 @@ function drawCars(roadTop, roadBot, dt) {
     if (car.gone) continue;
     car.dir = 1;
     car._prevY = car.y;
+    hurryPastHen(car);
 
     // Death rush — drawn in overlay
     if (car.rush) {
@@ -1276,49 +1493,78 @@ function drawCars(roadTop, roadBot, dt) {
 
     const barred = hasBarrier(car.lane);
 
-    // Closed barricade: never let traffic drive through the gate
+    // Closed barricade: queue ABOVE the stopper by nose position — never under it
     if (barred) {
-      const gate = carParkY(state.viewH);
-      // Still on the approach side — cancel any exit and hard-stop at the gate
-      if (car.y <= gate + 28) {
-        car.exiting = false;
-        car.stopped = true;
+      const face = barrierFaceY(state.viewH);
+      const park = carParkY(state.viewH, car);
+
+      if (carPastClosedGate(car) || car.exiting) {
+        // Nose already past the gate — finish leaving (do not freeze under stopper)
+        car.exiting = true;
+        car.stopped = false;
         car.parking = false;
-        const target = maxYBeforeCarAhead(car, gate, PARK_CAR_GAP);
-        car.stopY = target;
-        if (car.y < target - 0.5) {
-          advanceCarY(car, Math.max(car.speed, 160) * dt, gate, PARK_CAR_GAP);
+        car.speed = cappedExitSpeed(car);
+        // Still never drive through the hen on a live survive — vault or hold
+        if (!vaultPastHen(car)) {
+          advanceCarY(car, car.speed * dt, laneHardCap(car));
+          vaultPastHen(car);
         }
-        // Hard clamp — cannot cross a closed barricade
-        if (car.y > target) car.y = target;
-        if (car.y > gate) car.y = gate;
+        if (car.y > span + 160) {
+          car.gone = true;
+          continue;
+        }
         drawOneCar(car, roadTop);
         continue;
       }
-      // Already past the gate when it closed — finish leaving, do not recycle back onto this lane
-      car.exiting = true;
-      car.stopped = false;
-      advanceCarY(car, Math.max(car.speed, 200) * dt, Infinity);
-      if (car.y > span + 160) {
-        car.gone = true;
-        continue;
+
+      car.exiting = false;
+      car.stopped = true;
+      car.parking = false;
+      if (car.speed > APPROACH_GATE_SPEED) car.speed = APPROACH_GATE_SPEED;
+      const target = maxYBeforeCarAhead(car, park, PARK_CAR_GAP);
+      car.stopY = target;
+      if (car.y < target - 0.5) {
+        advanceCarY(car, APPROACH_GATE_SPEED * dt, park, PARK_CAR_GAP);
       }
+      // Hard clamp — nose must stay above the barricade face
+      if (car.y > target) car.y = target;
+      const noseLimit = face - carHalfH(car);
+      if (car.y > noseLimit) car.y = noseLimit;
       drawOneCar(car, roadTop);
       continue;
     }
 
-    // Barricaded / stopped cars: queue at the gate (never stack on the same spot)
+    // Stopped cars (lane not yet barred): queue above their park line
     if ((car.stopped || car.parking) && !car.exiting) {
-      const gate = carParkY(state.viewH);
-      const target = maxYBeforeCarAhead(car, gate, PARK_CAR_GAP);
-      car.stopY = target;
-      if (car.y < target - 0.5) {
-        advanceCarY(car, Math.max(car.speed, 160) * dt, gate, PARK_CAR_GAP);
-      } else if (car.y > target + 8) {
-        // Already past our queue slot — drive off instead of teleporting upward
+      const park = carParkY(state.viewH, car);
+      if (carPastClosedGate(car)) {
         car.exiting = true;
         car.stopped = false;
-        advanceCarY(car, Math.max(car.speed, 200) * dt, Infinity);
+        car.speed = cappedExitSpeed(car);
+        if (!vaultPastHen(car)) {
+          advanceCarY(car, car.speed * dt, laneHardCap(car));
+          vaultPastHen(car);
+        }
+        if (car.y > span + 160) {
+          car.gone = true;
+          continue;
+        }
+        drawOneCar(car, roadTop);
+        continue;
+      }
+      const target = maxYBeforeCarAhead(car, park, PARK_CAR_GAP);
+      car.stopY = target;
+      if (car.speed > APPROACH_GATE_SPEED) car.speed = APPROACH_GATE_SPEED;
+      if (car.y < target - 0.5) {
+        advanceCarY(car, APPROACH_GATE_SPEED * dt, park, PARK_CAR_GAP);
+      } else if (car.y > target + 8) {
+        car.exiting = true;
+        car.stopped = false;
+        car.speed = cappedExitSpeed(car);
+        if (!vaultPastHen(car)) {
+          advanceCarY(car, car.speed * dt, laneHardCap(car));
+          vaultPastHen(car);
+        }
         if (car.y > span + 160) {
           car.gone = true;
           continue;
@@ -1326,7 +1572,8 @@ function drawCars(roadTop, roadBot, dt) {
         drawOneCar(car, roadTop);
         continue;
       } else {
-        car.y = target;
+        car.y = Math.min(car.y, park);
+        if (car.y > target) car.y = target;
       }
       car.stopped = true;
       car.parking = false;
@@ -1335,7 +1582,11 @@ function drawCars(roadTop, roadBot, dt) {
     }
 
     if (car.exiting) {
-      advanceCarY(car, Math.max(car.speed, 200) * dt, Infinity);
+      car.speed = cappedExitSpeed(car);
+      if (!vaultPastHen(car)) {
+        advanceCarY(car, car.speed * dt, laneHardCap(car));
+        vaultPastHen(car);
+      }
       if (car.y > span + 160) {
         car.gone = true;
         continue;
@@ -1350,7 +1601,10 @@ function drawCars(roadTop, roadBot, dt) {
     car.cruise += (Math.random() - 0.5) * 0.01;
     car.cruise = Math.max(0.85, Math.min(1.12, car.cruise));
     const drive = car.speed * car.cruise;
-    advanceCarY(car, drive * dt, Infinity);
+    if (!vaultPastHen(car)) {
+      advanceCarY(car, drive * dt, laneHardCap(car));
+      vaultPastHen(car);
+    }
     if (car.y > span + 140) {
       car.y = safeRecycleY(car.lane, car);
       car._prevY = car.y;
@@ -1370,8 +1624,9 @@ function drawCars(roadTop, roadBot, dt) {
         !car.hitCue &&
         !car.rush
       ) {
+        vaultPastHen(car);
         car.exiting = true;
-        car.speed = Math.max(car.speed, 160);
+        car.speed = cappedExitSpeed(car, HEN_CLEAR_SPEED);
         continue;
       }
       killFromCollision(car);

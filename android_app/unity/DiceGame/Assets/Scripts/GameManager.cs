@@ -223,6 +223,12 @@ public class GameManager : MonoBehaviour
         OnWalletUpdated?.Invoke(WalletAmount);
     }
 
+    public void SetWalletAmount(float amount)
+    {
+        WalletAmount = Mathf.Max(0f, amount);
+        OnWalletUpdated?.Invoke(WalletAmount);
+    }
+
     /// <summary>Called from Kotlin/Android via UnitySendMessage - accepts {"accessToken","refreshToken"} or {"access","refresh"}</summary>
     public void SetAccessAndRefreshToken(string json)
     {

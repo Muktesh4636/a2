@@ -29,12 +29,41 @@ RESULT_SECONDS = 2.5
 REDIS_KEY = "trading:shared_state"
 WINS_KEY_PREFIX = "trading:wins:"
 CASHOUTS_KEY_PREFIX = "trading:cashouts:"
+TIMER_LOCK_KEY = "trading:timer_lock"
+TIMER_HEARTBEAT_KEY = "trading:timer_heartbeat"
+
+# Every app server runs a trading_game_timer container against the same Redis,
+# so exactly one of them may drive the clock. The lock expires on its own, which
+# keeps a dead leader from stalling the market for longer than LOCK_TTL_SECONDS.
+LOCK_TTL_SECONDS = 10
+HEARTBEAT_TTL_SECONDS = 15
+
+# How far phase_ends_at may fall behind before the clock counts as stopped.
+STALE_AFTER_SECONDS = 20.0
+
+_RENEW_LOCK_LUA = """
+if redis.call('get', KEYS[1]) == ARGV[1] then
+    return redis.call('expire', KEYS[1], ARGV[2])
+end
+return 0
+"""
+
+_RELEASE_LOCK_LUA = """
+if redis.call('get', KEYS[1]) == ARGV[1] then
+    return redis.call('del', KEYS[1])
+end
+return 0
+"""
 
 
 def _redis():
     from game.utils import get_redis_client
 
     return get_redis_client()
+
+
+def redis_available() -> bool:
+    return _redis() is not None
 
 
 def _now() -> float:
@@ -167,35 +196,37 @@ def default_state() -> dict[str, Any]:
     }
 
 
+def _decorate(st: dict[str, Any], redis_down: bool = False) -> dict[str, Any]:
+    if not st.get("crowd"):
+        st["crowd"] = generate_crowd()
+    now = _now()
+    ends = float(st.get("phase_ends_at") or now)
+    st["server_now"] = now
+    st["seconds_left"] = max(0.0, ends - now)
+    st["redis_down"] = redis_down
+    st["stale"] = redis_down or (now - ends) > STALE_AFTER_SECONDS
+    return st
+
+
 def load_state() -> dict[str, Any]:
     r = _redis()
     if not r:
-        st = default_state()
-        st["seconds_left"] = max(0.0, st["phase_ends_at"] - st["server_now"])
-        return st
+        return _decorate(default_state(), redis_down=True)
     raw = r.get(REDIS_KEY)
     if not raw:
         st = default_state()
         save_state(st)
-        st["seconds_left"] = max(0.0, st["phase_ends_at"] - st["server_now"])
-        return st
+        return _decorate(st)
     try:
         st = json.loads(raw)
     except Exception:
         st = default_state()
         save_state(st)
-    if not st.get("crowd"):
-        st["crowd"] = generate_crowd()
-    st["server_now"] = _now()
-    st["seconds_left"] = max(0.0, float(st.get("phase_ends_at", st["server_now"])) - st["server_now"])
-    return st
+    return _decorate(st)
 
 
-def save_state(st: dict[str, Any]) -> None:
-    r = _redis()
-    if not r:
-        return
-    payload = {
+def _state_payload(st: dict[str, Any]) -> dict[str, Any]:
+    return {
         "phase": st["phase"],
         "phase_ends_at": float(st["phase_ends_at"]),
         "final_pct": st.get("final_pct"),
@@ -206,7 +237,127 @@ def save_state(st: dict[str, Any]) -> None:
         "round": int(st.get("round") or 1),
         "crowd": st.get("crowd") or generate_crowd(),
     }
-    r.set(REDIS_KEY, json.dumps(payload))
+
+
+def save_state(st: dict[str, Any]) -> None:
+    r = _redis()
+    if not r:
+        return
+    r.set(REDIS_KEY, json.dumps(_state_payload(st)))
+
+
+def save_state_cas(st: dict[str, Any], expect_phase: str, expect_round: int) -> bool:
+    """
+    Write state only if Redis still holds the phase/round this caller read.
+
+    Phase changes must never be applied twice. Without this guard a second timer
+    can rewind a round that already advanced, which restarts the chart mid-trade
+    and makes the market look frozen or jumpy.
+    """
+    r = _redis()
+    if not r:
+        return False
+    from redis.exceptions import WatchError
+
+    payload = json.dumps(_state_payload(st))
+    try:
+        with r.pipeline() as pipe:
+            for _ in range(3):
+                try:
+                    pipe.watch(REDIS_KEY)
+                    raw = pipe.get(REDIS_KEY)
+                    if raw:
+                        try:
+                            current = json.loads(raw)
+                        except Exception:
+                            current = {}
+                        same_phase = current.get("phase") == expect_phase
+                        same_round = int(current.get("round") or 1) == int(expect_round)
+                        if not (same_phase and same_round):
+                            pipe.unwatch()
+                            return False
+                    pipe.multi()
+                    pipe.set(REDIS_KEY, payload)
+                    pipe.execute()
+                    return True
+                except WatchError:
+                    continue
+        return False
+    except Exception as exc:
+        logger.warning("trading state CAS failed: %s", exc)
+        return False
+
+
+def acquire_timer_lock(token: str) -> bool:
+    r = _redis()
+    if not r:
+        return False
+    try:
+        return bool(r.set(TIMER_LOCK_KEY, token, ex=LOCK_TTL_SECONDS, nx=True))
+    except Exception as exc:
+        logger.warning("trading timer lock acquire failed: %s", exc)
+        return False
+
+
+def renew_timer_lock(token: str) -> bool:
+    r = _redis()
+    if not r:
+        return False
+    try:
+        return bool(r.eval(_RENEW_LOCK_LUA, 1, TIMER_LOCK_KEY, token, LOCK_TTL_SECONDS))
+    except Exception as exc:
+        logger.warning("trading timer lock renew failed: %s", exc)
+        return False
+
+
+def release_timer_lock(token: str) -> None:
+    r = _redis()
+    if not r:
+        return
+    try:
+        r.eval(_RELEASE_LOCK_LUA, 1, TIMER_LOCK_KEY, token)
+    except Exception as exc:
+        logger.warning("trading timer lock release failed: %s", exc)
+
+
+def write_heartbeat(token: str) -> None:
+    r = _redis()
+    if not r:
+        return
+    try:
+        r.set(
+            TIMER_HEARTBEAT_KEY,
+            json.dumps({"owner": token, "at": _now()}),
+            ex=HEARTBEAT_TTL_SECONDS,
+        )
+    except Exception as exc:
+        logger.warning("trading heartbeat write failed: %s", exc)
+
+
+def seconds_since_heartbeat(heartbeat: dict | None) -> float:
+    if not heartbeat:
+        return float("inf")
+    try:
+        return max(0.0, _now() - float(heartbeat.get("at") or 0))
+    except (TypeError, ValueError):
+        return float("inf")
+
+
+def timer_heartbeat() -> dict | None:
+    """Owner + timestamp of the live clock, or None when no timer is running."""
+    r = _redis()
+    if not r:
+        return None
+    try:
+        raw = r.get(TIMER_HEARTBEAT_KEY)
+    except Exception:
+        return None
+    if not raw:
+        return None
+    try:
+        return json.loads(raw)
+    except Exception:
+        return None
 
 
 def is_betting_open() -> bool:
@@ -288,6 +439,7 @@ def public_state(user=None) -> dict[str, Any]:
         "trading_seconds": TRADING_SECONDS,
         "can_bet": st.get("phase") == PHASE_BETTING and st.get("seconds_left", 0) > 0.05,
         "can_cashout": st.get("phase") == PHASE_TRADING and st.get("seconds_left", 0) > 0.05,
+        "stale": bool(st.get("stale")),
         "cashouts": cashout_feed(st.get("round")),
         "crowd": {
             "up_amount": int(crowd.get("up_amount") or 0),

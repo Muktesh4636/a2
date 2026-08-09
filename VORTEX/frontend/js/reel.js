@@ -171,6 +171,11 @@ export function createReel(coreEl) {
 
   const startSpin = () => {
     measure();
+    if (stopResolver) {
+      const done = stopResolver;
+      stopResolver = null;
+      done(currentFace);
+    }
     mode = "spin";
     speed = cellH * 2;
     coreEl.classList.add("reel-spinning");

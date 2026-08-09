@@ -1738,22 +1738,18 @@ function setBoardCollapsed(collapsed) {
   const shell = document.getElementById("game-shell");
   const btn = document.getElementById("board-toggle");
   if (!shell) return;
-  shell.classList.toggle("board-collapsed", collapsed);
+  // Temporarily force normal (non-overlay) board — big-board + arrow disabled
+  shell.classList.add("board-collapsed");
+  shell.classList.remove("board-expanded");
   if (btn) {
-    btn.setAttribute("aria-label", collapsed ? "Expand board" : "Collapse board");
-    btn.title = collapsed ? "Expand board" : "Collapse board";
+    btn.hidden = true;
+    btn.setAttribute("aria-hidden", "true");
   }
 }
 
 function initBoardToggle() {
-  const btn = document.getElementById("board-toggle");
-  // Default: expanded board overlay — matches APK / 4rabet UI
-  setBoardCollapsed(false);
-  btn?.addEventListener("click", () => {
-    const shell = document.getElementById("game-shell");
-    const next = !shell?.classList.contains("board-collapsed");
-    setBoardCollapsed(next);
-  });
+  // Temporarily disabled: no expand/collapse arrow, no big overlay board
+  setBoardCollapsed(true);
 }
 
 /* ——— Bottom hamburger menu ——— */

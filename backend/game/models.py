@@ -159,6 +159,36 @@ class AdminPermissions(models.Model):
         }
 
 
+class AdminTelegramLink(models.Model):
+    """
+    Links an admin-panel account to a private Telegram chat so the account owner
+    gets a message every time someone signs in as them.
+
+    `link_code` is the one-time value the admin sends to the bot as
+    `/start <code>`; the webhook swaps it for the chat_id.
+    """
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='telegram_link'
+    )
+    link_code = models.CharField(max_length=40, unique=True, db_index=True)
+    chat_id = models.CharField(max_length=40, blank=True, db_index=True)
+    telegram_username = models.CharField(max_length=64, blank=True)
+    enabled = models.BooleanField(default=True)
+    linked_at = models.DateTimeField(null=True, blank=True)
+    last_alert_at = models.DateTimeField(null=True, blank=True)
+    last_error = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    @property
+    def is_linked(self):
+        return bool(self.chat_id)
+
+    def __str__(self):
+        state = f'chat {self.chat_id}' if self.chat_id else 'unlinked'
+        return f'Telegram link for {self.user.username} ({state})'
+
+
 class UserSoundSetting(models.Model):
     """User-specific sound settings"""
     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='sound_settings')

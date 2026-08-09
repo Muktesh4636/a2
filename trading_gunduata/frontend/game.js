@@ -455,11 +455,17 @@
       if (state.phase !== "settled") {
         state.finalPct = Number(game.final_pct != null ? game.final_pct : game.last_pct || state.finalPct);
         state.livePct = state.finalPct;
-        showResultFlash(state.finalPct, typeof game.win === "number" ? game.win : null);
+        // Use server win only when settlement has completed (win > 0);
+        // if win is 0 the timer hasn't settled yet — fall back to client calc.
+        showResultFlash(state.finalPct, typeof game.win === "number" && game.win > 0 ? game.win : null);
         setPhase("settled", Math.max(0.2, secondsLeft) * 1000);
         if (typeof game.win === "number" && game.win > 0) {
           state.lastWin = game.win;
         }
+      } else if (typeof game.win === "number" && game.win > 0 && !state.lastWin) {
+        // Settlement completed after we entered settled — refresh the flash with real payout
+        state.lastWin = game.win;
+        showResultFlash(state.finalPct, game.win);
       }
     } else if (nextPhase === "betting") {
       if (state.phase !== "betting") {
@@ -495,10 +501,30 @@
     }
   }
 
+  // A frozen chart is indistinguishable from a slow one, so say which it is.
+  let linkBanner = null;
+  let pollFailures = 0;
+
+  function setLinkStatus(message) {
+    if (!message) {
+      if (linkBanner) linkBanner.hidden = true;
+      return;
+    }
+    if (!linkBanner) {
+      linkBanner = document.createElement("div");
+      linkBanner.className = "link-banner";
+      document.body.appendChild(linkBanner);
+    }
+    linkBanner.textContent = message;
+    linkBanner.hidden = false;
+  }
+
   async function pollState() {
     try {
       // Public endpoint — drives graph/timer even without JWT
       const data = await api("/state/");
+      pollFailures = 0;
+      setLinkStatus(data && data.stale ? "Market paused — reconnecting" : null);
       try {
         applyGameClock(data);
       } catch (clockErr) {
@@ -512,6 +538,9 @@
       }
       syncHud();
     } catch (e) {
+      pollFailures++;
+      // One dropped poll is normal on mobile; only surface a sustained outage.
+      if (pollFailures >= 3) setLinkStatus("Reconnecting to market…");
       console.warn("poll", e);
     }
   }

@@ -57,6 +57,43 @@
         .alert-success { background: #d1fae5; color: #065f46; }
         .alert-error { background: #fee2e2; color: #991b1b; }
         .alert-info { background: #e0e7ff; color: #3730a3; }
+        .roster {
+            margin-top: 32px;
+            background: #fff;
+            border: 1px solid #e2e8f0;
+            border-radius: 16px;
+            box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+            overflow: hidden;
+        }
+        .roster-head {
+            display: flex; align-items: center; justify-content: space-between;
+            flex-wrap: wrap; gap: 10px;
+            padding: 20px 24px; border-bottom: 1px solid #f1f5f9;
+        }
+        .roster-head h2 { margin: 0; font-size: 18px; color: #0f172a; }
+        .roster-count { font-size: 13px; color: #64748b; }
+        .roster-scroll { overflow-x: auto; }
+        .roster-table { width: 100%; border-collapse: collapse; min-width: 640px; }
+        .roster-table th {
+            text-align: left; padding: 12px 24px;
+            font-size: 12px; font-weight: 600; text-transform: uppercase;
+            letter-spacing: 0.05em; color: #64748b; background: #f8fafc;
+            white-space: nowrap;
+        }
+        .roster-table td {
+            padding: 14px 24px; font-size: 14px; color: #0f172a;
+            border-top: 1px solid #f1f5f9; white-space: nowrap;
+        }
+        .roster-table .num { text-align: right; }
+        .roster-table .uname { font-weight: 700; }
+        .roster-table .muted { color: #64748b; }
+        .role-tag {
+            display: inline-block; padding: 3px 10px; border-radius: 999px;
+            font-size: 11px; font-weight: 700; color: #fff; letter-spacing: 0.03em;
+        }
+        .status { font-size: 12px; font-weight: 600; }
+        .status.on { color: #047857; }
+        .status.off { color: #b91c1c; }
         .logout-row { margin-top: 28px; text-align: right; }
         .logout-btn {
             background: #fee2e2; color: #991b1b; padding: 10px 16px; border-radius: 8px;
@@ -64,6 +101,7 @@
         }
         @media (max-width: 640px) {
             .snap-value { font-size: 36px; }
+            .roster-table th, .roster-table td { padding-left: 16px; padding-right: 16px; }
         }
     </style>
 </head>
@@ -102,6 +140,51 @@
                 <p style="color:#64748b;">No hierarchy data available.</p>
                 {% endfor %}
             </div>
+
+            {% if staff_roster %}
+            <div class="roster">
+                <div class="roster-head">
+                    <h2>All admins</h2>
+                    <span class="roster-count">{{ staff_roster|length }} staff account{{ staff_roster|length|pluralize }}</span>
+                </div>
+                <div class="roster-scroll">
+                    <table class="roster-table">
+                        <thead>
+                            <tr>
+                                <th>Username</th>
+                                <th>Role</th>
+                                <th>Reports to</th>
+                                <th class="num">Players</th>
+                                <th>Status</th>
+                                <th>Last login</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for row in staff_roster %}
+                            <tr>
+                                <td class="uname">{{ row.username }}</td>
+                                <td>
+                                    <span class="role-tag" style="background: {{ row.role_colour }};">{{ row.role_label }}</span>
+                                </td>
+                                <td>{{ row.parent }}</td>
+                                <td class="num">{{ row.players }}</td>
+                                <td>
+                                    {% if row.is_active %}
+                                        <span class="status on">Active</span>
+                                    {% else %}
+                                        <span class="status off">Inactive</span>
+                                    {% endif %}
+                                </td>
+                                <td class="muted">
+                                    {% if row.last_login %}{{ row.last_login|date:"d M Y, H:i" }}{% else %}Never{% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            {% endif %}
 
             <div class="logout-row">
                 <a href="{% url 'admin_logout' %}" class="logout-btn">Logout</a>

@@ -96,12 +96,15 @@ class Command(BaseCommand):
     help = 'Runs the colour game timer (60s rounds)'
 
     def handle(self, *args, **options):
+        from django.db import close_old_connections
         from game.models import ColourRound
 
         self.stdout.write(self.style.SUCCESS('Colour game timer started'))
 
         while True:
             try:
+                # PgBouncer / idle timeouts drop connections — refresh each tick.
+                close_old_connections()
                 now = timezone.now()
 
                 round_obj = ColourRound.objects.filter(
@@ -128,13 +131,17 @@ class Command(BaseCommand):
 
                 elapsed = (now - round_obj.start_time).total_seconds()
 
-                if elapsed >= BETTING_CLOSE_AT and round_obj.status == 'BETTING':
-                    round_obj.status     = 'CLOSED'
-                    round_obj.close_time = now
-                    round_obj.save(update_fields=['status', 'close_time'])
-                    self.stdout.write(self.style.WARNING(f'Round {round_obj.round_id} CLOSED at {elapsed:.1f}s'))
+                # Stale recovery: if the worker was down past 60s while still BETTING,
+                # jump straight to result instead of leaving the round open forever.
+                if elapsed >= ROUND_DURATION and round_obj.status in ('BETTING', 'CLOSED'):
+                    if round_obj.status == 'BETTING':
+                        round_obj.status = 'CLOSED'
+                        round_obj.close_time = now
+                        round_obj.save(update_fields=['status', 'close_time'])
+                        self.stdout.write(self.style.WARNING(
+                            f'Round {round_obj.round_id} force-CLOSED (stale {elapsed:.0f}s)'
+                        ))
 
-                if elapsed >= ROUND_DURATION and round_obj.status == 'CLOSED':
                     result, number = _pick_colour_result()
 
                     round_obj.result      = result
@@ -155,9 +162,20 @@ class Command(BaseCommand):
 
                     self.stdout.write(self.style.SUCCESS(f'Round {round_obj.round_id} COMPLETED'))
 
+                elif elapsed >= BETTING_CLOSE_AT and round_obj.status == 'BETTING':
+                    round_obj.status     = 'CLOSED'
+                    round_obj.close_time = now
+                    round_obj.save(update_fields=['status', 'close_time'])
+                    self.stdout.write(self.style.WARNING(f'Round {round_obj.round_id} CLOSED at {elapsed:.1f}s'))
+
                 time.sleep(1)
 
             except Exception as e:
                 logger.error(f"Colour game timer error: {e}", exc_info=True)
                 self.stdout.write(self.style.ERROR(f'Error: {e}'))
+                try:
+                    from django.db import close_old_connections
+                    close_old_connections()
+                except Exception:
+                    pass
                 time.sleep(2)

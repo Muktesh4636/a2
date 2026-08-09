@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+{% load format_filters %}<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="utf-8">
@@ -247,7 +247,7 @@
                             <td class="log-action-{{ log.action|lower }}">{{ log.get_action_display }}</td>
                             <td>₹{{ log.amount|floatformat:0 }}</td>
                             <td>{% if log.balance_after is not None %}₹{{ log.balance_after|floatformat:0 }}{% else %}—{% endif %}</td>
-                            <td>{{ log.performed_by.username|default:"—" }}</td>
+                            <td>{{ log.performed_by|staff_name:user|default:"—" }}</td>
                         </tr>
                         {% empty %}
                         <tr><td colspan="5" style="text-align: center; padding: 24px; color: #94a3b8;">No balance add/set recorded yet.</td></tr>

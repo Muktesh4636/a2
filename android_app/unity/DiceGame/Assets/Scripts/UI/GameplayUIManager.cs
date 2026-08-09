@@ -563,7 +563,23 @@ public class GameplayUIManager : MonoBehaviour
         rt.position = startPos;
         rt.localScale = Vector3.one;
 
+        int index = diceNumber - 1;
+        var betCoin = new BetCoin
+        {
+            coinObj = coin,
+            amountText = coin.transform.GetChild(0).GetComponent<TextMeshProUGUI>(),
+            diceNumber = diceNumber,
+            amount = amount
+        };
+
+        // Push onto undo stack IMMEDIATELY (before fly animation completes).
+        // Previously the stack push was in OnComplete, so undo during the fly
+        // left the chip to appear after animation and never get removed.
+        betcoins[index] = betCoin;
+        betStack.Push(betCoin);
+
         Sequence seq = DOTween.Sequence();
+        betCoin.moveTween = seq;
 
         seq.Append(
            rt.DOMove(target.position, 0.2f)
@@ -572,22 +588,13 @@ public class GameplayUIManager : MonoBehaviour
 
         seq.OnComplete(() =>
         {
+            // Bet may already have been undone while animating.
+            if (coin == null || betCoin.coinObj == null) return;
+
             coin.transform.SetParent(target, worldPositionStays: false);
-
-            int index = diceNumber - 1;
-
-            betcoins[index] = new BetCoin
-            {
-                coinObj = coin,
-                amountText = coin.transform.GetChild(0)
-                        .GetComponent<TextMeshProUGUI>(),
-                diceNumber = diceNumber,
-                amount = amount
-            };
             rt.anchoredPosition = Vector2.zero;
             rt.DOScale(0.65f, 0.07f);
-
-            betStack.Push(betcoins[index]);
+            betCoin.moveTween = null;
         });
 
     }
@@ -609,13 +616,65 @@ public class GameplayUIManager : MonoBehaviour
         if (betStack.Count == 0) return;
 
         BetCoin lastBet = betStack.Pop();
-
-        // destroy visual coin immediately
-        if (lastBet.coinObj != null)
-            Destroy(lastBet.coinObj);
+        DestroyBetCoinVisual(lastBet);
+        RefreshBetCoinSlot(lastBet.diceNumber);
 
         // Update balance display
         UpdateBalance(GameManager.Instance.WalletAmount);
+    }
+
+    public void RemoveLastBetOnNumber(int number)
+    {
+        if (number < 1 || number > 6) return;
+
+        // Remove newest stack entry for this number (matches server undo of last chip on that number)
+        BetCoin target = null;
+        var kept = new Stack<BetCoin>();
+        while (betStack.Count > 0)
+        {
+            var b = betStack.Pop();
+            if (target == null && b.diceNumber == number)
+            {
+                target = b;
+                continue;
+            }
+            kept.Push(b);
+        }
+        while (kept.Count > 0) betStack.Push(kept.Pop());
+
+        if (target == null) return;
+        DestroyBetCoinVisual(target);
+        RefreshBetCoinSlot(number);
+        UpdateBalance(GameManager.Instance.WalletAmount);
+    }
+
+    private void DestroyBetCoinVisual(BetCoin bet)
+    {
+        if (bet == null) return;
+        try { bet.moveTween?.Kill(false); } catch { }
+        bet.moveTween = null;
+        if (bet.coinObj != null)
+        {
+            Destroy(bet.coinObj);
+            bet.coinObj = null;
+        }
+    }
+
+    private void RefreshBetCoinSlot(int diceNumber)
+    {
+        int idx = diceNumber - 1;
+        if (idx < 0 || idx >= betcoins.Length) return;
+
+        BetCoin newestOnNumber = null;
+        foreach (var b in betStack)
+        {
+            if (b != null && b.diceNumber == diceNumber && b.coinObj != null)
+            {
+                newestOnNumber = b;
+                break; // Stack enumerates from top (newest) first
+            }
+        }
+        betcoins[idx] = newestOnNumber;
     }
 
     public void RemoveAllBets()
@@ -623,9 +682,10 @@ public class GameplayUIManager : MonoBehaviour
         while (betStack.Count > 0)
         {
             BetCoin bet = betStack.Pop();
-            if (bet.coinObj != null)
-                Destroy(bet.coinObj);
+            DestroyBetCoinVisual(bet);
         }
+        for (int i = 0; i < betcoins.Length; i++)
+            betcoins[i] = null;
     }
 
     public void SetWinLooseText()
@@ -655,29 +715,42 @@ public class GameplayUIManager : MonoBehaviour
         }
 
         // Call server to remove user's most recent bet
-        api.DeleteLastBet((ok, err) =>
+        api.DeleteLastBet((ok, err, betNumber, walletBalance) =>
         {
             if (ok)
             {
-                // Update local ordered list and visual stack
+                int removedNumber = betNumber;
+
+                // Update local ordered list (LIFO) and exposure cache
                 if (localOrderedBets.Count > 0)
                 {
-                    // decrement cachedExposure using last entry amount before removal
                     var last = localOrderedBets[localOrderedBets.Count - 1];
                     cachedExposure -= last.amount;
+                    if (removedNumber <= 0) removedNumber = last.number;
                     localOrderedBets.RemoveAt(localOrderedBets.Count - 1);
                 }
 
-                // Update local UI stack if any coin exists locally (remove last visual bet)
-                if (betStack.Count > 0)
-                {
+                // Always drop the matching visual chip (works even if fly-anim was in progress)
+                if (removedNumber > 0 && betStack.Count > 0)
+                    RemoveLastBetOnNumber(removedNumber);
+                else if (betStack.Count > 0)
                     RemoveLastBet();
+
+                UpdateExposureText(Mathf.Max(0f, cachedExposure));
+
+                if (!string.IsNullOrEmpty(walletBalance) &&
+                    float.TryParse(walletBalance, NumberStyles.Any, CultureInfo.InvariantCulture, out float bal))
+                {
+                    GameManager.Instance.SetWalletAmount(bal);
+                    UpdateBalance(bal);
+                }
+                else
+                {
+                    GameManager.Instance.RefreshWallet();
                 }
 
-                // Update balance from server response if present, otherwise refresh wallet
-                GameManager.Instance.RefreshWallet();
-
-                // Refresh authoritative exposure from server
+                // Refresh authoritative exposure from server (bypass throttle after undo)
+                lastExposureFetchTime = -999f;
                 FetchAndUpdateExposure();
             }
             else
@@ -969,6 +1042,7 @@ public class BetCoin
     public TextMeshProUGUI amountText;
     public int diceNumber;
     public float amount;
+    public Tween moveTween;
 
     public void changeAmount(float newAmount)
     {

@@ -52,6 +52,9 @@ for SERVER in "${APP_SERVERS[@]}"; do
     "$REPO_ROOT/backend/game/admin_views.py" \
     "$REPO_ROOT/backend/game/admin_utils.py" \
     "$REPO_ROOT/backend/game/admin_urls.py" \
+    "$REPO_ROOT/backend/game/trading_engine.py" \
+    "$REPO_ROOT/backend/game/trading_views.py" \
+    "$REPO_ROOT/backend/game/trading_services.py" \
     root@$SERVER:$REMOTE_DIR/backend/game/ 2>/dev/null || true
 
   echo "  game migrations + management commands..."
@@ -62,6 +65,9 @@ for SERVER in "${APP_SERVERS[@]}"; do
   sshpass -p "$PASSWORD" scp -o StrictHostKeyChecking=no \
     "$REPO_ROOT/backend/game/management/commands/daily_journey_reset.py" \
     "$REPO_ROOT/backend/game/management/commands/backfill_journeys.py" \
+    "$REPO_ROOT/backend/game/management/commands/trading_game_timer.py" \
+    "$REPO_ROOT/backend/game/management/commands/roulette_game_timer.py" \
+    "$REPO_ROOT/backend/game/management/commands/colour_game_timer.py" \
     root@$SERVER:$REMOTE_DIR/backend/game/management/commands/ 2>/dev/null || true
 
   echo "  backend root (game_engine_v3, smart_dice_engine, worker_v2)..."
@@ -117,9 +123,9 @@ for SERVER in "${APP_SERVERS[@]}"; do
       "cd $REMOTE_DIR && (grep -q '^REDIS_HOST=' .env 2>/dev/null && sed -i 's/^REDIS_HOST=.*/REDIS_HOST=redis/' .env || echo 'REDIS_HOST=redis' >> .env); echo 'done'" 2>/dev/null || true
   fi
 
-  echo "  restart containers (web, game_timer, bet_worker, daily_reset)..."
+  echo "  restart containers (web, game_timer, bet_worker, daily_reset, game timers)..."
   sshpass -p "$PASSWORD" ssh -o StrictHostKeyChecking=no root@$SERVER \
-    "cd $REMOTE_DIR && (docker compose up -d 2>/dev/null; docker compose restart web game_timer bet_worker daily_reset 2>/dev/null) || (docker restart dice_game_web dice_game_timer dice_game_bet_worker dice_game_daily_reset 2>/dev/null) || docker compose restart web 2>/dev/null || docker restart dice_game_web" 2>/dev/null && echo "  $SERVER: OK" || echo "  $SERVER: restart done (check logs if needed)"
+    "cd $REMOTE_DIR && (docker compose up -d 2>/dev/null; docker compose restart web game_timer bet_worker daily_reset trading_game_timer roulette_game_timer colour_game_timer 2>/dev/null) || (docker restart dice_game_web dice_game_timer dice_game_bet_worker dice_game_daily_reset dice_game_trading_timer dice_game_roulette_timer dice_game_colour_timer 2>/dev/null) || docker compose restart web 2>/dev/null || docker restart dice_game_web" 2>/dev/null && echo "  $SERVER: OK" || echo "  $SERVER: restart done (check logs if needed)"
 done
 
 echo ""

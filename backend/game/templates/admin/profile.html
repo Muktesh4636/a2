@@ -369,6 +369,86 @@
             }
             </script>
 
+            <div class="control-panel" id="telegram-panel">
+                <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:16px; flex-wrap:wrap; margin-bottom:8px;">
+                    <div>
+                        <h2 style="margin-bottom:6px;">Telegram login alerts</h2>
+                        <p class="subtitle" style="margin-bottom:0;">Get a private Telegram message every time this account signs in to the admin panel.</p>
+                    </div>
+                    {% if tg_linked %}
+                        <span class="badge" style="background:#ecfdf5; color:#047857;">{% if tg_enabled %}Connected{% else %}Paused{% endif %}</span>
+                    {% else %}
+                        <span class="badge" style="background:#fef2f2; color:#b91c1c;">Not connected</span>
+                    {% endif %}
+                </div>
+
+                {% if not tg_configured %}
+                    <div class="alert alert-warning" style="margin-top:14px;">
+                        The Telegram bot is not set up yet. A Super Admin must add the bot token under
+                        <strong>App Settings → Telegram bot</strong> before alerts can be connected.
+                    </div>
+                {% elif tg_linked %}
+                    <div class="info-grid" style="margin-top:16px;">
+                        <div class="info-item">
+                            <span class="label">Telegram account</span>
+                            <span class="value">{% if tg_username %}@{{ tg_username }}{% else %}chat {{ tg_chat_id }}{% endif %}</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="label">Connected on</span>
+                            <span class="value">{% if tg_linked_at %}{{ tg_linked_at|date:"d M Y, h:i A" }}{% else %}—{% endif %}</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="label">Last alert sent</span>
+                            <span class="value">{% if tg_last_alert_at %}{{ tg_last_alert_at|date:"d M Y, h:i A" }}{% else %}No alerts yet{% endif %}</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="label">Alerts</span>
+                            <span class="value">{% if tg_enabled %}On{% else %}Paused{% endif %}</span>
+                        </div>
+                    </div>
+                    {% if tg_last_error %}
+                        <div class="alert alert-error" style="margin-top:14px;">Last send failed: {{ tg_last_error }}</div>
+                    {% endif %}
+                    <form method="post" action="{% url 'admin_profile' %}" style="margin-top:18px; display:flex; gap:10px; flex-wrap:wrap;">
+                        {% csrf_token %}
+                        <input type="hidden" name="form_type" value="telegram">
+                        <button type="submit" name="tg_action" value="test" class="btn">Send test message</button>
+                        {% if tg_enabled %}
+                            <button type="submit" name="tg_action" value="pause" class="btn" style="background:#d97706;">Pause alerts</button>
+                        {% else %}
+                            <button type="submit" name="tg_action" value="resume" class="btn" style="background:#059669;">Resume alerts</button>
+                        {% endif %}
+                        <button type="submit" name="tg_action" value="unlink" class="btn" style="background:#dc2626;"
+                                onclick="return confirm('Disconnect Telegram? You will stop receiving login alerts.');">Disconnect</button>
+                    </form>
+                {% else %}
+                    <div style="margin-top:16px;">
+                        <p style="color:#475569; font-size:14px; margin-bottom:14px;">
+                            Tap the button below on a device that has Telegram installed. It opens the bot
+                            <strong>@{{ tg_bot_username }}</strong> with your personal code already filled in — just press <em>Start</em>.
+                        </p>
+                        {% if tg_connect_url %}
+                            <a href="{{ tg_connect_url }}" target="_blank" rel="noopener" class="btn" style="display:inline-block; text-decoration:none;">
+                                Connect Telegram
+                            </a>
+                            <p style="color:#64748b; font-size:13px; margin-top:14px;">
+                                Not on this device? Open Telegram, search <strong>@{{ tg_bot_username }}</strong>, and send:<br>
+                                <code style="background:#f1f5f9; padding:4px 8px; border-radius:6px; display:inline-block; margin-top:6px;">/start {{ tg_link_code }}</code>
+                            </p>
+                        {% else %}
+                            <div class="alert alert-warning">
+                                The bot username is missing. A Super Admin must set it under <strong>App Settings → Telegram bot</strong>.
+                            </div>
+                        {% endif %}
+                        <form method="post" action="{% url 'admin_profile' %}" style="margin-top:16px;">
+                            {% csrf_token %}
+                            <input type="hidden" name="form_type" value="telegram">
+                            <button type="submit" name="tg_action" value="regenerate" class="btn" style="background:#94a3b8;">Generate a new code</button>
+                        </form>
+                    </div>
+                {% endif %}
+            </div>
+
             <div class="control-panel" id="deposit-mode-panel">
                 <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:16px; flex-wrap:wrap; margin-bottom:8px;">
                     <div>
