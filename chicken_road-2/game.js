@@ -122,8 +122,10 @@ const CAR_KEYS = ["car1", "car2", "car3", "car4", "car5", "car6"];
 const TRUCK_BRAND = "PRIDE";
 /** Minimum center-to-center gap so cars never stack on each other. */
 const MIN_CAR_GAP = 200;
-/** Tighter gap when cars queue at a barricade (keeps them on-screen). */
-const PARK_CAR_GAP = 70;
+/** Queue spacing at a barricade — must clear tall truck sprites. */
+const PARK_CAR_GAP = 130;
+/** How fast a death truck races from the top for a sudden splat. */
+const DEATH_RUSH_SPEED = 720;
 
 /* Spine atlas body (Y from bottom of page) */
 const CHICK = {
@@ -315,9 +317,9 @@ function laneMates(lane, self) {
   );
 }
 
-/** Recycle above every other car on the lane — never on top of one. */
+/** Recycle well above the road — cars always re-enter from the top. */
 function safeRecycleY(lane, car) {
-  let y = -160 - Math.random() * 90;
+  let y = -260 - Math.random() * 140;
   for (const other of laneMates(lane, car)) {
     y = Math.min(y, other.y - MIN_CAR_GAP);
   }
@@ -371,10 +373,10 @@ function naturalSpeed(lane = 0) {
 
 function spawnCars(count) {
   const cars = [];
-  // Spawn mostly above the road so the first hop doesn't clear a full lane of mid-screen traffic
+  // Always spawn above the viewport so traffic enters from the top, never mid-road
   for (let i = 0; i < count; i++) {
     const n = 1 + (i % 3 === 0 ? 1 : 0);
-    const base = -220 - ((i * 71) % 260) - Math.random() * 80;
+    const base = -280 - ((i * 71) % 220) - Math.random() * 100;
     for (let c = 0; c < n; c++) {
       cars.push({
         lane: i,
@@ -422,7 +424,7 @@ function softResetTraffic() {
     if (present.has(i)) continue;
     state.cars.push({
       lane: i,
-      y: -200 - Math.random() * 140,
+      y: -280 - Math.random() * 160,
       dir: 1,
       speed: naturalSpeed(i),
       cruise: 0.92 + Math.random() * 0.16,
@@ -697,23 +699,31 @@ function padY(h) {
   return h * 0.52;
 }
 
-/** Barricade vertical position (near top of the road). */
+/** Barricade anchor Y (matches drawBarriers). */
 function barrierY(h) {
   return h * 0.22;
 }
 
-/**
- * Face of the closed gate — a car's nose (front) must stay above this when queued.
- * Using a fixed center park Y left tall trucks visually under/through the stopper.
- */
-function barrierFaceY(h) {
-  return barrierY(h) - 8;
+/** Drawn stopper size — keep park math in sync with drawBarriers. */
+function stopperSize() {
+  const bw = 118;
+  const bh = bw * (264 / 517);
+  return { bw, bh, top: bh * 0.35, bottom: bh * 0.65 };
 }
 
-/** Parked car center so this vehicle's nose stops just above the barricade. */
+/**
+ * Top edge of the stopper sprite. Cars must keep their nose above this so
+ * trucks never sit under / through the barricade.
+ */
+function barrierFaceY(h) {
+  const { top } = stopperSize();
+  return barrierY(h) - top;
+}
+
+/** Parked car center so the whole vehicle stays above the barricade. */
 function carParkY(h, car) {
   const half = car ? carHalfH(car) : 52;
-  return barrierFaceY(h) - half - 6;
+  return barrierFaceY(h) - half - 12;
 }
 
 /** True when the car has already crossed the closed gate (must leave, not park). */
@@ -992,9 +1002,10 @@ function killFromCollision(car) {
 function checkHenCarHits() {
   if (state.hitAnim > 0) return;
   if (state.phase === "idle") return;
-  // Only after the hen has planted on a pad — not while airborne mid-hop
-  if (state.phase === "animating" && state.hopT < 0.98) return;
+  const midHop = state.phase === "animating" && state.hopT < 0.98;
   for (const car of state.cars) {
+    // Mid-hop: only the death rush may splat — random traffic waits for landing
+    if (midHop && !(car.rush || car.hitCue)) continue;
     if (!carOverlapsHen(car)) continue;
     if (
       state.roundId &&
@@ -1012,18 +1023,23 @@ function checkHenCarHits() {
   }
 }
 
-/** Add an extra hit-car from the top — never teleport/remove existing traffic. */
+/** Death truck from the top — rushes immediately so the splat feels sudden. */
 function cueHitCar(lane) {
   const car = {
     lane,
-    y: -160 - Math.random() * 30,
+    y: -300 - Math.random() * 60,
     dir: 1,
-    speed: 260,
+    speed: DEATH_RUSH_SPEED,
     key: CAR_KEYS[(lane + 2) % CAR_KEYS.length],
     scale: 0.18,
-    approaching: true,
+    approaching: false,
+    exiting: false,
+    stopped: false,
+    parking: false,
     hitCue: true,
+    rush: true,
   };
+  car._prevY = car.y;
   state.cars.push(car);
   state.hitCar = car;
   state.hitLane = lane;
@@ -1221,7 +1237,7 @@ function startDeathFx() {
 }
 
 function kill() {
-  // Force a car through the hen, then she dies — never miss
+  // Force a car through the hen from the TOP, then she dies on impact
   forfeitServerRound();
   state.hitLane = Math.max(0, state.crashAt != null ? state.crashAt - 1 : state.step);
   state.phase = "ended";
@@ -1230,7 +1246,6 @@ function kill() {
   state.hitAnim = 0;
   state.pendingDeath = true;
 
-  const henY = padY(state.viewH);
   let car =
     state.hitCar && state.hitCar.lane === state.hitLane && !state.hitCar.gone
       ? state.hitCar
@@ -1238,9 +1253,9 @@ function kill() {
   if (!car) {
     car = {
       lane: state.hitLane,
-      y: henY - 140,
+      y: -300 - Math.random() * 40,
       dir: 1,
-      speed: 280,
+      speed: DEATH_RUSH_SPEED,
       key: CAR_KEYS[state.hitLane % CAR_KEYS.length],
       scale: 0.2,
       hitCue: true,
@@ -1253,10 +1268,12 @@ function kill() {
   car.exiting = false;
   car.gone = false;
   car.safePass = false;
-  // Start just above the hen — controlled pass, not a rocket
-  car.y = henY - 120;
+  // Never teleport mid-screen — always keep / reset above the road
+  if (car.y > -40) {
+    car.y = -300 - Math.random() * 40;
+  }
   car._prevY = car.y;
-  car.speed = 280;
+  car.speed = DEATH_RUSH_SPEED;
   car.rush = true;
   car.hitCue = true;
   state.hitCar = car;
@@ -1265,15 +1282,16 @@ function kill() {
   els.playBtn.hidden = false;
   disablePlayFor(3000);
 
-  // Die as soon as the car reaches her (next frames), with a hard fallback splat
+  // Impact kill in drawCars; fallback only if something stalls the rush
   if (killFallbackTimer != null) clearTimeout(killFallbackTimer);
   killFallbackTimer = setTimeout(() => {
     killFallbackTimer = null;
-    if (state.hitAnim <= 0) {
-      state.pendingDeath = false;
-      startDeathFx();
+    if (state.hitAnim <= 0 && state.hitCar) {
+      state.hitCar.y = henWorldY();
+      state.hitCar._prevY = state.hitCar.y;
+      killFromCollision(state.hitCar);
     }
-  }, 180);
+  }, 1100);
 }
 
 function sampleRoadColor() {

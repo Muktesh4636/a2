@@ -136,10 +136,11 @@ class GameWebViewActivity : ComponentActivity() {
 
     private fun handleBack() {
         val current = webView.url.orEmpty()
-        when {
-            webView.canGoBack() && !isLobbyUrl(current) -> webView.goBack()
-            isLobbyUrl(current) -> finishToHome()
-            else -> webView.loadUrl(buildUrlWithTokens(Constants.CASINO_PATH))
+        // Casino lobby → app home. Any game page → casino (never skip lobby).
+        if (isLobbyUrl(current)) {
+            finishToHome()
+        } else {
+            webView.loadUrl(buildUrlWithTokens(Constants.CASINO_PATH))
         }
     }
 
@@ -185,6 +186,15 @@ class GameWebViewActivity : ComponentActivity() {
         "chicken-road" -> "/chicken-road/"
         "chicken-road-2" -> "/chicken-road-2/"
         "vortex" -> "/vortex/"
+        "mines" -> "/mines/"
+        "steps" -> "/steps/"
+        "boxes" -> "/boxes/"
+        "snake" -> "/snake/"
+        "slide" -> "/slide/"
+        "cases" -> "/cases/"
+        "drop" -> "/drop/"
+        "plinko" -> "/plinko/"
+        "air-balloon", "air_balloon", "air-ballon-pump" -> "/air-balloon/"
         "chit-pat" -> "/chit-pat/"
         "rangu" -> "/rangu/"
         "casino" -> Constants.CASINO_PATH

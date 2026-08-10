@@ -36,8 +36,17 @@ See `android_app/APK_WEBVIEW_GAMES.md`.
 | Chicken Road | `https://gunduata.tech/chicken-road/?token=` |
 | Chicken Road 2 | `https://gunduata.tech/chicken-road-2/?token=` |
 | Vortex | `https://gunduata.tech/vortex/?token=` |
-| Chit Pat | `https://gunduata.tech/chit-pat/?token=` |
-| Rangu | `https://gunduata.tech/rangu/?token=` |
+| Mines | `https://gunduata.tech/mines/?token=` |
+| Steps | `https://gunduata.tech/steps/?token=` |
+| Boxes | `https://gunduata.tech/boxes/?token=` |
+| Snake | `https://gunduata.tech/snake/?token=` |
+| Slide | `https://gunduata.tech/slide/?token=` |
+| Vault | `https://gunduata.tech/cases/?token=` |
+| Drop | `https://gunduata.tech/drop/?token=` |
+| Plinko | `https://gunduata.tech/plinko/?token=` |
+| Air Balloon | `https://gunduata.tech/air-balloon/?token=` |
+| Chit Pat | `https://gunduata.tech/chit-pat/?token=` *(native Kotlin — open Activity)* |
+| Rangu | `https://gunduata.tech/rangu/?token=` *(native Kotlin / colour API)* |
 
 ## Adding more games
 

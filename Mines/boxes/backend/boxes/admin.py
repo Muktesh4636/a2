@@ -1,0 +1,23 @@
+from django.contrib import admin
+
+from .models import Game, Player
+
+
+@admin.register(Player)
+class PlayerAdmin(admin.ModelAdmin):
+    list_display = ('id', 'balance', 'created_at')
+    readonly_fields = ('id', 'created_at', 'updated_at')
+
+
+@admin.register(Game)
+class GameAdmin(admin.ModelAdmin):
+    list_display = (
+        'id',
+        'player',
+        'status',
+        'bet_amount',
+        'total_multiplier',
+        'payout',
+        'created_at',
+    )
+    list_filter = ('status',)

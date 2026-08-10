@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Air Balloon Pump</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css?v=60" />
+</head>
+<body>
+  <div class="app">
+    <header class="top-bar">
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true"></span>
+        <h1>Air Balloon Pump</h1>
+      </div>
+      <div class="balance-pill" title="Your balance">
+        <span class="balance-label">Balance</span>
+        <span id="balance">₹1,000.00</span>
+      </div>
+    </header>
+
+    <main class="stage" id="stage">
+      <div class="sky" aria-hidden="true">
+        <div class="sky-glow" id="skyGlow"></div>
+        <div class="sky-dust"></div>
+      </div>
+
+      <!-- One fixed assembly: balloon stays clamped on the nozzle -->
+      <div class="rig" id="rig">
+        <div class="balloon-stack" id="balloonStack">
+          <div class="air-stream" id="airStream" aria-hidden="true"></div>
+
+          <div class="balloon-wrap" id="balloonWrap">
+            <!-- One SVG: balloon + rubber mouth rolled onto metal pipe -->
+            <!-- YMax keeps the mouth glued to the nozzle as the wrap grows -->
+            <svg class="balloon-svg" id="balloonSvg" viewBox="0 0 220 236" preserveAspectRatio="xMidYMax meet" aria-hidden="true">
+              <defs>
+                <radialGradient id="latexBody" cx="38%" cy="28%" r="68%">
+                  <stop offset="0%" stop-color="#8ec8ff" />
+                  <stop offset="28%" stop-color="#3ea0ff" />
+                  <stop offset="62%" stop-color="#1f7ef0" />
+                  <stop offset="100%" stop-color="#0d4eb8" />
+                </radialGradient>
+                <radialGradient id="latexRim" cx="50%" cy="40%" r="55%">
+                  <stop offset="70%" stop-color="rgba(255,255,255,0)" />
+                  <stop offset="100%" stop-color="rgba(8,40,110,0.35)" />
+                </radialGradient>
+                <linearGradient id="pipeMetalFit" x1="0" y1="0" x2="1" y2="0">
+                  <stop offset="0%" stop-color="#1a2233" />
+                  <stop offset="32%" stop-color="#8a9bb4" />
+                  <stop offset="58%" stop-color="#55657e" />
+                  <stop offset="100%" stop-color="#121925" />
+                </linearGradient>
+                <linearGradient id="sleeveLatex" x1="0" y1="0" x2="1" y2="0">
+                  <stop offset="0%" stop-color="#0a3a86" />
+                  <stop offset="25%" stop-color="#2f8cff" />
+                  <stop offset="50%" stop-color="#8ec8ff" />
+                  <stop offset="75%" stop-color="#1f7ef0" />
+                  <stop offset="100%" stop-color="#0d4eb8" />
+                </linearGradient>
+                <radialGradient id="rollFit" cx="50%" cy="32%" r="68%">
+                  <stop offset="0%" stop-color="#b6dcff" />
+                  <stop offset="35%" stop-color="#3ea0ff" />
+                  <stop offset="100%" stop-color="#0a3578" />
+                </radialGradient>
+                <filter id="softGlow" x="-30%" y="-30%" width="160%" height="160%">
+                  <feGaussianBlur stdDeviation="3.5" result="blur" />
+                  <feMerge>
+                    <feMergeNode in="blur" />
+                    <feMergeNode in="SourceGraphic" />
+                  </feMerge>
+                </filter>
+              </defs>
+
+              <!--
+                Balloon only — the pump nozzle tip rises into this mouth from below.
+                Rubber + lip overlap the tip so the pipe is inside the balloon end.
+              -->
+              <g class="nozzle-align" transform="translate(8 0)">
+                <g class="balloon-body-group" id="balloonBodyGroup">
+                  <!-- limp: body fallen RIGHT; evenodd hole so grey pipe shows in the mouth -->
+                  <path
+                    id="balloonPath"
+                    class="balloon-path"
+                    fill="url(#latexBody)"
+                    fill-rule="evenodd"
+                    d="M88 230
+                       C88 214 96 206 100 204
+                       C110 202 124 212 138 228
+                       C154 248 166 272 162 294
+                       C158 312 138 318 120 310
+                       C104 302 92 282 90 258
+                       C88 244 88 234 88 230 Z
+                       M95 210
+                       C95 207 97 206 100 206
+                       C103 206 105 207 105 210
+                       L104 228
+                       C104 230 102 231 100 231
+                       C98 231 96 230 96 228 Z"
+                  />
+                  <path
+                    id="balloonRim"
+                    class="balloon-rim"
+                    fill="url(#latexRim)"
+                    fill-rule="evenodd"
+                    d="M88 230
+                       C88 214 96 206 100 204
+                       C110 202 124 212 138 228
+                       C154 248 166 272 162 294
+                       C158 312 138 318 120 310
+                       C104 302 92 282 90 258
+                       C88 244 88 234 88 230 Z
+                       M95 210
+                       C95 207 97 206 100 206
+                       C103 206 105 207 105 210
+                       L104 228
+                       C104 230 102 231 100 231
+                       C98 231 96 230 96 228 Z"
+                  />
+                  <ellipse class="shine-main" cx="128" cy="62" rx="15" ry="26" transform="rotate(-22 128 62)" />
+                  <ellipse class="shine-soft" cx="72" cy="92" rx="20" ry="32" transform="rotate(18 72 92)" />
+                  <ellipse class="shine-tiny" cx="146" cy="100" rx="5" ry="7" transform="rotate(-30 146 100)" />
+                  <ellipse class="shine-limp" cx="138" cy="268" rx="10" ry="16" transform="rotate(-22 138 268)" />
+                </g>
+
+                <!--
+                  Rubber sleeves wrap the REAL pump nozzle (no second tip).
+                  Left/right latex in front of the pipe = pipe is inside the mouth.
+                -->
+                <g class="mouth-fit" id="pipeFit">
+                  <path
+                    d="M86 214
+                       C86 208 90 204 95 204
+                       L95 232
+                       C90 232 86 228 86 222 Z"
+                    fill="url(#sleeveLatex)"
+                  />
+                  <path
+                    d="M105 204
+                       C110 204 114 208 114 214
+                       L114 222
+                       C114 228 110 232 105 232 Z"
+                    fill="url(#sleeveLatex)"
+                  />
+                  <path d="M89 208 C90 216 90 224 91 230" stroke="rgba(255,255,255,0.35)" stroke-width="1.1" fill="none" />
+                  <path d="M111 208 C110 216 110 224 109 230" stroke="rgba(0,25,80,0.4)" stroke-width="1.1" fill="none" />
+                  <!-- U lip under/around shaft -->
+                  <path
+                    d="M86 224
+                       C86 232 92 236 100 236
+                       C108 236 114 232 114 224
+                       L110 224
+                       C110 228 106 230 100 230
+                       C94 230 90 228 90 224 Z"
+                    fill="url(#rollFit)"
+                  />
+                </g>
+              </g>
+            </svg>
+            <div class="multiplier" id="multiplier">1.00x</div>
+          </div>
+        </div>
+
+        <svg class="pump" id="pumpSvg" viewBox="0 0 400 160" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <defs>
+            <linearGradient id="pumpMetal" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="#3a465c" />
+              <stop offset="45%" stop-color="#2a3448" />
+              <stop offset="100%" stop-color="#1a2233" />
+            </linearGradient>
+            <linearGradient id="pumpTop" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="#55657e" />
+              <stop offset="100%" stop-color="#2c364a" />
+            </linearGradient>
+            <linearGradient id="handleWood" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="#6b7c96" />
+              <stop offset="100%" stop-color="#3d4b63" />
+            </linearGradient>
+            <radialGradient id="ledOn" cx="50%" cy="40%" r="50%">
+              <stop offset="0%" stop-color="#9ecbff" />
+              <stop offset="55%" stop-color="#3d8bfd" />
+              <stop offset="100%" stop-color="#1a5fd0" />
+            </radialGradient>
+          </defs>
+
+          <ellipse cx="200" cy="142" rx="175" ry="7" fill="rgba(0,0,0,0.3)" />
+
+          <!-- Base console -->
+          <path
+            fill="url(#pumpMetal)"
+            d="M24 108
+               C24 90 38 78 56 78
+               H120
+               C132 78 140 70 142 58
+               V50
+               C142 40 150 34 160 34
+               H210
+               C220 34 228 40 228 50
+               V62
+               C228 72 236 78 246 78
+               H348
+               C368 78 380 94 380 112
+               V132 H24 Z"
+          />
+
+          <!-- Floor-pump cylinder + T-handle (left) — this is what you push -->
+          <g class="pump-cylinder" transform="translate(78 0)">
+            <rect x="0" y="48" width="34" height="62" rx="8" fill="url(#pumpTop)" />
+            <rect x="4" y="52" width="8" height="50" rx="2" fill="rgba(255,255,255,0.07)" />
+            <g class="plunger" id="plunger">
+              <rect class="plunger-shaft" x="13" y="8" width="8" height="55" rx="2" fill="#4a5870" />
+              <rect class="plunger-grip" x="-6" y="0" width="46" height="14" rx="5" fill="url(#handleWood)" />
+              <rect x="-2" y="3" width="38" height="3" rx="1.5" fill="rgba(255,255,255,0.14)" />
+            </g>
+          </g>
+
+          <!-- Single nozzle — tip rises into the balloon mouth above -->
+          <g class="nozzle-fixed">
+            <rect x="193" y="40" width="14" height="36" rx="3" fill="url(#pumpTop)" />
+            <!-- hourglass tip that seats inside the balloon edge -->
+            <path
+              fill="url(#pumpTop)"
+              d="M190 18
+                 C190 10 194 6 200 6
+                 C206 6 210 10 210 18
+                 L207 40
+                 C207 44 204 46 200 46
+                 C196 46 193 44 193 40 Z"
+            />
+            <rect x="196" y="20" width="2.2" height="22" rx="1" fill="rgba(255,255,255,0.14)" />
+            <ellipse cx="200" cy="7.5" rx="9" ry="3.2" fill="#6a7a94" />
+            <ellipse cx="200" cy="7" rx="5" ry="1.6" fill="#1a2233" />
+          </g>
+
+          <g class="pump-lights" transform="translate(128 96)">
+            <rect x="-6" y="-12" width="80" height="24" rx="12" fill="#121925" opacity="0.9" />
+            <circle cx="8" cy="0" r="5.5" data-dot="0" />
+            <circle cx="28" cy="0" r="5.5" data-dot="1" />
+            <circle cx="48" cy="0" r="5.5" data-dot="2" />
+            <circle cx="68" cy="0" r="5.5" data-dot="3" />
+          </g>
+        </svg>
+      </div>
+
+      <div class="burst" id="burst" hidden aria-hidden="true">
+        <canvas id="burstCanvas" width="320" height="320"></canvas>
+        <span class="burst-text">POP!</span>
+      </div>
+
+      <div class="status-line" id="statusLine">Place a bet, then pump to inflate</div>
+    </main>
+
+    <section class="controls">
+      <div class="bet-row">
+        <label class="field">
+          <span>Bet amount</span>
+          <div class="bet-input">
+            <button type="button" id="betMinus" aria-label="Decrease bet">−</button>
+            <input id="betAmount" type="number" min="10" max="5000" step="10" value="50" />
+            <button type="button" id="betPlus" aria-label="Increase bet">+</button>
+          </div>
+        </label>
+        <div class="quick-bets">
+          <button type="button" data-bet="25">₹25</button>
+          <button type="button" data-bet="50">₹50</button>
+          <button type="button" data-bet="100">₹100</button>
+          <button type="button" data-bet="250">₹250</button>
+        </div>
+      </div>
+
+      <div class="action-row">
+        <button type="button" class="btn btn-pump" id="pumpBtn">
+          <span class="btn-label">Pump</span>
+          <span class="btn-sub" id="pumpHint">Start round</span>
+        </button>
+        <button type="button" class="btn btn-cash" id="cashoutBtn" disabled>
+          <span class="btn-label">Cash Out</span>
+          <span class="btn-sub" id="cashHint">₹0.00</span>
+        </button>
+      </div>
+
+      <div class="meta-row">
+        <div class="stat">
+          <span>Potential win</span>
+          <strong id="potentialWin">₹0.00</strong>
+        </div>
+        <div class="stat">
+          <span>Last crash</span>
+          <strong id="lastCrash">—</strong>
+        </div>
+        <div class="stat">
+          <span>Pumps</span>
+          <strong id="pumpCount">0</strong>
+        </div>
+      </div>
+    </section>
+
+    <aside class="history" aria-label="Recent multipliers">
+      <div class="history-track" id="historyTrack"></div>
+    </aside>
+  </div>
+
+  <script src="game.js?v=61"></script>
+</body>
+</html>

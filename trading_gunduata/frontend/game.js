@@ -6,6 +6,24 @@
   const SETTLE_MS = 2500;
   const COMMISSION = 0.03;
   const CHIP_AMOUNTS = [10, 20, 50, 100, 500, 1000];
+  const chipSfx = (() => {
+    try {
+      const a = new Audio(new URL("sounds/chip.wav", location.origin + "/trading/").href);
+      a.preload = "auto";
+      a.volume = 0.75;
+      return a;
+    } catch (_) {
+      return null;
+    }
+  })();
+
+  function playChipSound() {
+    if (!chipSfx) return;
+    try {
+      chipSfx.currentTime = 0;
+      void chipSfx.play();
+    } catch (_) {}
+  }
 
   // Real Gundu API (same pattern as roulette) — no demo balance
   const API_BASE = (() => {
@@ -262,6 +280,16 @@
     return String(n);
   }
 
+  function chipAssetUrl(amount) {
+    const color = chipColorFor(amount);
+    // Always resolve under /trading/ even if the page URL has no trailing slash
+    try {
+      return new URL(`chips/chip-${color}.png`, location.origin + "/trading/").href;
+    } catch (_) {
+      return `chips/chip-${color}.png`;
+    }
+  }
+
   function chipSlotEl(side) {
     return side === "up" ? els.chipSlotUp : els.chipSlotDown;
   }
@@ -272,6 +300,13 @@
       .reduce((a, c) => a + Number(c.amount || 0), 0);
   }
 
+  function isChipFlyInProgress() {
+    return !!(
+      els.chipSlotUp?.classList.contains("awaiting-chip") ||
+      els.chipSlotDown?.classList.contains("awaiting-chip")
+    );
+  }
+
   function renderPlacedChips() {
     for (const side of ["up", "down"]) {
       const slot = chipSlotEl(side);
@@ -280,11 +315,10 @@
       slot.innerHTML = "";
       slot.classList.toggle("has-chips", total > 0);
       if (total <= 0) continue;
-      const color = chipColorFor(total);
       const el = document.createElement("span");
       el.className = "placed-chip";
-      el.dataset.chip = String(color);
-      el.style.backgroundImage = `url("chips/chip-${color}.png")`;
+      el.dataset.chip = String(chipColorFor(total));
+      el.style.backgroundImage = `url("${chipAssetUrl(total)}")`;
       el.title = `₹${total}`;
       // Opaque center so PNG denomination is hidden; show REAL total (e.g. 30 on 20-color)
       const cover = document.createElement("span");
@@ -329,7 +363,7 @@
     fly.className = "flying-chip";
     // Fly with the chip COLOR for the NEW total; label shows REAL total (e.g. 30)
     const flyTotal = total || add;
-    fly.style.backgroundImage = `url("chips/chip-${chipColorFor(flyTotal)}.png")`;
+    fly.style.backgroundImage = `url("${chipAssetUrl(flyTotal)}")`;
     const flyCover = document.createElement("span");
     flyCover.className = "chip-cover";
     const flyLabel = document.createElement("span");
@@ -357,39 +391,51 @@
     setTimeout(() => {
       fly.remove();
       slot.classList.remove("awaiting-chip");
+      // Re-assert from state in case a poll tried to clear mid-flight
+      if (state._roundStake > 0 && state.side) {
+        setSideStake(state.side, state._roundStake);
+      }
       renderPlacedChips();
     }, 430);
   }
 
   function syncChipsFromPending(pending) {
-    if (!pending || !pending.side || !(pending.stake > 0)) {
+    if (!pending || !pending.side || !(Number(pending.stake) > 0)) {
+      // Never wipe chips while a place/fly is in progress (poll race)
+      if (state.pendingRequest || isChipFlyInProgress()) return;
       clearPlacedChips();
       return;
     }
+    const stake = Number(pending.stake);
     const current = sideStakeTotal(pending.side);
     const sameSideOnly = state.chipPlacements.length > 0
       && state.chipPlacements.every((c) => c.side === pending.side);
-    if (sameSideOnly && current === pending.stake) {
+    if (sameSideOnly && current === stake) {
       return;
     }
-    setSideStake(pending.side, pending.stake);
-    renderPlacedChips();
+    setSideStake(pending.side, stake);
+    if (!isChipFlyInProgress()) renderPlacedChips();
   }
 
   function applyUserPayload(data) {
     if (typeof data.balance === "number") state.balance = data.balance;
     if (typeof data.portfolio === "number") state.portfolio = data.portfolio;
     const pending = data.pending;
-    if (pending) {
+    if (pending && pending.side && Number(pending.stake) > 0) {
       state.side = pending.side;
-      state._roundStake = pending.stake;
-      if (state.phase === "betting") state.portfolio = pending.stake;
+      state._roundStake = Number(pending.stake);
+      if (state.phase === "betting") state.portfolio = state._roundStake;
       syncChipsFromPending(pending);
     } else if (data.pending === null) {
-      state.side = null;
-      state._roundStake = 0;
-      if (state.phase !== "trading") state.portfolio = 0;
-      clearPlacedChips();
+      // Poll race: don't clear right after a successful place / during fly-in
+      if (state.pendingRequest || isChipFlyInProgress()) {
+        // keep local chips
+      } else {
+        state.side = null;
+        state._roundStake = 0;
+        if (state.phase !== "trading") state.portfolio = 0;
+        clearPlacedChips();
+      }
     }
     const crowd = data.crowd || null;
     if (crowd) {
@@ -636,19 +682,31 @@
       state.lastSide = side;
       state.lastStake = stakeAmt;
       // One chip per side — color follows TOTAL stake ranges (10→20→50…)
-      const prevSame = state.chipPlacements.every((c) => c.side === side)
-        ? sideStakeTotal(side)
-        : 0;
-      const serverTotal = data.pending && typeof data.pending.stake === "number"
-        ? data.pending.stake
-        : null;
-      const totalAfter = serverTotal != null && serverTotal > 0
-        ? serverTotal
-        : prevSame + stakeAmt;
+      const prevSame =
+        state.chipPlacements.length > 0 &&
+        state.chipPlacements.every((c) => c.side === side)
+          ? sideStakeTotal(side)
+          : 0;
+      const serverTotal =
+        data.pending && data.pending.stake != null
+          ? Number(data.pending.stake)
+          : null;
+      const totalAfter =
+        serverTotal != null && serverTotal > 0
+          ? serverTotal
+          : prevSame + stakeAmt;
+      state.side = side;
+      state._roundStake = totalAfter;
       setSideStake(side, totalAfter);
-      flyChipToSide(side, stakeAmt, totalAfter);
+      // Apply server wallet/crowd first, but chip sync is already set above
       applyUserPayload(data);
       if (data.game) applyGameClock(data.game);
+      // Keep local chip state if a poll raced with pending:null
+      state.side = side;
+      state._roundStake = totalAfter;
+      setSideStake(side, totalAfter);
+      playChipSound();
+      flyChipToSide(side, stakeAmt, totalAfter);
       showToast(side.toUpperCase() + " ₹" + stakeAmt);
     } catch (e) {
       showToast(e.message || "Bet failed");
@@ -1253,6 +1311,7 @@
     });
     // Paint collapsed state first, then open → CSS transition runs
     void els.chipStack.offsetWidth;
+    playChipSound();
     requestAnimationFrame(() => {
       els.chipStack.classList.add("open");
       els.chipStack.setAttribute("aria-expanded", "true");

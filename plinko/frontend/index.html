@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Plinko</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=JetBrains+Mono:wght@500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/src/styles.css" />
+  </head>
+  <body>
+    <div class="app">
+      <header class="topbar">
+        <div class="brand">
+          <span class="brand-mark" aria-hidden="true"></span>
+          <h1>Plinko</h1>
+        </div>
+        <div class="balance-chip" title="Your balance">
+          <span class="coin" aria-hidden="true"></span>
+          <span id="balance">1000.00</span>
+          <span class="currency">₹</span>
+        </div>
+      </header>
+
+      <main class="layout">
+        <aside class="panel">
+          <div class="mode-tabs" role="tablist">
+            <button class="mode-tab is-active" data-mode="manual" type="button">
+              Manual
+            </button>
+            <button class="mode-tab" data-mode="auto" type="button">Auto</button>
+          </div>
+
+          <label class="field">
+            <span class="field-label">Bet Amount</span>
+            <div class="bet-row">
+              <div class="bet-input-wrap">
+                <span class="coin small" aria-hidden="true"></span>
+                <input
+                  id="bet-amount"
+                  type="number"
+                  min="1"
+                  step="1"
+                  value="100"
+                  inputmode="decimal"
+                />
+              </div>
+              <div class="bet-quick">
+                <button type="button" data-bet="half">½</button>
+                <button type="button" data-bet="double">2×</button>
+              </div>
+            </div>
+            <p class="field-hint">
+              You get back bet × box. Example: ₹100 on 1.5× → ₹150; on 0.2× → ₹20.
+            </p>
+          </label>
+
+          <div id="auto-controls" class="auto-controls is-hidden">
+            <label class="field">
+              <span class="field-label">Number of Bets</span>
+              <input id="auto-count" type="number" min="1" max="100" value="10" />
+            </label>
+          </div>
+
+          <button id="bet-btn" class="bet-btn" type="button">Bet</button>
+
+          <div class="profit-box">
+            <span class="field-label">You Get Back</span>
+            <div class="profit-value">
+              <span class="coin small" aria-hidden="true"></span>
+              <span id="last-payout">0.00</span>
+            </div>
+            <p id="last-profit" class="payout-meta">Your payout shows here</p>
+          </div>
+
+          <div class="recent-strip">
+            <span class="field-label">Recent</span>
+            <div id="recent-multipliers" class="recent-multipliers"></div>
+          </div>
+        </aside>
+
+        <section class="board-wrap">
+          <canvas id="plinko"></canvas>
+          <div id="buckets" class="buckets" aria-hidden="true"></div>
+          <div class="live-wins" aria-live="polite">
+            <div class="live-wins__top">
+              <span>Live wins</span>
+              <span class="live-wins__dot" aria-hidden="true"></span>
+              <span id="live-online">Online: 1200</span>
+            </div>
+            <div id="live-entry" class="live-wins__entry"></div>
+          </div>
+          <div id="toast" class="toast" role="status" aria-live="polite"></div>
+        </section>
+
+        <aside class="history-panel">
+          <div class="history-head">
+            <h2>Recent</h2>
+            <button id="clear-history" type="button" title="Clear history">
+              Clear
+            </button>
+          </div>
+          <ul id="history-list" class="history-list"></ul>
+          <p id="history-empty" class="history-empty">No drops yet — place a bet.</p>
+        </aside>
+      </main>
+    </div>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

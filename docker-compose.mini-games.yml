@@ -1,0 +1,108 @@
+# Mini-games backends (Mines family + Plinko API + Air Balloon).
+# Run on an app server alongside the main stack:
+#   docker compose -f docker-compose.mini-games.yml up -d --build
+#
+# Frontends are static files on the LB under /mines/, /plinko/, etc.
+# Nginx proxies /api/<game>/ → these containers.
+
+services:
+  mines_api:
+    build: ./Mines/mines/backend
+    container_name: gundu_mines_api
+    command: bash -lc "python manage.py migrate --noinput && python manage.py runserver 0.0.0.0:8000"
+    ports: ["8101:8000"]
+    volumes:
+      - ./Mines/mines/backend:/app
+      - mines_data:/app/data
+    restart: unless-stopped
+
+  steps_api:
+    build: ./Mines/steps/backend
+    container_name: gundu_steps_api
+    command: bash -lc "python manage.py migrate --noinput && python manage.py runserver 0.0.0.0:8000"
+    ports: ["8102:8000"]
+    volumes:
+      - ./Mines/steps/backend:/app
+      - steps_data:/app/data
+    restart: unless-stopped
+
+  boxes_api:
+    build: ./Mines/boxes/backend
+    container_name: gundu_boxes_api
+    command: bash -lc "python manage.py migrate --noinput && python manage.py runserver 0.0.0.0:8000"
+    ports: ["8103:8000"]
+    volumes:
+      - ./Mines/boxes/backend:/app
+      - boxes_data:/app/data
+    restart: unless-stopped
+
+  snake_api:
+    build: ./Mines/snake/backend
+    container_name: gundu_snake_api
+    command: bash -lc "python manage.py migrate --noinput && python manage.py runserver 0.0.0.0:8000"
+    ports: ["8104:8000"]
+    volumes:
+      - ./Mines/snake/backend:/app
+      - snake_data:/app/data
+    restart: unless-stopped
+
+  slide_api:
+    build: ./Mines/slide/backend
+    container_name: gundu_slide_api
+    command: bash -lc "python manage.py migrate --noinput && python manage.py runserver 0.0.0.0:8000"
+    ports: ["8105:8000"]
+    volumes:
+      - ./Mines/slide/backend:/app
+      - slide_data:/app/data
+    restart: unless-stopped
+
+  cases_api:
+    build: ./Mines/cases/backend
+    container_name: gundu_cases_api
+    command: bash -lc "python manage.py migrate --noinput && python manage.py runserver 0.0.0.0:8000"
+    ports: ["8106:8000"]
+    volumes:
+      - ./Mines/cases/backend:/app
+      - cases_data:/app/data
+    restart: unless-stopped
+
+  drop_api:
+    build: ./Mines/drop/backend
+    container_name: gundu_drop_api
+    command: bash -lc "python manage.py migrate --noinput && python manage.py runserver 0.0.0.0:8000"
+    ports: ["8107:8000"]
+    volumes:
+      - ./Mines/drop/backend:/app
+      - drop_data:/app/data
+    restart: unless-stopped
+
+  plinko_api:
+    build: ./plinko/backend
+    container_name: gundu_plinko_api
+    command: bash -lc "python manage.py migrate --noinput && python manage.py runserver 0.0.0.0:8000"
+    ports: ["8108:8000"]
+    volumes:
+      - ./plinko/backend:/app
+      - plinko_data:/app/data
+    restart: unless-stopped
+
+  air_balloon_api:
+    build: ./Air_ballon_pump/backend
+    container_name: gundu_air_balloon_api
+    command: bash -lc "python manage.py migrate --noinput && python manage.py runserver 0.0.0.0:8000"
+    ports: ["8109:8000"]
+    volumes:
+      - ./Air_ballon_pump/backend:/app
+      - air_balloon_data:/app/data
+    restart: unless-stopped
+
+volumes:
+  mines_data:
+  steps_data:
+  boxes_data:
+  snake_data:
+  slide_data:
+  cases_data:
+  drop_data:
+  plinko_data:
+  air_balloon_data:

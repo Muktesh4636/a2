@@ -1,10 +1,10 @@
 /**
- * Casino Games list — all tiles link to web games.
+ * Casino Games list — all tiles link to web games (APK WebView + browser).
  *
  * To add a game:
- * 1. Put the tile PNG in ./images/ (e.g. images/my-game.png)
+ * 1. Put the tile image in ./images/
  * 2. Append an object below with id, title, image, path
- * 3. Redeploy — no other code changes needed
+ * 3. Redeploy — APK openGame uses the same id → path map
  *
  * path: web URL on gunduata.tech (?token= is appended automatically)
  */
@@ -46,6 +46,18 @@ export const GAMES = [
     path: "/vortex/",
   },
   {
+    id: "plinko",
+    title: "Plinko",
+    image: "images/plinko.jpeg",
+    path: "/plinko/",
+  },
+  {
+    id: "slide",
+    title: "Pin Stop",
+    image: "images/slide.jpeg",
+    path: "/slide/",
+  },
+  {
     id: "chit-pat",
     title: "Chit Pat",
     image: "images/chit-pat.png",
@@ -56,5 +68,41 @@ export const GAMES = [
     title: "Rangu",
     image: "images/rangu.png",
     path: "/rangu/",
+  },
+  {
+    id: "mines",
+    title: "Mines",
+    image: "images/mines.jpeg",
+    path: "/mines/",
+  },
+  {
+    id: "steps",
+    title: "Sky Path",
+    image: "images/steps.jpeg",
+    path: "/steps/",
+  },
+  {
+    id: "boxes",
+    title: "Pick 4",
+    image: "images/boxes.jpeg",
+    path: "/boxes/",
+  },
+  {
+    id: "snake",
+    title: "Roll & Land",
+    image: "images/snake.jpeg",
+    path: "/snake/",
+  },
+  {
+    id: "cases",
+    title: "Vault",
+    image: "images/cases.jpeg",
+    path: "/cases/",
+  },
+  {
+    id: "air-balloon",
+    title: "Air Balloon",
+    image: "images/air-balloon.jpeg",
+    path: "/air-balloon/",
   },
 ];

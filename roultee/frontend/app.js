@@ -1169,6 +1169,25 @@ const betState = {
   pollTimer: null,
 };
 
+const chipSfx = (() => {
+  try {
+    const a = new Audio("sounds/chip.wav");
+    a.preload = "auto";
+    a.volume = 0.75;
+    return a;
+  } catch (_) {
+    return null;
+  }
+})();
+
+function playChipSound() {
+  if (!betState.soundOn || !chipSfx) return;
+  try {
+    chipSfx.currentTime = 0;
+    void chipSfx.play();
+  } catch (_) {}
+}
+
 const betTimerEl = document.getElementById("bet-timer");
 const betTimerProgress = betTimerEl?.querySelector(".bt-progress");
 
@@ -1467,6 +1486,7 @@ async function placeBet(key, btn) {
     applyServerState(data);
     betState.historyStack.push({ key, chip, visualChip: chip });
     if (btn) updateCellStack(btn);
+    playChipSound();
   } catch (e) {
     if (resultEl) resultEl.textContent = `Bet failed: ${e.message}`;
   } finally {
@@ -1700,6 +1720,7 @@ function initBettingUi() {
       c.classList.add(`fan-${Math.min(i, 4)}`);
     });
     void chipStack.offsetWidth;
+    playChipSound();
     requestAnimationFrame(() => {
       chipStack.classList.add("open");
       chipStack.setAttribute("aria-expanded", "true");
