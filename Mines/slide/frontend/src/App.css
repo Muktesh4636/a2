@@ -4,7 +4,8 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 20px 16px 36px;
+  /* Slight top inset so the page sits a little lower */
+  padding: calc(36px + env(safe-area-inset-top, 0px)) 16px 28px;
   position: relative;
   overflow: hidden;
 }
@@ -173,6 +174,43 @@
   cursor: not-allowed;
 }
 
+.bet-presets {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 6px;
+}
+
+.bet-preset {
+  flex: 1 1 0;
+  min-width: 0;
+  border: 1px solid #2f4553;
+  background: #0f212e;
+  color: #c4d0d9;
+  border-radius: 8px;
+  padding: 8px 2px;
+  cursor: pointer;
+  font-weight: 700;
+  font-size: 0.7rem;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.bet-preset:hover:not(:disabled) {
+  border-color: #4b6a7c;
+  color: #fff;
+}
+
+.bet-preset.is-selected {
+  border-color: #60a5fa;
+  background: rgba(96, 165, 250, 0.14);
+  color: #fff;
+}
+
+.bet-preset:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
 .stats {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -253,7 +291,7 @@
   flex-direction: column;
   justify-content: center;
   gap: 18px;
-  min-height: 320px;
+  min-height: 400px;
 }
 
 .reel-stage {
@@ -263,7 +301,7 @@
 .reel-viewport {
   position: relative;
   overflow: hidden;
-  height: 210px;
+  height: 280px;
   border-radius: 12px;
   contain: layout paint;
   transform: translateZ(0);
@@ -386,9 +424,9 @@
 .pin {
   position: absolute;
   left: 50%;
-  /* Sit lower on the boxes — line + dot near the bottom bar */
-  top: 52%;
-  bottom: 6px;
+  /* Start lower; long stem so tip sits near the bottom bar */
+  top: 62%;
+  bottom: 0;
   transform: translateX(-50%);
   z-index: 5;
   display: flex;
@@ -399,20 +437,20 @@
 }
 
 .pin-line {
-  width: 2px;
+  width: 3px;
   flex: 1;
-  min-height: 36px;
-  background: linear-gradient(180deg, transparent 0%, #fff 30%, #fff 100%);
-  margin-bottom: -2px;
+  min-height: 88px;
+  background: linear-gradient(180deg, transparent 0%, #fff 22%, #fff 100%);
+  margin-bottom: -4px;
 }
 
 .pin-dot {
-  width: 12px;
-  height: 12px;
+  width: 22px;
+  height: 22px;
   border-radius: 50%;
   background: #fff;
-  box-shadow: 0 0 12px rgba(255, 255, 255, 0.6);
-  margin-bottom: 2px;
+  box-shadow: 0 0 18px rgba(255, 255, 255, 0.8);
+  margin-bottom: 0;
   flex-shrink: 0;
 }
 
@@ -514,10 +552,10 @@
 
   .board-wrap {
     order: 1;
-    min-height: 280px;
+    min-height: 360px;
   }
 
   .reel-viewport {
-    height: 190px;
+    height: 250px;
   }
 }

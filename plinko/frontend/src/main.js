@@ -149,7 +149,7 @@ function renderLiveWin(entry) {
 function tickLiveWins() {
   renderLiveWin(nextLiveWin());
   liveOnline = Math.max(900, liveOnline + Math.floor(Math.random() * 9 - 4));
-  if (liveOnlineEl) liveOnlineEl.textContent = `Online: ${liveOnline}`;
+  if (liveOnlineEl) liveOnlineEl.textContent = String(liveOnline);
 }
 
 function startLiveWinsFeed() {

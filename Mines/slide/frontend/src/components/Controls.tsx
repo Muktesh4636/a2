@@ -1,5 +1,7 @@
 import { formatMoney, formatMultiplier } from '../game/format'
 
+const BET_PRESETS = [10, 50, 100, 500, 1000]
+
 type Props = {
   balance: number
   betAmount: number
@@ -23,7 +25,7 @@ export function Controls({
 }: Props) {
   return (
     <aside className="controls">
-<label className="field">
+      <label className="field">
         <span>Bet Amount</span>
         <div className="field-row">
           <span className="prefix">₹</span>
@@ -51,6 +53,31 @@ export function Controls({
               2×
             </button>
           </div>
+        </div>
+        <div className="bet-presets" role="group" aria-label="Quick bet amounts">
+          {BET_PRESETS.map((amount) => {
+            const overBalance = amount > balance
+            const selected = betAmount === amount
+            return (
+              <button
+                key={amount}
+                type="button"
+                className={`bet-preset${selected ? ' is-selected' : ''}`}
+                disabled={busy || overBalance}
+                onClick={() => onBetChange(amount)}
+              >
+                ₹{amount.toLocaleString('en-IN')}
+              </button>
+            )
+          })}
+          <button
+            type="button"
+            className={`bet-preset${betAmount === Math.floor(balance) && balance > 0 ? ' is-selected' : ''}`}
+            disabled={busy || balance < 1}
+            onClick={() => onBetChange(Math.max(1, Math.floor(balance)))}
+          >
+            Max
+          </button>
         </div>
       </label>
 

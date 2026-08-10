@@ -390,12 +390,13 @@ export default function App() {
       ) : null}
 
       <div className="stage">
-        <div className="live">
-          <div className="live__top">
-            <span>Live wins:</span>
-            <span className="live__dot" />
-            <span>Online: {online}</span>
+        <div className="live-members">
+          <div className="live-members__pill">
+            <span className="live-members__dot" />
+            <span>{online}</span>
           </div>
+        </div>
+        <div className="live">
           <div className="live__entry" key={live.id}>
             <div className="live__avatar" style={{ background: live.color }}>
               {live.letter}

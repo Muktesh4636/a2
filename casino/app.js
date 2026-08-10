@@ -194,8 +194,109 @@ const TITLE_IN_ART = new Set([
   "rangu",
 ]);
 
+/** Popularity baselines — live counts wander around these (Stock Market highest) */
+const PLAYING_BASE = {
+  "stock-market": 8640,
+  "chicken-road": 4210,
+  "chicken-road-2": 3650,
+  "gundu-ata": 3120,
+  plinko: 2760,
+  mines: 2040,
+  "auto-roulette": 1890,
+  "air-balloon": 1680,
+  vortex: 1540,
+  "chit-pat": 1420,
+  rangu: 1180,
+  cases: 1100,
+  slide: 980,
+  snake: 920,
+  steps: 860,
+  boxes: 740,
+};
+
+const playingById = new Map();
+/** Soft drift direction per game so counts don't just bounce randomly */
+const playingDrift = new Map();
+
+function randInt(min, max) {
+  return min + Math.floor(Math.random() * (max - min + 1));
+}
+
+function initialPlaying(id) {
+  const base = PLAYING_BASE[id] ?? randInt(600, 2400);
+  // Fresh random start every open (±12%) so it never looks frozen
+  const spread = Math.max(40, Math.floor(base * 0.12));
+  return base + randInt(-spread, spread);
+}
+
+function formatPlaying(n) {
+  return Math.round(n).toLocaleString("en-IN");
+}
+
+function makePlayersBadge(game) {
+  const count = initialPlaying(game.id);
+  playingById.set(game.id, count);
+  playingDrift.set(game.id, Math.random() < 0.5 ? -1 : 1);
+
+  const badge = document.createElement("div");
+  badge.className = "card-players";
+  badge.dataset.gameId = game.id;
+  badge.setAttribute("aria-live", "polite");
+
+  const dot = document.createElement("span");
+  dot.className = "card-players-dot";
+  dot.setAttribute("aria-hidden", "true");
+
+  const num = document.createElement("span");
+  num.className = "card-players-num";
+  num.textContent = formatPlaying(count);
+
+  const label = document.createElement("span");
+  label.className = "card-players-label";
+  label.textContent = "playing";
+
+  badge.append(dot, num, label);
+  return badge;
+}
+
+function tickPlayingCounts() {
+  playingById.forEach((count, id) => {
+    const base = PLAYING_BASE[id] ?? count;
+    const min = Math.max(80, Math.floor(base * 0.78));
+    const max = Math.floor(base * 1.22);
+    let drift = playingDrift.get(id) || 1;
+    // Occasionally flip trend; bounce at edges
+    if (Math.random() < 0.18) drift *= -1;
+    if (count <= min + 20) drift = 1;
+    if (count >= max - 20) drift = -1;
+    playingDrift.set(id, drift);
+
+    // Scale step with popularity — busy games move more
+    const stepScale = Math.max(3, Math.round(base / 900));
+    let delta = drift * randInt(stepScale, stepScale * 4);
+    // Occasional small opposite blip (someone leaving/joining against the trend)
+    if (Math.random() < 0.22) delta = -drift * randInt(1, stepScale + 2);
+    // Always change by at least 1
+    if (delta === 0) delta = drift || 1;
+
+    const next = Math.min(max, Math.max(min, count + delta));
+    playingById.set(id, next);
+    const el = grid.querySelector(
+      `.card-players[data-game-id="${id}"] .card-players-num`
+    );
+    if (el && next !== count) {
+      el.textContent = formatPlaying(next);
+      el.classList.remove("is-tick");
+      // restart CSS flash
+      void el.offsetWidth;
+      el.classList.add("is-tick");
+    }
+  });
+}
+
 function render() {
   grid.innerHTML = "";
+  playingById.clear();
   GAMES.forEach((game) => {
     const card = document.createElement("article");
     card.className = TITLE_IN_ART.has(game.id) ? "card art-has-frame" : "card";
@@ -234,6 +335,7 @@ function render() {
 
     overlay.appendChild(play);
     media.appendChild(img);
+    media.appendChild(makePlayersBadge(game));
     if (!TITLE_IN_ART.has(game.id)) {
       const title = document.createElement("h2");
       title.className = "card-title";
@@ -301,3 +403,4 @@ try {
 
 readAccessToken();
 render();
+setInterval(tickPlayingCounts, 2200);

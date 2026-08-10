@@ -348,24 +348,51 @@ select {
   box-shadow: var(--shadow);
 }
 
-.live-wins {
+.live-members {
   position: absolute;
   top: 10px;
   left: 10px;
   z-index: 4;
-  width: min(240px, calc(100% - 20px));
   pointer-events: none;
   font-size: 12px;
   font-weight: 700;
 }
 
-.live-wins__top {
+.live-members__pill {
   display: flex;
   align-items: center;
   gap: 6px;
-  color: rgba(255, 255, 255, 0.72);
-  margin-bottom: 6px;
+  background: rgba(10, 18, 32, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  padding: 6px 12px 6px 8px;
+  color: rgba(255, 255, 255, 0.88);
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.65);
+  width: fit-content;
+}
+
+.live-members__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #4cd964;
+  animation: live-pulse 1.6s infinite;
+  flex-shrink: 0;
+}
+
+.live-wins {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  left: auto;
+  z-index: 4;
+  width: min(240px, calc(100% - 20px));
+  pointer-events: none;
+  font-size: 12px;
+  font-weight: 700;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
 }
 
 .live-wins__dot {
@@ -398,6 +425,7 @@ select {
   padding: 4px 10px 4px 4px;
   width: fit-content;
   max-width: 100%;
+  margin-left: auto;
 }
 
 .live-wins__entry.is-fresh {

@@ -86,12 +86,13 @@
         <section class="board-wrap">
           <canvas id="plinko"></canvas>
           <div id="buckets" class="buckets" aria-hidden="true"></div>
-          <div class="live-wins" aria-live="polite">
-            <div class="live-wins__top">
-              <span>Live wins</span>
-              <span class="live-wins__dot" aria-hidden="true"></span>
-              <span id="live-online">Online: 1200</span>
+          <div class="live-members" aria-hidden="false">
+            <div class="live-members__pill">
+              <span class="live-members__dot" aria-hidden="true"></span>
+              <span id="live-online">1200</span>
             </div>
+          </div>
+          <div class="live-wins" aria-live="polite">
             <div id="live-entry" class="live-wins__entry"></div>
           </div>
           <div id="toast" class="toast" role="status" aria-live="polite"></div>
