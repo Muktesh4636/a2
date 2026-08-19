@@ -17,6 +17,47 @@
     }
   })();
 
+  const hostVoice = (() => {
+    try {
+      const a = new Audio(new URL("sounds/host-voice.mp3", location.origin + "/trading/").href);
+      a.preload = "auto";
+      a.loop = true;
+      a.volume = 0.85;
+      return a;
+    } catch (_) {
+      return null;
+    }
+  })();
+
+  let voiceMuted = localStorage.getItem("trading_voice_muted") === "1";
+  let hostSpeakingOn = false;
+
+  function applyVoiceMuteUi() {
+    els.hostVoiceBtn?.classList.toggle("is-muted", voiceMuted);
+    els.hostVoiceBtn?.setAttribute("aria-label", voiceMuted ? "Unmute host" : "Mute host");
+    els.hostVoiceBtn?.setAttribute("title", voiceMuted ? "Sound off" : "Sound on");
+  }
+
+  function syncHostVoice() {
+    if (!hostVoice) return;
+    hostVoice.muted = voiceMuted;
+    if (voiceMuted) {
+      hostVoice.pause();
+      return;
+    }
+    const p = hostVoice.play();
+    if (p && typeof p.catch === "function") p.catch(() => {});
+  }
+
+  function toggleHostVoice(ev) {
+    ev?.preventDefault();
+    ev?.stopPropagation();
+    voiceMuted = !voiceMuted;
+    localStorage.setItem("trading_voice_muted", voiceMuted ? "1" : "0");
+    applyVoiceMuteUi();
+    syncHostVoice();
+  }
+
   function playChipSound() {
     if (!chipSfx) return;
     try {
@@ -69,6 +110,8 @@
     downPlayers: $("downPlayers"),
     sentFillUp: $("sentFillUp"),
     toast: $("toast"),
+    playingNum: $("playingNum"),
+    hostVoiceBtn: $("hostVoiceBtn"),
   };
 
   const ctx = els.chart.getContext("2d");
@@ -225,19 +268,20 @@
   }
 
   async function api(pathName, options = {}) {
+    const { skipAuth = false, requireAuth = false, headers: extraHeaders, ...fetchOpts } = options;
     const headers = {
       "Content-Type": "application/json",
-      ...(options.headers || {}),
+      ...(extraHeaders || {}),
     };
-    // Auth optional for public clock (/state/); required for bets/cashout
-    if (state.accessToken) {
+    // Never send a stale JWT on the public clock — Django returns 401 even on AllowAny.
+    if (!skipAuth && state.accessToken) {
       headers.Authorization = `Bearer ${state.accessToken}`;
-    } else if (options.requireAuth) {
+    } else if (requireAuth && !state.accessToken) {
       throw new Error("Login required — open Trading from the app");
     }
     let res;
     try {
-      res = await fetch(`${API_BASE}${pathName}`, { ...options, headers });
+      res = await fetch(`${API_BASE}${pathName}`, { ...fetchOpts, headers });
     } catch (e) {
       throw new Error(`Cannot reach API at ${API_BASE}`);
     }
@@ -565,10 +609,15 @@
     linkBanner.hidden = false;
   }
 
+  let pollInFlight = false;
+  let userPollAt = 0;
+
   async function pollState() {
+    if (pollInFlight) return;
+    pollInFlight = true;
     try {
-      // Public endpoint — drives graph/timer even without JWT
-      const data = await api("/state/");
+      // Public clock only — a leftover casino JWT must not 401 the graph.
+      const data = await api("/state/", { skipAuth: true });
       pollFailures = 0;
       setLinkStatus(data && data.stale ? "Market paused — reconnecting" : null);
       try {
@@ -576,18 +625,25 @@
       } catch (clockErr) {
         console.warn("applyGameClock", clockErr);
       }
-      if (state.accessToken) {
-        try { applyUserPayload(data); } catch (_) {}
-        state.apiReady = true;
-      } else {
+      if (state.accessToken && Date.now() - userPollAt > 1200) {
+        userPollAt = Date.now();
+        try {
+          const authed = await api("/state/");
+          applyUserPayload(authed);
+          state.apiReady = true;
+        } catch (_) {
+          state.apiReady = false;
+        }
+      } else if (!state.accessToken) {
         state.apiReady = false;
       }
       syncHud();
     } catch (e) {
       pollFailures++;
-      // One dropped poll is normal on mobile; only surface a sustained outage.
       if (pollFailures >= 3) setLinkStatus("Reconnecting to market…");
       console.warn("poll", e);
+    } finally {
+      pollInFlight = false;
     }
   }
 
@@ -803,9 +859,21 @@
     els.downAmount.textContent = "₹ " + Math.round(d).toLocaleString("en-IN");
     els.upPlayers.textContent = String(state.sentiment.upPlayers);
     els.downPlayers.textContent = String(state.sentiment.downPlayers);
+    syncPlayingHud();
     // Resize both the bottom bar AND the background halves together
     els.sentFillUp.style.width = upPct + "%";
     document.getElementById("sentiment").style.gridTemplateColumns = `${upPct}% ${downPct}%`;
+  }
+
+  let onlinePlaying = 1100 + Math.floor(Math.random() * 400);
+
+  function syncPlayingHud() {
+    if (!els.playingNum) return;
+    const roundPlayers =
+      (Number(state.sentiment.upPlayers) || 0) +
+      (Number(state.sentiment.downPlayers) || 0);
+    const n = Math.max(onlinePlaying, roundPlayers);
+    els.playingNum.textContent = n.toLocaleString("en-IN");
   }
 
   function pushCashedOut(name, mult, amt) {
@@ -815,13 +883,8 @@
   }
 
   function renderCashedOut() {
-    els.cashedOutList.innerHTML = state.cashed.map((c) => `
-      <div class="co-row">
-        <span class="name">${c.name}</span>
-        <span class="mult">+${c.mult}%</span>
-        <span class="amt">₹${c.amt.toFixed(2)}</span>
-      </div>
-    `).join("");
+    if (!els.cashedOutList) return;
+    els.cashedOutList.innerHTML = "";
   }
 
   function startCashSim() {
@@ -1378,7 +1441,6 @@
   // Identical inset on EVERY frame so size can't drift between swaps
   const HOST_INSET = 0.06;
 
-  let hostSpeakingOn = false;
   let hostFrameI = 0;
   let hostTimer = null;
   let hostNextBlinkAt = 0;
@@ -1523,6 +1585,7 @@
 
   function setHostSpeaking(on) {
     hostSpeakingOn = !!on;
+    syncHostVoice();
     if (!hostReady) return;
     clearHostTimer();
     hostBusyBlink = false;
@@ -1540,6 +1603,36 @@
     });
   }
 
+  // Photo-library host clips (old PNG host kept in photos/host-upright/live/)
+  const HOST_CLIPS = [
+    new URL("photos/host-video/girl-22.mp4", location.origin + "/trading/").href,
+    new URL("photos/host-video/girl-27.mp4", location.origin + "/trading/").href,
+  ];
+  let hostClipI = 0;
+
+  function startHostVideo() {
+    const vid = document.getElementById("hostClip");
+    if (!vid) {
+      startHostTalking();
+      return;
+    }
+    const playNext = () => {
+      vid.src = HOST_CLIPS[hostClipI % HOST_CLIPS.length];
+      hostClipI += 1;
+      vid.muted = true;
+      const p = vid.play();
+      if (p && typeof p.catch === "function") p.catch(() => {});
+    };
+    vid.addEventListener("ended", playNext);
+    document.addEventListener("pointerdown", () => {
+      if (vid.paused) {
+        const p = vid.play();
+        if (p && typeof p.catch === "function") p.catch(() => {});
+      }
+    }, { once: true, passive: true });
+    playNext();
+  }
+
   window.addEventListener("resize", () => {
     resizeCanvases();
     drawChart(state.phase === "settled" ? 1 : 0);
@@ -1549,7 +1642,10 @@
   // Boot — always poll public clock so graph runs; JWT only needed to bet
   resizeCanvases();
   renderSentiment();
-  startHostTalking();
+  startHostVideo();
+  applyVoiceMuteUi();
+  els.hostVoiceBtn?.addEventListener("click", toggleHostVoice);
+  document.addEventListener("pointerdown", () => syncHostVoice(), { once: true, passive: true });
   requestAnimationFrame(tick);
 
   state.accessToken = readAccessToken();
@@ -1560,6 +1656,11 @@
   // Always start the loop — do not gate setInterval on first poll success
   pollState();
   setInterval(pollState, 350);
+  syncPlayingHud();
+  setInterval(() => {
+    onlinePlaying = Math.max(900, onlinePlaying + Math.floor(Math.random() * 9 - 4));
+    syncPlayingHud();
+  }, 2800);
 
   function casinoUrl() {
     const token = readAccessToken() || "";

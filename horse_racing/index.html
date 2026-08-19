@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Gallop — 6 Horse Race</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Outfit:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/src/style.css" />
+    <link rel="stylesheet" href="/casino/live-wins.css" />
+    <script src="/casino/live-wins.js" defer></script>
+  </head>
+  <body>
+    <div id="app">
+      <section class="stage" aria-label="Race view">
+        <header class="hud">
+          <div class="brand">
+            <span class="brand-mark">GALLOP</span>
+            <span class="brand-sub">6 Horse Race</span>
+          </div>
+          <div class="race-meta">
+            <div class="stat">
+              <span class="stat-label">Leader</span>
+              <span class="stat-value" id="leader">—</span>
+            </div>
+            <div class="stat">
+              <span class="stat-label">Lap</span>
+              <span class="stat-value" id="lap">1 / 3</span>
+            </div>
+            <div class="stat">
+              <span class="stat-label">Speed</span>
+              <span class="stat-value" id="speed">0 mph</span>
+            </div>
+            <div class="stat">
+              <span class="stat-label">Time</span>
+              <span class="stat-value" id="timer">00:00.0</span>
+            </div>
+          </div>
+        </header>
+
+        <canvas id="scene"></canvas>
+
+        <div id="finishBanner" class="finish" hidden>
+          <p class="finish-title">Finish</p>
+          <p class="finish-time" id="finishTime"></p>
+          <p class="finish-bet" id="finishBet"></p>
+        </div>
+      </section>
+
+      <aside class="betting" aria-label="Betting">
+        <div class="betting-top">
+          <div class="bank">
+            <span class="bank-label">Bankroll</span>
+            <span class="bank-value" id="bankroll">₹1,000</span>
+          </div>
+          <p class="bet-status" id="betStatus">Pick a horse and stake to place a bet</p>
+          <div class="controls">
+            <button id="startBtn" type="button" hidden>Start Race</button>
+            <button id="resetBtn" type="button" hidden>Race Again</button>
+          </div>
+        </div>
+
+        <div class="horse-picks" id="horsePicks" role="listbox" aria-label="Select horse"></div>
+
+        <div class="bet-form">
+          <label class="amount-field">
+            <span>Bet amount</span>
+            <div class="amount-row">
+              <span class="currency">₹</span>
+              <input
+                id="betAmount"
+                type="number"
+                min="1"
+                step="1"
+                value="50"
+                inputmode="numeric"
+              />
+              <div class="quick-amounts">
+                <button type="button" data-amount="25">25</button>
+                <button type="button" data-amount="50">50</button>
+                <button type="button" data-amount="100">100</button>
+              </div>
+            </div>
+          </label>
+          <button id="placeBetBtn" type="button">Place Bet</button>
+        </div>
+
+        <ul class="open-bets" id="openBets" aria-live="polite"></ul>
+      </aside>
+    </div>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

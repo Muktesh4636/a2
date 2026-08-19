@@ -1,0 +1,60 @@
+# MediaMTX config for WebRTC capacity testing.
+# Serves one path ("loadtest") fed by the synthetic ffmpeg publisher.
+
+logLevel: info
+logDestinations: [stdout]
+
+readTimeout: 10s
+writeTimeout: 10s
+writeQueueSize: 512
+
+# Open publish/read (this rig is meant to run on a closed test network), with
+# api/metrics/pprof limited to loopback and private ranges.
+authInternalUsers:
+  - user: any
+    pass:
+    ips: []
+    permissions:
+      - action: publish
+      - action: read
+      - action: playback
+  - user: any
+    pass:
+    ips: [127.0.0.1/32, ::1/128, 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16]
+    permissions:
+      - action: api
+      - action: metrics
+      - action: pprof
+
+# Prometheus metrics — loadtest.py scrapes this for the server-side view.
+metrics: yes
+metricsAddress: :9998
+
+api: yes
+apiAddress: :9997
+
+rtsp: yes
+rtspAddress: :8554
+rtspTransports: [tcp, udp]
+
+rtmp: yes
+rtmpAddress: :1935
+
+hls: no
+
+webrtc: yes
+webrtcAddress: :8889
+# Single muxed UDP port keeps the published port list small.
+webrtcLocalUDPAddress: :8189
+webrtcLocalTCPAddress: ""
+# Inside Docker the container's own interface IPs are unreachable from the host,
+# so advertise the addresses clients actually dial instead.
+webrtcIPsFromInterfaces: no
+webrtcAdditionalHosts: [127.0.0.1, host.docker.internal]
+
+srt: yes
+srtAddress: :8890
+
+paths:
+  loadtest:
+    source: publisher

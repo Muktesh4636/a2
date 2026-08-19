@@ -8,7 +8,7 @@ object Constants {
 
     /** HTTPS origin for casino + web games (WebView). */
     const val WEB_ORIGIN = "https://gunduata.tech"
-    const val CASINO_PATH = "/casino/"
+    const val CASINO_PATH = "/casino/?v=20260818"
     const val GUNDU_ATA_PATH = "/game/"
     const val CASINO_URL = "$WEB_ORIGIN$CASINO_PATH"
     const val GUNDU_ATA_WEB_URL = "$WEB_ORIGIN$GUNDU_ATA_PATH"

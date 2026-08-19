@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import './App.css'
 import GameField from './GameField'
 import { api, readAccessToken } from './api'
+import { playJump, unlockAudio, isMusicOn, setMusicOn } from './sounds'
 
 const ASSET = (p) => `${import.meta.env.BASE_URL}${String(p).replace(/^\//, '')}`
 
@@ -114,6 +115,7 @@ export default function App() {
   const [diffOpen, setDiffOpen] = useState(false)
   const [authReady, setAuthReady] = useState(false)
   const [authError, setAuthError] = useState('')
+  const [musicOn, setMusicOnUi] = useState(isMusicOn)
   const busy = useRef(false)
   const fieldRef = useRef(null)
   const stepRef = useRef(0)
@@ -128,11 +130,13 @@ export default function App() {
   betRef.current = bet
 
   useEffect(() => {
-    const id = setInterval(() => {
-      setLive(nextLive(liveRef.current))
-      setOnline(o => Math.max(900, o + Math.floor(Math.random() * 9 - 4)))
-    }, 2800)
-    return () => clearInterval(id)
+    const arm = () => unlockAudio()
+    document.addEventListener('pointerdown', arm, { capture: true })
+    document.addEventListener('touchstart', arm, { capture: true })
+    return () => {
+      document.removeEventListener('pointerdown', arm, { capture: true })
+      document.removeEventListener('touchstart', arm, { capture: true })
+    }
   }, [])
 
   useEffect(() => {
@@ -199,6 +203,7 @@ export default function App() {
   }
 
   function playReveal(index, tile, { dead, finished, mult }) {
+    playJump()
     setAnim(index === 0 ? 'jump' : 'go')
     const nextStep = index + 1
     stepRef.current = nextStep
@@ -349,25 +354,6 @@ export default function App() {
   return (
     <div className="app">
       <header className="header">
-        <button
-          className="gundu-back"
-          type="button"
-          aria-label="Back to Casino"
-          onClick={() => {
-            const token =
-              new URLSearchParams(location.search).get('token') ||
-              localStorage.getItem('gundu_access_token') ||
-              localStorage.getItem('access_token') ||
-              ''
-            const u = new URL('/casino/', location.origin)
-            if (token) u.searchParams.set('token', token)
-            location.href = u.toString()
-          }}
-        >
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <path d="M15.5 4.5 8 12l7.5 7.5" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"/>
-          </svg>
-        </button>
         <div className="header__logo">
           <img src={ASSET('assets/logo_mobile.svg')} alt="Chicken Road" />
         </div>
@@ -375,9 +361,20 @@ export default function App() {
           <div className="header__balance">
             {Math.round(balance).toLocaleString('en-IN')}
           </div>
-          <button className="header__icon" type="button" aria-label="Menu">
-            <svg width="24" height="25" viewBox="0 0 24 25" fill="none">
-              <path d="M4.125 18.875H19.875M4.125 12.875H19.875M4.125 6.875H19.875" stroke="white" strokeWidth="1.5" strokeLinecap="round"/>
+          <button
+            className={`header__icon${musicOn ? '' : ' header__icon--muted'}`}
+            type="button"
+            aria-label={musicOn ? 'Mute music' : 'Unmute music'}
+            title={musicOn ? 'Music on' : 'Music off'}
+            onClick={() => {
+              const next = !musicOn
+              setMusicOn(next)
+              setMusicOnUi(next)
+              if (next) unlockAudio()
+            }}
+          >
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path fill="currentColor" d="M4 9v6h3.5L12 19.5V4.5L7.5 9H4zm11.5 3c0-1.8-1-3.4-2.5-4.2v8.4c1.5-.8 2.5-2.4 2.5-4.2z"/>
             </svg>
           </button>
         </div>

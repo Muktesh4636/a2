@@ -8,7 +8,24 @@ Tapping **Gundu Ata** in the app opens `GameWebViewActivity` with the casino lob
 https://gunduata.tech/casino/?token=<JWT>&refresh=<JWT>
 ```
 
-From the lobby, every tile opens its web game with `?token=` (Gundu Ata WebGL, trading, roulette, chicken road, vortex, …).
+From the lobby, every tile opens its web game with `?token=` (Gundu Ata WebGL, trading, roulette, chicken road, vortex, Line games, …).
+
+## Line games (JWT deep links)
+
+Same JWT as roulette / trading / chicken:
+
+```
+https://gunduata.tech/circle-game/?token=<JWT>
+https://gunduata.tech/stop-bar/?token=<JWT>
+https://gunduata.tech/spin-dial/?token=<JWT>
+https://gunduata.tech/mines-path/?token=<JWT>
+https://gunduata.tech/dice-over-under/?token=<JWT>
+https://gunduata.tech/color-match/?token=<JWT>
+https://gunduata.tech/wheel-pockets/?token=<JWT>
+https://gunduata.tech/wave-surf/?token=<JWT>
+https://gunduata.tech/keno-pick/?token=<JWT>
+https://gunduata.tech/hi-lo-cards/?token=<JWT>
+```
 
 ## AndroidBridge
 

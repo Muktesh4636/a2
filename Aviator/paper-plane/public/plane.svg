@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 80" fill="none">
+  <!-- paper airplane, nose right -->
+  <defs>
+    <linearGradient id="paper" x1="20" y1="10" x2="140" y2="70">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="55%" stop-color="#f1f5f9"/>
+      <stop offset="100%" stop-color="#cbd5e1"/>
+    </linearGradient>
+    <linearGradient id="shade" x1="0" y1="0" x2="0" y2="1">
+      <stop stop-color="#94a3b8" stop-opacity="0.35"/>
+      <stop offset="1" stop-color="#64748b" stop-opacity="0.55"/>
+    </linearGradient>
+  </defs>
+  <!-- left wing (under) -->
+  <path d="M18 42 L78 38 L148 28 L78 48 Z" fill="url(#shade)"/>
+  <!-- body / right wing top -->
+  <path d="M18 42 L148 28 L78 22 Z" fill="url(#paper)"/>
+  <!-- center fold -->
+  <path d="M18 42 L148 28" stroke="#94a3b8" stroke-width="1.2" opacity="0.7"/>
+  <!-- belly fold -->
+  <path d="M18 42 L78 48 L148 28" fill="#e2e8f0"/>
+  <path d="M78 38 L148 28 L78 48 Z" fill="#f8fafc" opacity="0.9"/>
+  <!-- nose tip accent -->
+  <path d="M138 30 L152 28 L140 34 Z" fill="#38bdf8" opacity="0.55"/>
+  <!-- soft edge lines -->
+  <path d="M40 36 L100 30" stroke="#fff" stroke-width="1" opacity="0.5"/>
+</svg>

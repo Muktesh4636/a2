@@ -7,18 +7,14 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="styles.css?v=69" />
+  <link rel="stylesheet" href="styles.css?v=74" />
 </head>
 <body>
   <div class="phone">
     <header class="topbar">
       <div class="brand">
-        <button type="button" class="gundu-back" id="gunduBackBtn" aria-label="Back to Casino">
-          <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
-            <path d="M15.5 4.5 8 12l7.5 7.5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-        </button>
         <span class="logo">GROW<span>MORE</span></span>
+        <span class="playing-count"><strong id="playingNum">1,240</strong> playing</span>
       </div>
       <div class="top-right">
         <div class="wallet">
@@ -49,9 +45,18 @@
 
       <div class="host-pip" id="hostPip">
         <div class="host-video">
-          <canvas class="host-face" id="hostFace" width="360" height="440" aria-label="Live host"></canvas>
+          <canvas class="host-face host-face-still" id="hostFace" width="360" height="440" aria-hidden="true" hidden></canvas>
+          <video class="host-face" id="hostClip" playsinline muted autoplay></video>
         </div>
         <span class="live-tag">LIVE</span>
+        <button type="button" class="host-voice-btn" id="hostVoiceBtn" aria-label="Mute host" title="Sound">
+          <svg class="icon-on" viewBox="0 0 24 24" aria-hidden="true">
+            <path fill="currentColor" d="M4 9v6h3.5L12 19.5V4.5L7.5 9H4zm11.5 3c0-1.8-1-3.4-2.5-4.2v8.4c1.5-.8 2.5-2.4 2.5-4.2zm2.5 0c0 2.9-1.6 5.4-4 6.7v2.2c3.5-1.4 6-4.8 6-8.9s-2.5-7.5-6-8.9v2.2c2.4 1.3 4 3.8 4 6.7z"/>
+          </svg>
+          <svg class="icon-off" viewBox="0 0 24 24" aria-hidden="true">
+            <path fill="currentColor" d="M16.5 12c0-1.8-1-3.4-2.5-4.2v2.4l2.4 2.4c.06-.2.1-.4.1-.6zM19 12c0 .9-.2 1.8-.5 2.6l1.5 1.5C20.6 15.1 21 13.6 21 12c0-4.1-2.5-7.5-6-8.9v2.2c2.4 1.3 4 3.8 4 6.7zM4.3 3 3 4.3 7.7 9H4v6h3.5L12 19.5v-6.2l4.2 4.2c-.7.5-1.4.9-2.2 1.2v2.2c1.4-.3 2.6-1 3.7-1.8L19.7 21 21 19.7 4.3 3zM12 4.5v4.7L9.8 7.05 12 4.5z"/>
+          </svg>
+        </button>
       </div>
 
       <div class="bets-banner" id="betsBanner">
@@ -150,7 +155,7 @@
   </div>
 
   <div class="toast" id="toast" hidden></div>
-  <script src="game.js?v=73"></script>
+  <script src="game.js?v=78"></script>
     <link rel="stylesheet" href="/casino/live-wins.css" />
     <script src="/casino/live-wins.js" defer></script>
 </body>

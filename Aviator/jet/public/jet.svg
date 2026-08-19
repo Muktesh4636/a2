@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 72" fill="none">
+  <!-- sleek fighter / afterburner jet, nose right -->
+  <g transform="translate(8,8)">
+    <!-- exhaust glow -->
+    <ellipse cx="10" cy="30" rx="14" ry="7" fill="#ff6b1a" opacity="0.55"/>
+    <ellipse cx="4" cy="30" rx="8" ry="4" fill="#ffd166" opacity="0.7"/>
+    <!-- fuselage -->
+    <path d="M18 30 L46 24 L118 22 L138 28 L118 36 L46 36 Z" fill="#d7e6f2"/>
+    <path d="M46 24 L90 18 L118 22 L90 28 Z" fill="#9fb4c8"/>
+    <!-- canopy -->
+    <path d="M78 22 L102 20 L108 26 L84 28 Z" fill="#1a3a55"/>
+    <path d="M82 23 L100 21.5 L104 25.5 L86 27 Z" fill="#2de2e6" opacity="0.45"/>
+    <!-- main wing -->
+    <path d="M52 32 L78 34 L64 58 L48 40 Z" fill="#7f96ab"/>
+    <path d="M56 34 L74 35.5 L64 52 Z" fill="#b8c9d8"/>
+    <!-- far wing hint -->
+    <path d="M58 24 L82 18 L70 8 L54 20 Z" fill="#5f7388"/>
+    <!-- vertical stabilizer -->
+    <path d="M36 24 L48 8 L52 24 Z" fill="#8aa0b4"/>
+    <!-- nose cone -->
+    <path d="M118 22 L144 28 L118 36 Z" fill="#2de2e6"/>
+    <!-- intake / detail -->
+    <rect x="60" y="28" width="18" height="4" rx="1" fill="#2a4055"/>
+  </g>
+</svg>

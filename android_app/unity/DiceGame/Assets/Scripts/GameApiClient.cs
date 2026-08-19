@@ -17,10 +17,10 @@ public class GameApiClient : MonoBehaviour
 {
     [Header("API Config")]
     [Tooltip("Base HTTP URL (no trailing slash)")]
-    [SerializeField] private string baseUrl = "https://gunduata.club";
+    [SerializeField] private string baseUrl = "https://gunduata.tech";
 
     [Tooltip("Base WebSocket URL (ws://host:port/ws/game/)")]
-    [SerializeField] private string wsUrl = "wss://gunduata.club/ws/game/";
+    [SerializeField] private string wsUrl = "wss://gunduata.tech/ws/game/";
 
     // Auth tokens (kept in memory; persist externally if desired)
     private string accessToken = null;

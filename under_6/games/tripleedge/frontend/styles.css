@@ -1,0 +1,785 @@
+:root {
+  --ink: #1a1410;
+  --ink-soft: #3d3228;
+  --cream: #f2e6d4;
+  --sand: #d9c4a0;
+  --felt: #1f4d3a;
+  --felt-deep: #143528;
+  --gold: #e0a84a;
+  --gold-deep: #b87820;
+  --under: #2a6f9e;
+  --six: #c45c26;
+  --over: #8b3a5c;
+  --win: #7dcea0;
+  --lose: #e8a0a0;
+  --radius: 4px;
+  --font-display: "Bebas Neue", sans-serif;
+  --font-body: "DM Sans", sans-serif;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  min-height: 100%;
+}
+
+body {
+  font-family: var(--font-body);
+  color: var(--cream);
+  background: #000000;
+  overflow-x: hidden;
+}
+
+.atmosphere {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background: #000000;
+}
+
+.atmosphere::after {
+  display: none;
+}
+
+.topbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1.1rem 1.5rem;
+  max-width: 720px;
+  margin: 0 auto;
+}
+
+.bank {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.bank-label {
+  font-size: 0.7rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--sand);
+  opacity: 0.8;
+}
+
+.bank-value {
+  font-family: var(--font-display);
+  font-size: 1.85rem;
+  letter-spacing: 0.04em;
+  color: var(--gold);
+  line-height: 1;
+}
+
+.bank-value::before {
+  content: "₹";
+  font-size: 0.75em;
+  margin-right: 0.1em;
+  opacity: 0.75;
+}
+
+.round {
+  font-size: 0.85rem;
+  color: var(--sand);
+  text-align: right;
+  max-width: 12rem;
+}
+
+.stage {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 0 1.25rem 3rem;
+}
+
+.brand-block {
+  text-align: center;
+  padding: 0.15rem 0 1.1rem;
+  animation: rise 0.7s ease-out both;
+}
+
+.brand {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: clamp(3.2rem, 12vw, 5rem);
+  letter-spacing: 0.06em;
+  line-height: 0.85;
+  color: var(--cream);
+  text-shadow: 0 0.06em 0 rgba(0, 0, 0, 0.35);
+}
+
+.tagline {
+  margin: 0.55rem 0 0.25rem;
+  font-family: var(--font-body);
+  font-size: clamp(0.95rem, 3vw, 1.15rem);
+  font-weight: 600;
+  color: var(--gold);
+}
+
+.lede {
+  margin: 0 auto;
+  max-width: 28rem;
+  font-size: 0.88rem;
+  line-height: 1.4;
+  color: var(--sand);
+  opacity: 0.9;
+}
+
+.table {
+  opacity: 1;
+}
+
+/* ——— Real WebGL 3D table + HTML play overlay ——— */
+.table-scene {
+  position: relative;
+  height: clamp(420px, 70vw, 580px);
+  margin: 0.1rem 0 0.2rem;
+  overflow: hidden;
+  border-radius: 8px;
+  background: #000000;
+}
+
+.table-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  z-index: 0;
+}
+
+/* Always top-down — flat card overlay on the table */
+.play-surface {
+  position: absolute;
+  left: 50%;
+  top: 48%;
+  width: min(54%, 360px);
+  transform: translate(-50%, -50%) perspective(1200px) rotateX(0deg);
+  transform-origin: center center;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 1.1rem 0.9rem 0.7rem;
+  pointer-events: none;
+}
+
+.play-surface .cards,
+.play-surface .result-banner {
+  pointer-events: auto;
+}
+
+.cards {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(1.6rem, 6vw, 2.8rem);
+  min-height: 120px;
+  perspective: 900px;
+}
+
+.result-banner[hidden] {
+  display: none !important;
+}
+
+.result-banner {
+  position: relative;
+  z-index: 4;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+  margin-top: 0.85rem;
+  padding: 0.55rem 0.9rem 0.65rem;
+  min-width: min(100%, 220px);
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.78);
+  border: 1px solid rgba(224, 168, 74, 0.45);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+}
+
+.card-slot {
+  position: relative;
+  width: 72px;
+  height: 102px;
+  perspective: 1100px;
+  transform-style: preserve-3d;
+  transition: transform 0.55s cubic-bezier(0.2, 0.8, 0.2, 1);
+  z-index: 1;
+}
+
+/* Zoom card up for the reveal */
+.card-slot.is-revealing {
+  transform: scale(2.05);
+  z-index: 12;
+}
+
+.card-shadow {
+  position: absolute;
+  left: 10%;
+  right: 10%;
+  bottom: -12px;
+  height: 20px;
+  border-radius: 50%;
+  background: radial-gradient(ellipse at center, rgba(0, 0, 0, 0.55), transparent 72%);
+  filter: blur(3px);
+  opacity: 0;
+  transform: scaleX(0.75);
+  transition:
+    opacity 0.4s ease,
+    transform 0.75s cubic-bezier(0.22, 0.9, 0.3, 1),
+    filter 0.75s ease;
+  pointer-events: none;
+}
+
+.card-slot[data-landed="true"] .card-shadow {
+  opacity: 0.9;
+  transform: scaleX(1);
+}
+
+.card-slot[data-flipping="true"] .card-shadow {
+  opacity: 0.3;
+  transform: scaleX(1.4) translateY(8px);
+  filter: blur(7px);
+}
+
+/* Cards stay off the table until deal */
+.card-rig {
+  position: absolute;
+  inset: 0;
+  transform-origin: center bottom;
+  will-change: transform;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: transform 0.75s cubic-bezier(0.16, 0.84, 0.22, 1.08);
+}
+
+.card-rig[data-state="hidden"] {
+  opacity: 0;
+  visibility: hidden;
+  transform: perspective(700px) translate3d(0, -130px, 100px) rotateX(55deg) scale(0.4);
+}
+
+.card-rig[data-state="deal-start"] {
+  opacity: 0;
+  visibility: visible;
+  transition: none;
+}
+
+.card-slot[data-slot="1"] .card-rig[data-state="deal-start"] {
+  transform: perspective(700px) translate3d(-40px, -140px, 90px) rotateX(52deg) rotateZ(-22deg) scale(0.4);
+}
+
+.card-slot[data-slot="2"] .card-rig[data-state="deal-start"] {
+  transform: perspective(700px) translate3d(40px, -140px, 90px) rotateX(52deg) rotateZ(22deg) scale(0.4);
+}
+
+.card-rig[data-state="dealt"] {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+}
+
+.card-slot[data-slot="1"] .card-rig[data-state="dealt"] {
+  opacity: 1;
+  visibility: visible;
+  transform: perspective(700px) rotateY(-4deg) rotateX(0deg) rotateZ(-1deg) translateZ(4px);
+}
+
+.card-slot[data-slot="2"] .card-rig[data-state="dealt"] {
+  opacity: 1;
+  visibility: visible;
+  transform: perspective(700px) rotateY(4deg) rotateX(0deg) rotateZ(1deg) translateZ(4px);
+}
+
+.card {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  transform-style: preserve-3d;
+  transform: rotateY(0deg) scaleX(1);
+  transition: transform 0.42s cubic-bezier(0.4, 0.05, 0.2, 1);
+  will-change: transform;
+}
+
+.card[data-face="up"] {
+  transform: rotateY(0deg) scaleX(1);
+}
+
+.card[data-flip="out"] {
+  transform: rotateY(90deg) scaleX(0.85);
+}
+
+.card[data-flip="in"] {
+  transition: none;
+  transform: rotateY(-90deg) scaleX(0.85);
+}
+
+.card-face {
+  position: absolute;
+  inset: 0;
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow:
+    0 16px 30px rgba(0, 0, 0, 0.5),
+    0 2px 0 rgba(255, 255, 255, 0.14) inset;
+}
+
+.card-face::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    125deg,
+    rgba(255, 255, 255, 0.32) 0%,
+    transparent 40%,
+    transparent 60%,
+    rgba(0, 0, 0, 0.1) 100%
+  );
+  pointer-events: none;
+  z-index: 3;
+}
+
+.card-back {
+  background:
+    radial-gradient(circle at 50% 45%, rgba(242, 230, 212, 0.14), transparent 45%),
+    repeating-linear-gradient(
+      -35deg,
+      #6b1f2e,
+      #6b1f2e 6px,
+      #8a2a3d 6px,
+      #8a2a3d 12px
+    );
+  border: 3px solid var(--cream);
+  display: grid;
+  place-items: center;
+  z-index: 2;
+}
+
+.card[data-face="up"] .card-back {
+  visibility: hidden;
+}
+
+.back-mark {
+  font-family: var(--font-display);
+  font-size: 1.7rem;
+  color: rgba(242, 230, 212, 0.42);
+  text-shadow: 0 2px 0 rgba(0, 0, 0, 0.25);
+  border: 2px solid rgba(242, 230, 212, 0.28);
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+}
+
+.card-front {
+  background: linear-gradient(160deg, #fffdf8 0%, #f3ead8 100%);
+  color: var(--ink);
+  border: 2px solid #e4d6bf;
+  display: block;
+  z-index: 1;
+  visibility: hidden;
+}
+
+.card[data-face="up"] .card-front {
+  visibility: visible;
+  z-index: 2;
+}
+
+.card-front .corner {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  line-height: 1;
+  z-index: 2;
+}
+
+.card-front .corner.top {
+  top: 5px;
+  left: 5px;
+}
+
+.card-front .corner.bottom {
+  bottom: 5px;
+  right: 5px;
+  transform: rotate(180deg);
+}
+
+.card-front .rank {
+  font-family: var(--font-display);
+  font-size: 0.95rem;
+  letter-spacing: 0.02em;
+}
+
+.card-front .suit {
+  font-size: 0.7rem;
+  margin-top: 1px;
+}
+
+.card-front .center-suit {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-size: 2.1rem;
+  z-index: 1;
+}
+
+.card-front.red {
+  color: #b03333;
+}
+
+@media (max-width: 480px) {
+  .table-scene {
+    height: 360px;
+  }
+
+  .play-surface {
+    width: 72%;
+    top: 48%;
+  }
+
+  .card-slot {
+    width: 62px;
+    height: 88px;
+  }
+
+  .cards {
+    min-height: 100px;
+  }
+
+  .card-slot.is-revealing {
+    transform: scale(1.9);
+  }
+
+  .card-front .center-suit {
+    font-size: 1.9rem;
+  }
+
+  .back-mark {
+    width: 30px;
+    height: 30px;
+    font-size: 1.5rem;
+  }
+
+}
+
+.sum-orb {
+  display: flex;
+  flex-direction: row;
+  align-items: baseline;
+  justify-content: center;
+  gap: 0.4rem;
+  border: none;
+  background: none;
+  box-shadow: none;
+  width: auto;
+  height: auto;
+  transform: none;
+}
+
+.sum-orb.reveal .sum-value {
+  color: var(--gold);
+}
+
+.sum-label {
+  font-size: 0.7rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--sand);
+  opacity: 0.85;
+}
+
+.sum-value {
+  font-family: var(--font-display);
+  font-size: 1.7rem;
+  line-height: 1;
+  color: var(--cream);
+}
+
+.outcome {
+  margin: 0;
+  text-align: center;
+  font-family: var(--font-display);
+  font-size: 1.2rem;
+  letter-spacing: 0.06em;
+  color: var(--cream);
+}
+
+.outcome.win {
+  color: var(--win);
+  animation: pulse 0.55s ease;
+}
+
+.outcome.lose {
+  color: var(--lose);
+}
+
+.bet-board {
+  display: grid;
+  grid-template-columns: 1fr 1.1fr 1fr;
+  gap: 0.55rem;
+  margin-top: 0.15rem;
+}
+
+.bet-lane {
+  appearance: none;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  padding: 0.95rem 0.5rem;
+  cursor: pointer;
+  color: var(--cream);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.2rem;
+  transition:
+    transform 0.18s ease,
+    box-shadow 0.18s ease,
+    border-color 0.18s ease,
+    filter 0.18s ease;
+}
+
+.bet-lane:hover:not(:disabled) {
+  transform: translateY(-2px);
+  filter: brightness(1.08);
+}
+
+.bet-lane:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.bet-lane.selected {
+  border-color: var(--gold);
+  box-shadow: 0 0 0 1px var(--gold), 0 10px 24px rgba(0, 0, 0, 0.25);
+  transform: translateY(-3px);
+  opacity: 1;
+}
+
+.bet-lane.under {
+  background: linear-gradient(160deg, #3479a8, var(--under));
+}
+
+.bet-lane.six {
+  background: linear-gradient(160deg, #d9783a, var(--six));
+}
+
+.bet-lane.edge {
+  background: linear-gradient(160deg, #d4a84a, #9a6e18);
+}
+
+.cards-triple {
+  gap: clamp(0.6rem, 3vw, 1.2rem);
+}
+
+.cards-triple .card-slot {
+  width: 62px;
+  height: 88px;
+}
+
+.bet-lane.over {
+  background: linear-gradient(160deg, #a3486d, var(--over));
+}
+
+.bet-lane.winner-flash {
+  animation: laneWin 0.7s ease;
+}
+
+.lane-name {
+  font-family: var(--font-display);
+  font-size: 1.55rem;
+  letter-spacing: 0.1em;
+  line-height: 1;
+}
+
+.lane-range {
+  font-size: 0.85rem;
+  opacity: 0.9;
+}
+
+.lane-odds {
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0.75;
+  margin-top: 0.15rem;
+}
+
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.85rem;
+  margin-top: 1.15rem;
+}
+
+.chips {
+  display: flex;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+}
+
+.chip {
+  appearance: none;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  border: 2px dashed rgba(242, 230, 212, 0.55);
+  background: radial-gradient(circle at 35% 30%, #5a4634, #2e241c);
+  color: var(--cream);
+  font-family: var(--font-display);
+  font-size: 1.05rem;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  transition: transform 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.chip:hover {
+  transform: scale(1.06);
+}
+
+.chip.selected {
+  border-style: solid;
+  border-color: var(--gold);
+  color: var(--gold);
+}
+
+.deal-btn {
+  appearance: none;
+  flex: 1;
+  min-width: 140px;
+  border: none;
+  border-radius: var(--radius);
+  padding: 0.95rem 1.4rem;
+  font-family: var(--font-display);
+  font-size: 1.35rem;
+  letter-spacing: 0.12em;
+  cursor: pointer;
+  color: var(--ink);
+  background: linear-gradient(180deg, #f0c56e, var(--gold-deep));
+  box-shadow: 0 6px 0 #8a5a14, 0 10px 22px rgba(0, 0, 0, 0.3);
+  transition: transform 0.12s ease, box-shadow 0.12s ease, filter 0.12s ease;
+}
+
+.deal-btn:hover:not(:disabled) {
+  filter: brightness(1.05);
+  transform: translateY(-1px);
+}
+
+.deal-btn:active:not(:disabled) {
+  transform: translateY(3px);
+  box-shadow: 0 2px 0 #8a5a14, 0 4px 12px rgba(0, 0, 0, 0.25);
+}
+
+.deal-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.rules {
+  margin-top: 2.25rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid rgba(217, 196, 160, 0.2);
+  animation: rise 0.7s 0.22s ease-out both;
+}
+
+.rules h2 {
+  margin: 0 0 0.75rem;
+  font-family: var(--font-display);
+  font-size: 1.5rem;
+  letter-spacing: 0.1em;
+  color: var(--sand);
+}
+
+.rules ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.rules li {
+  font-size: 0.92rem;
+  color: var(--sand);
+  line-height: 1.4;
+}
+
+.rules strong {
+  color: var(--cream);
+}
+
+.rules em {
+  font-style: normal;
+  color: var(--gold);
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  40% {
+    transform: scale(1.06);
+  }
+}
+
+@keyframes laneWin {
+  0%,
+  100% {
+    filter: brightness(1);
+  }
+  40% {
+    filter: brightness(1.35);
+  }
+}
+
+@media (max-width: 480px) {
+  .sum-value {
+    font-size: 1.5rem;
+  }
+
+  .outcome {
+    font-size: 1.05rem;
+  }
+
+  .lane-name {
+    font-size: 1.25rem;
+  }
+
+  .controls {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .chips {
+    justify-content: center;
+  }
+}

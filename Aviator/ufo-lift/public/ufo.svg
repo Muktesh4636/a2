@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 100" fill="none">
+  <defs>
+    <radialGradient id="dome" cx="50%" cy="40%" r="55%">
+      <stop offset="0%" stop-color="#d8b4fe"/>
+      <stop offset="45%" stop-color="#a855f7"/>
+      <stop offset="100%" stop-color="#4c1d95"/>
+    </radialGradient>
+    <linearGradient id="saucer" x1="0" y1="0" x2="0" y2="1">
+      <stop stop-color="#e2e8f0"/>
+      <stop offset="0.45" stop-color="#94a3b8"/>
+      <stop offset="1" stop-color="#334155"/>
+    </linearGradient>
+    <radialGradient id="beam" cx="50%" cy="0%" r="80%">
+      <stop offset="0%" stop-color="#4ade80" stop-opacity="0.55"/>
+      <stop offset="100%" stop-color="#4ade80" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="1.5" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  <!-- tractor beam -->
+  <path d="M70 58 L50 98 L130 98 L110 58 Z" fill="url(#beam)"/>
+  <!-- saucer rim -->
+  <ellipse cx="90" cy="58" rx="78" ry="18" fill="url(#saucer)"/>
+  <ellipse cx="90" cy="54" rx="70" ry="10" fill="#cbd5e1" opacity="0.55"/>
+  <!-- lights -->
+  <g filter="url(#glow)">
+    <circle cx="40" cy="58" r="3.2" fill="#4ade80"/>
+    <circle cx="62" cy="64" r="3.2" fill="#22d3ee"/>
+    <circle cx="90" cy="66" r="3.5" fill="#f472b6"/>
+    <circle cx="118" cy="64" r="3.2" fill="#22d3ee"/>
+    <circle cx="140" cy="58" r="3.2" fill="#4ade80"/>
+  </g>
+  <!-- glass dome -->
+  <ellipse cx="90" cy="40" rx="28" ry="22" fill="url(#dome)" opacity="0.95"/>
+  <ellipse cx="82" cy="32" rx="10" ry="7" fill="#f5d0fe" opacity="0.45"/>
+  <!-- alien silhouette -->
+  <ellipse cx="90" cy="40" rx="7" ry="9" fill="#166534" opacity="0.55"/>
+  <circle cx="87" cy="38" r="1.6" fill="#4ade80"/>
+  <circle cx="93" cy="38" r="1.6" fill="#4ade80"/>
+</svg>

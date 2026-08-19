@@ -1,0 +1,50 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 90" fill="none">
+  <defs>
+    <linearGradient id="bodyTop" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#64748b"/>
+      <stop offset="45%" stop-color="#475569"/>
+      <stop offset="100%" stop-color="#334155"/>
+    </linearGradient>
+    <linearGradient id="bodyBot" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#f8fafc"/>
+      <stop offset="100%" stop-color="#e2e8f0"/>
+    </linearGradient>
+    <linearGradient id="finGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#64748b"/>
+      <stop offset="100%" stop-color="#1e293b"/>
+    </linearGradient>
+  </defs>
+  <!-- hinge at peduncle ~ x=48 -->
+  <g id="tail" transform="translate(48 45)">
+    <path d="M0 -3 C-8 -14 -18 -28 -28 -36 L-34 -20 C-26 -14 -18 -8 -12 -2 L-34 0 L-12 2 C-18 8 -26 14 -34 20 L-28 36 C-18 28 -8 14 0 3 Z" fill="url(#finGrad)"/>
+    <path d="M0 -2 L-22 -1 L-22 1 L0 2 Z" fill="#94a3b8" opacity="0.5"/>
+  </g>
+  <g id="body">
+    <!-- belly -->
+    <ellipse cx="120" cy="50" rx="70" ry="18" fill="url(#bodyBot)"/>
+    <!-- back -->
+    <path d="M52 45 C70 22 100 18 130 20 C160 22 185 32 192 42 C185 48 160 52 130 54 C100 56 70 54 52 48 Z" fill="url(#bodyTop)"/>
+    <!-- snout -->
+    <path d="M185 42 C198 40 210 42 214 45 C210 50 198 52 185 50 Z" fill="#64748b"/>
+    <path d="M185 46 C198 48 208 48 212 47 C208 50 198 52 185 50 Z" fill="#f1f5f9"/>
+    <!-- gills -->
+    <path d="M168 36 C170 42 170 48 168 54" stroke="#1e293b" stroke-width="1.2" opacity="0.45"/>
+    <path d="M173 35 C175 42 175 49 173 55" stroke="#1e293b" stroke-width="1.2" opacity="0.4"/>
+    <path d="M178 35 C180 42 180 49 178 54" stroke="#1e293b" stroke-width="1.1" opacity="0.35"/>
+    <!-- eye -->
+    <circle cx="196" cy="40" r="2.4" fill="#0f172a"/>
+    <circle cx="196.6" cy="39.4" r="0.7" fill="#e2e8f0"/>
+    <!-- mouth hint -->
+    <path d="M200 48 C206 49 210 48 212 47" stroke="#334155" stroke-width="1" opacity="0.5"/>
+  </g>
+  <g id="dorsal" transform="translate(118 22)">
+    <path d="M0 20 L-4 2 L8 -18 L14 6 Z" fill="url(#finGrad)"/>
+    <path d="M2 16 L6 -6" stroke="#94a3b8" stroke-width="1" opacity="0.35"/>
+  </g>
+  <g id="pectoral" transform="translate(150 52)">
+    <path d="M0 0 L18 14 L8 18 L-2 8 Z" fill="url(#finGrad)"/>
+  </g>
+  <g id="pelvic" transform="translate(95 58)">
+    <path d="M0 0 L10 8 L2 10 Z" fill="#475569"/>
+  </g>
+</svg>

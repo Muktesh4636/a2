@@ -36,6 +36,8 @@ See `android_app/APK_WEBVIEW_GAMES.md`.
 | Chicken Road | `https://gunduata.tech/chicken-road/?token=` |
 | Chicken Road 2 | `https://gunduata.tech/chicken-road-2/?token=` |
 | Vortex | `https://gunduata.tech/vortex/?token=` |
+| Vortex 1 | `https://gunduata.tech/vortex-1/?token=` |
+| VIP Vortex | `https://gunduata.tech/vip-vortex/?token=` |
 | Mines | `https://gunduata.tech/mines/?token=` |
 | Steps | `https://gunduata.tech/steps/?token=` |
 | Boxes | `https://gunduata.tech/boxes/?token=` |
@@ -47,6 +49,35 @@ See `android_app/APK_WEBVIEW_GAMES.md`.
 | Air Balloon | `https://gunduata.tech/air-balloon/?token=` |
 | Chit Pat | `https://gunduata.tech/chit-pat/?token=` *(native Kotlin — open Activity)* |
 | Rangu | `https://gunduata.tech/rangu/?token=` *(native Kotlin / colour API)* |
+| Circle Bet | `https://gunduata.tech/circle-game/?token=` |
+| Stop Bar | `https://gunduata.tech/stop-bar/?token=` |
+| Spin Dial | `https://gunduata.tech/spin-dial/?token=` |
+| Mines Path | `https://gunduata.tech/mines-path/?token=` |
+| Dice Over Under | `https://gunduata.tech/dice-over-under/?token=` |
+| Color Match | `https://gunduata.tech/color-match/?token=` |
+| Wheel Pockets | `https://gunduata.tech/wheel-pockets/?token=` |
+| Wave Surf | `https://gunduata.tech/wave-surf/?token=` |
+| Keno Pick | `https://gunduata.tech/keno-pick/?token=` |
+| Hi-Lo Cards | `https://gunduata.tech/hi-lo-cards/?token=` |
+
+## Line games — JWT for app developers
+
+Same pattern as Chicken Road / Roulette / Stock Market:
+
+```
+https://gunduata.tech/casino/?token=<JWT_ACCESS_TOKEN>&refresh=<JWT_REFRESH>
+```
+
+Lobby tiles open each Line game with `?token=` appended. Direct deep links:
+
+```
+https://gunduata.tech/circle-game/?token=<JWT_ACCESS_TOKEN>
+https://gunduata.tech/wave-surf/?token=<JWT_ACCESS_TOKEN>
+# …same for stop-bar, spin-dial, mines-path, dice-over-under,
+#    color-match, wheel-pockets, keno-pick, hi-lo-cards
+```
+
+The game UI stores the token and sends `Authorization: Bearer <JWT>` on API calls.
 
 ## Adding more games
 

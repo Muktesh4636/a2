@@ -1,0 +1,55 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 168" fill="none" class="balloon-svg">
+  <defs>
+    <radialGradient id="envGrad" cx="38%" cy="32%" r="68%">
+      <stop offset="0%" stop-color="#ffe8c8"/>
+      <stop offset="35%" stop-color="#ff9f4a"/>
+      <stop offset="70%" stop-color="#f97316"/>
+      <stop offset="100%" stop-color="#b45309"/>
+    </radialGradient>
+    <linearGradient id="panelLite" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#fff7ed" stop-opacity="0.55"/>
+      <stop offset="100%" stop-color="#fff7ed" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="wicker" x1="0" y1="0" x2="0" y2="1">
+      <stop stop-color="#c2410c"/>
+      <stop offset="1" stop-color="#7c2d12"/>
+    </linearGradient>
+  </defs>
+
+  <!-- envelope -->
+  <ellipse cx="60" cy="62" rx="44" ry="54" fill="url(#envGrad)"/>
+  <!-- gore seams -->
+  <path d="M60 10 L60 112" stroke="#fff7ed" stroke-width="1.8" opacity="0.35"/>
+  <path d="M28 40 Q60 62 28 92" stroke="#fff7ed" stroke-width="1.4" opacity="0.28"/>
+  <path d="M92 40 Q60 62 92 92" stroke="#fff7ed" stroke-width="1.4" opacity="0.28"/>
+  <path d="M38 26 Q60 48 82 26" stroke="#ea580c" stroke-width="1.6" opacity="0.4"/>
+  <path d="M32 70 Q60 86 88 70" stroke="#fdba74" stroke-width="1.8" opacity="0.45"/>
+  <!-- highlight -->
+  <ellipse cx="44" cy="44" rx="12" ry="20" fill="url(#panelLite)"/>
+  <ellipse cx="42" cy="40" rx="5" ry="9" fill="#ffffff" opacity="0.35"/>
+
+  <!-- burner glow + flame (loop-animated) -->
+  <ellipse class="burner-glow" cx="60" cy="116" rx="11" ry="7" fill="#fde68a" opacity="0.55"/>
+  <g class="flame">
+    <path d="M54 114 Q60 132 66 114 Q60 120 54 114Z" fill="#fb923c"/>
+    <path d="M57 114 Q60 126 63 114" fill="#fef08a"/>
+  </g>
+
+  <!-- mouth -->
+  <path d="M48 110 L72 110 L68 122 L52 122Z" fill="#9a3412"/>
+  <path d="M52 110 L68 110 L65 116 L55 116Z" fill="#c2410c"/>
+
+  <!-- rigging -->
+  <g stroke="#57534e" stroke-width="1.25" stroke-linecap="round">
+    <path d="M54 122 L46 144"/><path d="M60 122 L60 144"/><path d="M66 122 L74 144"/>
+    <path d="M56 122 L52 144"/><path d="M64 122 L68 144"/>
+  </g>
+
+  <!-- basket -->
+  <rect x="44" y="142" width="32" height="20" rx="2.5" fill="url(#wicker)"/>
+  <rect x="42" y="140" width="36" height="3.5" rx="1" fill="#92400e"/>
+  <g stroke="#451a03" stroke-width="0.9" opacity="0.4">
+    <path d="M46 148 H74"/><path d="M46 153 H74"/><path d="M46 158 H74"/>
+    <path d="M52 142 V160"/><path d="M60 142 V160"/><path d="M68 142 V160"/>
+  </g>
+</svg>

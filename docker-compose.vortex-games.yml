@@ -1,0 +1,41 @@
+# Vortex 1 / Vortex 2 / VIP Vortex backends.
+#   docker compose -f docker-compose.vortex-games.yml up -d --build
+#
+# Frontends are static on the LB under /vortex-1/, /vortex-2/, /vip-vortex/.
+# Nginx proxies /api/<id>/ → these containers.
+
+services:
+  vortex_1_api:
+    build: ./VORTEX/vortex-1/backend
+    container_name: gundu_vortex_1_api
+    command: bash -lc "python manage.py migrate --noinput && python manage.py runserver 0.0.0.0:8000"
+    ports: ["8152:8000"]
+    volumes:
+      - ./VORTEX/vortex-1/backend:/app
+      - vortex_1_data:/app/data
+    restart: unless-stopped
+
+  vortex_2_api:
+    build: ./VORTEX/vortex-2/backend
+    container_name: gundu_vortex_2_api
+    command: bash -lc "python manage.py migrate --noinput && python manage.py runserver 0.0.0.0:8000"
+    ports: ["8150:8000"]
+    volumes:
+      - ./VORTEX/vortex-2/backend:/app
+      - vortex_2_data:/app/data
+    restart: unless-stopped
+
+  vip_vortex_api:
+    build: ./VORTEX/vip-vortex/backend
+    container_name: gundu_vip_vortex_api
+    command: bash -lc "python manage.py migrate --noinput && python manage.py runserver 0.0.0.0:8000"
+    ports: ["8151:8000"]
+    volumes:
+      - ./VORTEX/vip-vortex/backend:/app
+      - vip_vortex_data:/app/data
+    restart: unless-stopped
+
+volumes:
+  vortex_1_data:
+  vortex_2_data:
+  vip_vortex_data:

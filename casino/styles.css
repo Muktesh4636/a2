@@ -1,13 +1,15 @@
 :root {
-  --bg: #000000;
-  --gold: #f0c94a;
+  --bg: #050505;
+  --accent: #ff7a18;
+  --accent-2: #ff9a3c;
+  --accent-deep: #e85d00;
   --ink: #ffffff;
-  --card-radius: 10px;
+  --muted: rgba(255, 255, 255, 0.62);
+  --card-radius: 12px;
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
   --topbar-h: 48px;
-  --gap: 10px;
-  --pad-x: 12px;
+  --pad-x: 14px;
 }
 
 * {
@@ -43,8 +45,10 @@ button {
   padding:
     max(8px, var(--safe-top))
     var(--pad-x)
-    calc(20px + var(--safe-bottom));
-  background: #000;
+    calc(28px + var(--safe-bottom));
+  background:
+    radial-gradient(120% 60% at 50% -10%, rgba(255, 122, 24, 0.16), transparent 55%),
+    var(--bg);
   display: flex;
   flex-direction: column;
 }
@@ -54,14 +58,14 @@ button {
   display: grid;
   grid-template-columns: 40px 1fr 40px;
   align-items: center;
-  margin-bottom: 10px;
+  margin-bottom: 8px;
 }
 
 .topbar h1 {
   text-align: center;
   font-size: 18px;
-  font-weight: 700;
-  letter-spacing: 0.2px;
+  font-weight: 800;
+  letter-spacing: 0.4px;
 }
 
 .icon-btn {
@@ -69,7 +73,7 @@ button {
   height: 36px;
   display: grid;
   place-items: center;
-  color: var(--gold);
+  color: var(--accent);
   border-radius: 8px;
 }
 
@@ -82,32 +86,243 @@ button {
   height: 36px;
 }
 
-.grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: var(--gap);
+.lobby {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
   width: 100%;
-  padding-bottom: 8px;
+}
+
+/* ---- Banners ---- */
+.banners {
+  position: relative;
+}
+
+.banner-track {
+  display: flex;
+  gap: 0;
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  scroll-behavior: smooth;
+  border-radius: 16px;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+  touch-action: pan-x;
+  scrollbar-width: none;
+  transform: translateZ(0);
+}
+
+.banner-track::-webkit-scrollbar {
+  display: none;
+}
+
+.banner-slide {
+  position: relative;
+  flex: 0 0 100%;
+  width: 100%;
+  min-width: 100%;
+  max-width: 100%;
+  aspect-ratio: 16 / 9;
+  scroll-snap-align: start;
+  border-radius: 16px;
+  overflow: hidden;
+  border: 1.5px solid rgba(255, 122, 24, 0.45);
+  background: #111;
+  touch-action: pan-x pan-y;
+}
+
+.banner-slide img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  filter: brightness(0.72);
+}
+
+.banner-slide .banner-copy {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  padding: 14px 14px 16px;
+  background: linear-gradient(180deg, transparent 30%, rgba(0, 0, 0, 0.82) 100%);
+  pointer-events: none;
+}
+
+.banner-slide .banner-tag {
+  align-self: flex-start;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: #1a0c00;
+  background: linear-gradient(90deg, var(--accent), var(--accent-2));
+  padding: 3px 8px;
+  border-radius: 999px;
+  margin-bottom: 8px;
+}
+
+.banner-slide h3 {
+  font-size: 20px;
+  font-weight: 800;
+  line-height: 1.15;
+}
+
+.banner-slide p {
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.banner-slide .banner-play {
+  pointer-events: auto;
+  margin-top: 10px;
+  align-self: flex-start;
+  min-width: 110px;
+  height: 36px;
+  padding: 0 16px;
+  border-radius: 999px;
+  font-weight: 800;
+  font-size: 13px;
+  color: #1a0c00;
+  background: linear-gradient(180deg, #ffb04a 0%, var(--accent) 55%, var(--accent-deep) 100%);
+  box-shadow: 0 6px 16px rgba(255, 122, 24, 0.35);
+}
+
+.banner-dots {
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.banner-dots button {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.25);
+}
+
+.banner-dots button.is-on {
+  width: 18px;
+  border-radius: 999px;
+  background: var(--accent);
+}
+
+/* ---- Sections ---- */
+.lobby-section {
+  min-width: 0;
+}
+
+.section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.section-head h2 {
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+}
+
+.section-head h2 span {
+  color: var(--accent);
+}
+
+.rail-nav {
+  display: flex;
+  gap: 6px;
+  flex: 0 0 auto;
+}
+
+.rail-nav button {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  display: grid;
+  place-items: center;
+  color: #1a0c00;
+  background: linear-gradient(180deg, #ffb04a 0%, var(--accent) 100%);
+  box-shadow: 0 2px 8px rgba(255, 122, 24, 0.3);
+}
+
+.rail-nav button:active {
+  opacity: 0.85;
+  transform: scale(0.96);
+}
+
+.rail-nav button:disabled {
+  opacity: 0.35;
+  pointer-events: none;
+}
+
+.rail-wrap {
+  position: relative;
+  margin: 0 -4px;
+  padding: 0 4px;
+}
+
+.rail {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 2px 2px 10px;
+  scroll-snap-type: none;
+  scroll-behavior: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+  touch-action: pan-x pan-y;
+}
+
+.rail.is-dragging {
+  cursor: grabbing;
+  scroll-snap-type: none;
+  user-select: none;
+}
+
+.rail.is-dragging .card {
+  pointer-events: none;
+}
+
+.rail::-webkit-scrollbar {
+  display: none;
 }
 
 .card {
   position: relative;
+  flex: 0 0 128px;
+  width: 128px;
   aspect-ratio: 1 / 1;
-  height: auto;
   border-radius: var(--card-radius);
-  border: 1.5px solid var(--gold);
+  border: 1.5px solid rgba(255, 122, 24, 0.55);
   overflow: hidden;
   background: #111;
   box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4);
-  transition: transform 0.15s ease, box-shadow 0.15s ease;
-  touch-action: pan-y;
+  transition: box-shadow 0.15s ease;
+  touch-action: pan-x pan-y;
   user-select: none;
   -webkit-user-select: none;
   -webkit-touch-callout: none;
+  scroll-snap-align: none;
+  flex-shrink: 0;
+}
+
+.card.card-wide {
+  flex: 0 0 168px;
+  width: 168px;
+  aspect-ratio: 4 / 3;
 }
 
 .card:active {
-  transform: scale(0.985);
+  transform: none;
 }
 
 .card-media {
@@ -117,8 +332,8 @@ button {
 
 .card.is-selected {
   box-shadow:
-    0 0 0 2px var(--gold),
-    0 0 22px rgba(240, 201, 74, 0.35),
+    0 0 0 2px var(--accent),
+    0 0 22px rgba(255, 122, 24, 0.4),
     0 10px 24px rgba(0, 0, 0, 0.5);
 }
 
@@ -134,7 +349,6 @@ button {
   pointer-events: none;
 }
 
-/* Artwork already has gold edge lines — crop them so CSS border is the only frame */
 .card.art-has-frame .card-art {
   width: 108%;
   height: 108%;
@@ -154,7 +368,7 @@ button {
   margin: 0;
   padding: 22px 8px 8px;
   text-align: center;
-  font-size: 12.5px;
+  font-size: 11.5px;
   font-weight: 700;
   line-height: 1.2;
   letter-spacing: 0.3px;
@@ -168,7 +382,7 @@ button {
 }
 
 .card.is-selected .card-title {
-  color: var(--gold);
+  color: var(--accent-2);
 }
 
 .card-overlay {
@@ -188,31 +402,30 @@ button {
 }
 
 .play-btn {
-  min-width: 108px;
-  height: 42px;
-  padding: 0 20px;
+  min-width: 96px;
+  height: 38px;
+  padding: 0 16px;
   border-radius: 999px;
   font-weight: 800;
-  font-size: 15px;
+  font-size: 14px;
   letter-spacing: 0.4px;
-  color: #1a1200;
-  background: linear-gradient(180deg, #ffe07a 0%, #f0c94a 45%, #c8961a 100%);
+  color: #1a0c00;
+  background: linear-gradient(180deg, #ffb04a 0%, var(--accent) 45%, var(--accent-deep) 100%);
   box-shadow:
-    0 2px 0 #8a6508,
+    0 2px 0 #9a4200,
     0 8px 18px rgba(0, 0, 0, 0.45),
-    inset 0 1px 0 rgba(255, 255, 255, 0.55);
+    inset 0 1px 0 rgba(255, 255, 255, 0.35);
 }
 
 .play-btn:active {
   transform: translateY(1px);
 }
 
-/* YouTube-style long-press: live game plays inside the tile */
 .card.is-previewing {
   z-index: 4;
   box-shadow:
-    0 0 0 2px var(--gold),
-    0 0 28px rgba(240, 201, 74, 0.45),
+    0 0 0 2px var(--accent),
+    0 0 28px rgba(255, 122, 24, 0.45),
     0 12px 28px rgba(0, 0, 0, 0.55);
   transform: scale(1.02);
 }
@@ -251,8 +464,8 @@ button {
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: #22c55e;
-  box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.55);
+  background: var(--accent);
+  box-shadow: 0 0 0 0 rgba(255, 122, 24, 0.55);
   animation: players-pulse 1.8s ease-out infinite;
   flex: 0 0 auto;
 }
@@ -264,7 +477,7 @@ button {
 }
 
 .card-players-num.is-tick {
-  color: #86efac;
+  color: #ffc78a;
 }
 
 .card-players-label {
@@ -274,13 +487,13 @@ button {
 
 @keyframes players-pulse {
   0% {
-    box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.55);
+    box-shadow: 0 0 0 0 rgba(255, 122, 24, 0.55);
   }
   70% {
-    box-shadow: 0 0 0 5px rgba(34, 197, 94, 0);
+    box-shadow: 0 0 0 5px rgba(255, 122, 24, 0);
   }
   100% {
-    box-shadow: 0 0 0 0 rgba(34, 197, 94, 0);
+    box-shadow: 0 0 0 0 rgba(255, 122, 24, 0);
   }
 }
 
@@ -303,18 +516,29 @@ button {
   background: #000;
 }
 
+.empty-hint {
+  font-size: 12px;
+  color: var(--muted);
+  padding: 8px 2px;
+}
+
 @media (min-width: 420px) {
   :root {
-    --gap: 12px;
     --pad-x: 16px;
+  }
+  .card {
+    flex-basis: 140px;
+    width: 140px;
+  }
+  .card.card-wide {
+    flex-basis: 180px;
+    width: 180px;
   }
 }
 
-/* Old APKs with no system-bar padding needed a little room; keep it tight. */
 body.in-app:not(.android-system-bars) .app {
   padding-top: max(8px, var(--safe-top));
 }
-/* New APK already pads the WebView below the status bar — no extra strip */
 body.android-system-bars .app,
 html.android-system-bars .app {
   padding-top: 4px;
@@ -333,14 +557,421 @@ html.android-system-bars .app {
   }
   .topbar {
     flex-basis: 40px;
-    margin-bottom: 8px;
+    margin-bottom: 6px;
   }
   .topbar h1 {
     font-size: 16px;
   }
+}
+
+.brand,
+.top-nav,
+.play-chip,
+.banner-arrow,
+.view-all,
+.section-head-right .view-all {
+  display: none;
+}
+
+.desktop-nav {
+  display: none;
+}
+
+@media (min-width: 768px) {
+  html,
+  body {
+    height: auto;
+    overflow-x: hidden;
+    overflow-y: auto;
+  }
+
+  .app {
+    width: 100%;
+    max-width: none;
+    min-height: 100dvh;
+    height: auto;
+    margin: 0;
+    padding: 112px 48px 72px;
+    overflow: visible;
+  }
+
+  .mobile-title,
+  .topbar-spacer {
+    display: none;
+  }
+
+  .topbar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 200;
+    display: flex;
+    align-items: center;
+    gap: 28px;
+    flex: none;
+    height: 96px;
+    margin: 0;
+    padding: 0 48px;
+    background: rgba(5, 5, 5, 0.97);
+    border-bottom: 1px solid rgba(255, 122, 24, 0.2);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+  }
+
+  .icon-btn {
+    width: 48px;
+    height: 48px;
+    flex: 0 0 auto;
+  }
+
+  .brand {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    flex: 0 0 auto;
+    color: #fff;
+    text-decoration: none;
+    font-size: 28px;
+    font-weight: 800;
+    letter-spacing: 0.4px;
+    white-space: nowrap;
+  }
+
+  .brand-flame {
+    color: var(--accent);
+    width: 30px;
+    height: 30px;
+  }
+
+  .brand em {
+    font-style: normal;
+    color: var(--accent);
+  }
+
+  .top-nav {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: 1;
+    gap: 6px;
+    min-width: 0;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .top-nav button {
+    padding: 14px 18px;
+    border-radius: 8px;
+    color: rgba(255, 255, 255, 0.78);
+    font-weight: 700;
+    font-size: 18px;
+    white-space: nowrap;
+  }
+
+  .top-nav button:hover {
+    color: #fff;
+  }
+
+  .top-nav button.is-on {
+    color: var(--accent);
+    box-shadow: inset 0 -3px 0 var(--accent);
+    border-radius: 0;
+    background: transparent;
+  }
+
+  .play-chip {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    min-width: 140px;
+    height: 52px;
+    padding: 0 24px;
+    border-radius: 12px;
+    background: linear-gradient(180deg, #ffb04a 0%, var(--accent) 55%, var(--accent-deep) 100%);
+    color: #1a0c00;
+    font-weight: 800;
+    font-size: 17px;
+    text-decoration: none;
+  }
+
+  .lobby {
+    gap: 40px;
+    width: 100%;
+  }
+
+  .lobby-section {
+    scroll-margin-top: 112px;
+  }
+
+  .banners {
+    position: relative;
+    width: 100%;
+  }
+
+  .banner-arrow {
+    display: grid;
+    place-items: center;
+    position: absolute;
+    top: 50%;
+    z-index: 3;
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    color: #fff;
+    background: rgba(0, 0, 0, 0.5);
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    transform: translateY(-50%);
+  }
+
+  .banner-arrow.prev {
+    left: 20px;
+  }
+
+  .banner-arrow.next {
+    right: 20px;
+  }
+
+  .banner-arrow:hover {
+    background: var(--accent);
+    color: #1a0c00;
+  }
+
+  .banner-slide {
+    aspect-ratio: auto;
+    width: 100%;
+    height: min(340px, 34vh);
+    min-height: 240px;
+    border-radius: 18px;
+    border: 0;
+  }
+
+  .banner-slide img {
+    filter: brightness(0.62);
+  }
+
+  .banner-slide .banner-copy {
+    justify-content: center;
+    align-items: flex-start;
+    padding: 48px 100px;
+    background: linear-gradient(90deg, rgba(0, 0, 0, 0.84) 0%, rgba(0, 0, 0, 0.4) 52%, transparent 100%);
+  }
+
+  .banner-slide .banner-tag {
+    font-size: 14px;
+    padding: 6px 14px;
+    margin-bottom: 14px;
+  }
+
+  .banner-slide h3 {
+    font-size: clamp(32px, 3.6vw, 56px);
+    font-weight: 900;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+  }
+
+  .banner-slide p {
+    font-size: 16px;
+    margin-top: 8px;
+    max-width: 560px;
+  }
+
+  .banner-slide .banner-play {
+    min-width: 160px;
+    height: 48px;
+    font-size: 16px;
+    margin-top: 16px;
+  }
+
+  .banner-dots {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 22px;
+    justify-content: center;
+    z-index: 3;
+    margin: 0;
+  }
+
+  .section-head {
+    margin-bottom: 16px;
+  }
+
+  .section-head h2 {
+    color: var(--accent);
+    font-size: 20px;
+    font-weight: 800;
+    letter-spacing: 0.3px;
+  }
+
+  .section-head-right {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .view-all {
+    display: inline-flex;
+    align-items: center;
+    color: rgba(255, 255, 255, 0.72);
+    font-size: 16px;
+    font-weight: 700;
+    background: none;
+    cursor: pointer;
+  }
+
+  .view-all:hover {
+    color: var(--accent);
+  }
+
+  #popularSection,
+  #categorySections {
+    display: block;
+  }
+
+  #allSection {
+    display: none;
+  }
+
+  .rail-wrap {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+  }
+
+  .rail {
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: calc((100% - 80px) / 6);
+    gap: 16px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: 2px 2px 8px;
+    scroll-snap-type: x mandatory;
+    width: 100%;
+  }
+
+  .card,
+  .card.card-wide {
+    width: 100%;
+    flex: none;
+    flex-basis: auto;
+    aspect-ratio: 3 / 4;
+    scroll-snap-align: start;
+    border-radius: 12px;
+    border-width: 0;
+    box-shadow: 0 8px 18px rgba(0, 0, 0, 0.35);
+  }
+
+  .card-title {
+    font-size: 13px;
+    padding: 22px 8px 10px;
+  }
+
+  .card-players {
+    top: 8px;
+    left: 8px;
+    font-size: 11px;
+    padding: 4px 8px;
+  }
+
   .play-btn {
     min-width: 96px;
-    height: 38px;
-    font-size: 14px;
+    height: 36px;
+    font-size: 13px;
   }
+
+  .card:hover {
+    transform: translateY(-4px);
+    box-shadow:
+      0 0 0 2px var(--accent),
+      0 16px 32px rgba(0, 0, 0, 0.45);
+  }
+}
+
+@media (min-width: 1400px) {
+  .rail {
+    grid-auto-columns: calc((100% - 96px) / 7);
+  }
+}
+
+@media (min-width: 1900px) {
+  .app {
+    padding: 120px 64px 88px;
+  }
+
+  .topbar {
+    padding: 0 64px;
+  }
+
+  .rail {
+    grid-auto-columns: calc((100% - 112px) / 8);
+  }
+}
+
+.casino-login-prompt {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(0, 0, 0, 0.72);
+}
+
+.casino-login-prompt__card {
+  width: min(360px, 100%);
+  border-radius: 16px;
+  background: #2a2a2a;
+  padding: 22px 20px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+}
+
+.casino-login-prompt__card h2 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+  color: #fff;
+}
+
+.casino-login-prompt__card p {
+  margin: 10px 0 18px;
+  font-size: 14px;
+  line-height: 1.4;
+  color: rgba(255, 255, 255, 0.75);
+}
+
+.casino-login-prompt__primary,
+.casino-login-prompt__secondary,
+.casino-login-prompt__cancel {
+  display: block;
+  width: 100%;
+  border-radius: 12px;
+  padding: 12px 14px;
+  margin-top: 10px;
+  text-align: center;
+  font-weight: 700;
+  font-size: 15px;
+  text-decoration: none;
+  border: none;
+  cursor: pointer;
+  box-sizing: border-box;
+}
+
+.casino-login-prompt__primary {
+  background: var(--accent);
+  color: #1a0c00;
+}
+
+.casino-login-prompt__secondary {
+  background: transparent;
+  color: var(--accent);
+  border: 2px solid var(--accent);
+}
+
+.casino-login-prompt__cancel {
+  background: #1e1e1e;
+  color: #fff;
 }

@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>TRIPLE EDGE — Three Card Call</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,600;0,9..40,700;1,9..40,400&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css?v=1" />
+  </head>
+  <body>
+    <div class="atmosphere" aria-hidden="true"></div>
+
+    <header class="topbar">
+      <div class="bank">
+        <span class="bank-label">Bankroll</span>
+        <span class="bank-value" id="bankroll">1000</span>
+      </div>
+      <div class="round" id="roundInfo">Place your bet</div>
+    </header>
+
+    <main class="stage">
+      <section class="brand-block">
+        <p class="brand">TRIPLE EDGE</p>
+        <h1 class="tagline">Three cards. Hit the edge.</h1>
+        <p class="lede">
+          Three cards flip. Their sum decides — under the edge, dead on it, or over.
+        </p>
+      </section>
+
+      <section class="table" aria-label="Game table">
+        <div class="table-scene" id="tableScene" data-camera="top">
+          <canvas id="tableCanvas" class="table-canvas" aria-hidden="true"></canvas>
+
+          <div class="play-surface" id="playSurface">
+            <div class="cards cards-triple" id="cards">
+              <div class="card-slot" data-slot="1">
+                <div class="card-shadow"></div>
+                <div class="card-rig" id="rig1" data-state="hidden">
+                  <div class="card" id="card1" data-face="down">
+                    <div class="card-face card-back" aria-hidden="true"><span class="back-mark">3</span></div>
+                    <div class="card-face card-front">
+                      <div class="corner top"><span class="rank"></span><span class="suit"></span></div>
+                      <span class="center-suit"></span>
+                      <div class="corner bottom"><span class="rank"></span><span class="suit"></span></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="card-slot" data-slot="2">
+                <div class="card-shadow"></div>
+                <div class="card-rig" id="rig2" data-state="hidden">
+                  <div class="card" id="card2" data-face="down">
+                    <div class="card-face card-back" aria-hidden="true"><span class="back-mark">3</span></div>
+                    <div class="card-face card-front">
+                      <div class="corner top"><span class="rank"></span><span class="suit"></span></div>
+                      <span class="center-suit"></span>
+                      <div class="corner bottom"><span class="rank"></span><span class="suit"></span></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="card-slot" data-slot="3">
+                <div class="card-shadow"></div>
+                <div class="card-rig" id="rig3" data-state="hidden">
+                  <div class="card" id="card3" data-face="down">
+                    <div class="card-face card-back" aria-hidden="true"><span class="back-mark">3</span></div>
+                    <div class="card-face card-front">
+                      <div class="corner top"><span class="rank"></span><span class="suit"></span></div>
+                      <span class="center-suit"></span>
+                      <div class="corner bottom"><span class="rank"></span><span class="suit"></span></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="result-banner" id="resultBanner" hidden>
+              <div class="sum-orb" id="sumOrb" aria-live="polite">
+                <span class="sum-label">Sum</span>
+                <span class="sum-value" id="sumValue">?</span>
+              </div>
+              <p class="outcome" id="outcome"></p>
+            </div>
+          </div>
+        </div>
+
+        <div class="bet-board" role="group" aria-label="Bet options">
+          <button type="button" class="bet-lane under" data-side="under">
+            <span class="lane-name">Under</span>
+            <span class="lane-range">Sum 3–9</span>
+            <span class="lane-odds">Pays 2×</span>
+          </button>
+          <button type="button" class="bet-lane edge" data-side="edge">
+            <span class="lane-name">Edge</span>
+            <span class="lane-range">Sum 10–11</span>
+            <span class="lane-odds">Pays 5×</span>
+          </button>
+          <button type="button" class="bet-lane over" data-side="over">
+            <span class="lane-name">Over</span>
+            <span class="lane-range">Sum 12–18</span>
+            <span class="lane-odds">Pays 2×</span>
+          </button>
+        </div>
+
+        <div class="controls">
+          <div class="chips" role="group" aria-label="Chip amount">
+            <button type="button" class="chip" data-amount="10">10</button>
+            <button type="button" class="chip selected" data-amount="25">25</button>
+            <button type="button" class="chip" data-amount="50">50</button>
+            <button type="button" class="chip" data-amount="100">100</button>
+          </div>
+          <button type="button" class="deal-btn" id="dealBtn" disabled>Deal cards</button>
+        </div>
+      </section>
+
+      <section class="rules">
+        <h2>How it pays</h2>
+        <ul>
+          <li><strong>Under</strong> — three-card sum 3–9 · <em>2×</em></li>
+          <li><strong>Edge</strong> — sum 10 or 11 · <em>5×</em></li>
+          <li><strong>Over</strong> — sum 12–18 · <em>2×</em></li>
+        </ul>
+      </section>
+    </main>
+
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://unpkg.com/three@0.170.0/build/three.module.js",
+          "three/addons/": "https://unpkg.com/three@0.170.0/examples/jsm/"
+        }
+      }
+    </script>
+    <script type="module" src="table3d.js?v=1"></script>
+    <script src="game.js?v=1"></script>
+  </body>
+</html>

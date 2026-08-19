@@ -1,0 +1,46 @@
+# WebRTC capacity test rig: MediaMTX (SFU) + a synthetic video publisher.
+#   docker compose -f tools/webrtc-loadtest/docker-compose.yml up -d
+#
+# Playback check:  http://127.0.0.1:8889/loadtest
+# WHEP endpoint:   http://127.0.0.1:8889/loadtest/whep
+#
+# On a Linux test server prefer `network_mode: host` for the mediamtx service and
+# set webrtcAdditionalHosts to that server's public IP, otherwise ICE will offer
+# candidates the load clients cannot reach.
+
+services:
+  mediamtx:
+    image: bluenviron/mediamtx:latest
+    container_name: loadtest_mediamtx
+    volumes:
+      - ./mediamtx.yml:/mediamtx.yml:ro
+    ports:
+      - "8889:8889"       # WebRTC signalling (WHIP/WHEP over HTTP)
+      - "8189:8189/udp"   # WebRTC media (muxed)
+      - "8554:8554"       # RTSP ingest
+      - "1935:1935"       # RTMP ingest
+      - "8890:8890/udp"   # SRT ingest
+      - "9997:9997"       # control API
+      - "9998:9998"       # Prometheus metrics
+    restart: unless-stopped
+
+  # Reproducible source: colour bars + tone at a fixed bitrate. Swap the two
+  # -i flags for `-i /media/yourfile.mp4` (plus a volume mount) to test with
+  # content you own.
+  source:
+    # Multi-arch (amd64 + arm64) — an emulated encoder cannot hit the target
+    # bitrate and would silently understate the load.
+    image: mwader/static-ffmpeg:7.1
+    container_name: loadtest_source
+    depends_on:
+      - mediamtx
+    command: >
+      -hide_banner -loglevel warning -re
+      -f lavfi -i testsrc2=size=${SRC_SIZE:-1280x720}:rate=${SRC_FPS:-30}
+      -f lavfi -i sine=frequency=1000:sample_rate=48000
+      -c:v libx264 -preset veryfast -tune zerolatency -profile:v baseline
+      -b:v ${SRC_BITRATE:-2500k} -maxrate ${SRC_BITRATE:-2500k} -bufsize 1000k
+      -g ${SRC_GOP:-60} -pix_fmt yuv420p
+      -c:a libopus -b:a 96k -ar 48000 -ac 2
+      -f rtsp -rtsp_transport tcp rtsp://mediamtx:8554/loadtest
+    restart: unless-stopped

@@ -1,0 +1,477 @@
+:root {
+  --ink: #1a1208;
+  --sand: #e8dcc8;
+  --turf: #2d5a27;
+  --accent: #c45c26;
+  --panel: #121a14;
+  --panel-edge: rgba(232, 220, 200, 0.12);
+  --glass: rgba(26, 18, 8, 0.55);
+  --stage-share: 62%;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body,
+#app {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: #0d1a0c;
+  color: var(--sand);
+  font-family: "Outfit", sans-serif;
+}
+
+#app {
+  display: flex;
+  flex-direction: column;
+}
+
+.stage {
+  position: relative;
+  flex: 0 0 var(--stage-share);
+  min-height: 0;
+  overflow: hidden;
+  background: #0d1a0c;
+}
+
+#scene {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.hud {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 2;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 1rem 1.5rem;
+  pointer-events: none;
+  background: linear-gradient(180deg, rgba(13, 26, 12, 0.75) 0%, transparent 100%);
+}
+
+.brand-mark {
+  display: block;
+  font-family: "Bebas Neue", sans-serif;
+  font-size: clamp(2rem, 5vw, 3.25rem);
+  letter-spacing: 0.08em;
+  line-height: 0.9;
+  color: var(--sand);
+  text-shadow: 0 2px 24px rgba(0, 0, 0, 0.45);
+}
+
+.brand-sub {
+  display: block;
+  margin-top: 0.2rem;
+  font-size: 0.75rem;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: rgba(232, 220, 200, 0.7);
+}
+
+.race-meta {
+  display: flex;
+  gap: 1.1rem;
+}
+
+.stat {
+  min-width: 4rem;
+  text-align: right;
+}
+
+.stat-label {
+  display: block;
+  font-size: 0.65rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: rgba(232, 220, 200, 0.55);
+}
+
+.stat-value {
+  display: block;
+  margin-top: 0.1rem;
+  font-family: "Bebas Neue", sans-serif;
+  font-size: 1.35rem;
+  letter-spacing: 0.04em;
+}
+
+/* Live wins — keep near top-right corner */
+.gundu-live-wins {
+  top: calc(8px + env(safe-area-inset-top, 0px));
+}
+
+/* Online count — lower on the race stage, quieter look */
+.gundu-live-members {
+  top: calc(52vh + env(safe-area-inset-top, 0px));
+  font-size: 10px;
+  font-weight: 500;
+  opacity: 0.42;
+}
+
+.gundu-live-members__pill {
+  gap: 4px;
+  padding: 3px 8px 3px 5px;
+  background: rgba(10, 18, 32, 0.28);
+  border-color: rgba(255, 255, 255, 0.04);
+  color: rgba(255, 255, 255, 0.55);
+  text-shadow: none;
+}
+
+.gundu-live-members__dot {
+  width: 5px;
+  height: 5px;
+  background: rgba(76, 217, 100, 0.45);
+  animation: none;
+  box-shadow: none;
+}
+
+@media (max-width: 640px) {
+  .gundu-live-members {
+    top: calc(46vh + env(safe-area-inset-top, 0px));
+  }
+}
+
+.betting {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 0.85rem 1.25rem 1rem;
+  background:
+    linear-gradient(180deg, rgba(18, 28, 20, 0.95), var(--panel)),
+    var(--panel);
+  border-top: 1px solid var(--panel-edge);
+  overflow: auto;
+}
+
+.betting-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.bank-label {
+  display: block;
+  font-size: 0.65rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: rgba(232, 220, 200, 0.55);
+}
+
+.bank-value {
+  display: block;
+  font-family: "Bebas Neue", sans-serif;
+  font-size: 1.8rem;
+  letter-spacing: 0.04em;
+  color: #f0e6d4;
+}
+
+.bet-status {
+  flex: 1 1 12rem;
+  font-size: 0.85rem;
+  color: rgba(232, 220, 200, 0.72);
+}
+
+.controls {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.controls button#startBtn,
+.controls button#resetBtn,
+#placeBetBtn {
+  appearance: none;
+  border: none;
+  cursor: pointer;
+  padding: 0.7rem 1.35rem;
+  border-radius: 999px;
+  font-family: "Outfit", sans-serif;
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--sand);
+  background: var(--accent);
+  box-shadow: 0 8px 28px rgba(196, 92, 38, 0.35);
+  transition: transform 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
+}
+
+.controls button#startBtn:hover,
+.controls button#resetBtn:hover,
+#placeBetBtn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 32px rgba(196, 92, 38, 0.5);
+}
+
+.controls button#startBtn:disabled,
+#placeBetBtn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.horse-picks {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 0.45rem;
+}
+
+.horse-pick {
+  appearance: none;
+  border: 1px solid transparent;
+  cursor: pointer;
+  text-align: left;
+  padding: 0.55rem 0.6rem;
+  border-radius: 0.55rem;
+  background: rgba(232, 220, 200, 0.06);
+  color: var(--sand);
+  transition: border-color 0.15s ease, background 0.15s ease, transform 0.15s ease;
+}
+
+.horse-pick:hover {
+  background: rgba(232, 220, 200, 0.1);
+}
+
+.horse-pick.is-selected {
+  border-color: rgba(232, 220, 200, 0.55);
+  background: rgba(232, 220, 200, 0.14);
+  transform: translateY(-1px);
+}
+
+.horse-pick:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.horse-pick-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.35rem;
+  margin-bottom: 0.25rem;
+}
+
+.horse-swatch {
+  width: 0.7rem;
+  height: 0.7rem;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+.horse-odds {
+  font-family: "Bebas Neue", sans-serif;
+  font-size: 1rem;
+  letter-spacing: 0.04em;
+}
+
+.horse-name {
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.horse-meta {
+  display: block;
+  margin-top: 0.1rem;
+  font-size: 0.62rem;
+  letter-spacing: 0.04em;
+  color: rgba(232, 220, 200, 0.55);
+}
+
+.bet-form {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.amount-field {
+  flex: 1 1 16rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-size: 0.65rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgba(232, 220, 200, 0.55);
+}
+
+.amount-row {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.currency {
+  font-family: "Bebas Neue", sans-serif;
+  font-size: 1.35rem;
+  color: var(--sand);
+}
+
+#betAmount {
+  width: 6.5rem;
+  padding: 0.55rem 0.65rem;
+  border: 1px solid var(--panel-edge);
+  border-radius: 0.45rem;
+  background: rgba(0, 0, 0, 0.28);
+  color: var(--sand);
+  font-family: "Outfit", sans-serif;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+#betAmount:focus {
+  outline: 1px solid rgba(232, 220, 200, 0.35);
+}
+
+.quick-amounts {
+  display: flex;
+  gap: 0.3rem;
+}
+
+.quick-amounts button {
+  appearance: none;
+  border: 1px solid var(--panel-edge);
+  background: rgba(232, 220, 200, 0.06);
+  color: var(--sand);
+  border-radius: 999px;
+  padding: 0.4rem 0.65rem;
+  cursor: pointer;
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+
+.quick-amounts button:hover {
+  background: rgba(232, 220, 200, 0.12);
+}
+
+#placeBetBtn {
+  flex: 0 0 auto;
+}
+
+.open-bets {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  min-height: 1.5rem;
+}
+
+.open-bets li {
+  padding: 0.35rem 0.7rem;
+  border-radius: 999px;
+  background: rgba(232, 220, 200, 0.08);
+  border: 1px solid var(--panel-edge);
+  font-size: 0.75rem;
+}
+
+.open-bets li.won {
+  border-color: rgba(90, 180, 110, 0.55);
+  color: #b8efc4;
+}
+
+.open-bets li.lost {
+  border-color: rgba(200, 90, 80, 0.45);
+  color: rgba(232, 220, 200, 0.55);
+}
+
+.finish {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  display: none;
+  place-content: center;
+  text-align: center;
+  background: rgba(13, 26, 12, 0.55);
+  backdrop-filter: blur(6px);
+  animation: fadeIn 0.5s ease;
+}
+
+.finish.is-visible {
+  display: grid;
+}
+
+.finish-title {
+  font-family: "Bebas Neue", sans-serif;
+  font-size: clamp(3rem, 10vw, 5.5rem);
+  letter-spacing: 0.12em;
+  line-height: 1;
+}
+
+.finish-time {
+  margin-top: 0.4rem;
+  font-size: 1.05rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: rgba(232, 220, 200, 0.85);
+}
+
+.finish-bet {
+  margin-top: 0.55rem;
+  font-size: 0.95rem;
+  letter-spacing: 0.08em;
+  color: #d8c29a;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@media (max-width: 900px) {
+  :root {
+    --stage-share: 58%;
+  }
+
+  .horse-picks {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  :root {
+    --stage-share: 52%;
+  }
+
+  .hud {
+    flex-direction: column;
+    gap: 0.65rem;
+    padding: 0.75rem;
+  }
+
+  .race-meta {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .stat {
+    text-align: left;
+  }
+
+  .horse-picks {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

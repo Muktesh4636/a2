@@ -1,0 +1,118 @@
+# Line games backends (circle / stop-bar / spin-dial / …).
+#   docker compose -f docker-compose.line-games.yml up -d --build
+#
+# Frontends are static files on the LB under /circle-game/, /wave-surf/, etc.
+# Nginx proxies /api/<game>/ → these containers (strip prefix → /api/).
+
+services:
+  circle_game_api:
+    build: ./line/circle-game/backend
+    container_name: gundu_circle_game_api
+    command: bash -lc "python manage.py migrate --noinput && python manage.py runserver 0.0.0.0:8000"
+    ports: ["8120:8000"]
+    volumes:
+      - ./line/circle-game/backend:/app
+      - circle_game_data:/app/data
+    restart: unless-stopped
+
+  stop_bar_api:
+    build: ./line/stop-bar/backend
+    container_name: gundu_stop_bar_api
+    command: bash -lc "python manage.py migrate --noinput && python manage.py runserver 0.0.0.0:8000"
+    ports: ["8121:8000"]
+    volumes:
+      - ./line/stop-bar/backend:/app
+      - stop_bar_data:/app/data
+    restart: unless-stopped
+
+  spin_dial_api:
+    build: ./line/spin-dial/backend
+    container_name: gundu_spin_dial_api
+    command: bash -lc "python manage.py migrate --noinput && python manage.py runserver 0.0.0.0:8000"
+    ports: ["8122:8000"]
+    volumes:
+      - ./line/spin-dial/backend:/app
+      - spin_dial_data:/app/data
+    restart: unless-stopped
+
+  mines_path_api:
+    build: ./line/mines-path/backend
+    container_name: gundu_mines_path_api
+    command: bash -lc "python manage.py migrate --noinput && python manage.py runserver 0.0.0.0:8000"
+    ports: ["8123:8000"]
+    volumes:
+      - ./line/mines-path/backend:/app
+      - mines_path_data:/app/data
+    restart: unless-stopped
+
+  dice_over_under_api:
+    build: ./line/dice-over-under/backend
+    container_name: gundu_dice_over_under_api
+    command: bash -lc "python manage.py migrate --noinput && python manage.py runserver 0.0.0.0:8000"
+    ports: ["8124:8000"]
+    volumes:
+      - ./line/dice-over-under/backend:/app
+      - dice_over_under_data:/app/data
+    restart: unless-stopped
+
+  color_match_api:
+    build: ./line/color-match/backend
+    container_name: gundu_color_match_api
+    command: bash -lc "python manage.py migrate --noinput && python manage.py runserver 0.0.0.0:8000"
+    ports: ["8125:8000"]
+    volumes:
+      - ./line/color-match/backend:/app
+      - color_match_data:/app/data
+    restart: unless-stopped
+
+  wheel_pockets_api:
+    build: ./line/wheel-pockets/backend
+    container_name: gundu_wheel_pockets_api
+    command: bash -lc "python manage.py migrate --noinput && python manage.py runserver 0.0.0.0:8000"
+    ports: ["8126:8000"]
+    volumes:
+      - ./line/wheel-pockets/backend:/app
+      - wheel_pockets_data:/app/data
+    restart: unless-stopped
+
+  wave_surf_api:
+    build: ./line/wave-surf/backend
+    container_name: gundu_wave_surf_api
+    command: bash -lc "python manage.py migrate --noinput && python manage.py runserver 0.0.0.0:8000"
+    ports: ["8127:8000"]
+    volumes:
+      - ./line/wave-surf/backend:/app
+      - wave_surf_data:/app/data
+    restart: unless-stopped
+
+  keno_pick_api:
+    build: ./line/keno-pick/backend
+    container_name: gundu_keno_pick_api
+    command: bash -lc "python manage.py migrate --noinput && python manage.py runserver 0.0.0.0:8000"
+    ports: ["8128:8000"]
+    volumes:
+      - ./line/keno-pick/backend:/app
+      - keno_pick_data:/app/data
+    restart: unless-stopped
+
+  hi_lo_cards_api:
+    build: ./line/hi-lo-cards/backend
+    container_name: gundu_hi_lo_cards_api
+    command: bash -lc "python manage.py migrate --noinput && python manage.py runserver 0.0.0.0:8000"
+    ports: ["8129:8000"]
+    volumes:
+      - ./line/hi-lo-cards/backend:/app
+      - hi_lo_cards_data:/app/data
+    restart: unless-stopped
+
+volumes:
+  circle_game_data:
+  stop_bar_data:
+  spin_dial_data:
+  mines_path_data:
+  dice_over_under_data:
+  color_match_data:
+  wheel_pockets_data:
+  wave_surf_data:
+  keno_pick_data:
+  hi_lo_cards_data:

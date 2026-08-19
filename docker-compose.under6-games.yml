@@ -1,0 +1,83 @@
+# under_6 card-game backends (rushbet, knock6, … teenpatti).
+# under-6 itself already runs as gundu_under6_api on :8111.
+#   docker compose -f docker-compose.under6-games.yml up -d --build
+
+services:
+  rushbet_api:
+    build: ./under_6/games/rushbet/backend
+    container_name: gundu_rushbet_api
+    command: bash -lc "python manage.py migrate --noinput && python manage.py runserver 0.0.0.0:8000"
+    ports: ["8140:8000"]
+    volumes:
+      - ./under_6/games/rushbet/backend:/app
+      - rushbet_data:/app/data
+    restart: unless-stopped
+
+  knock6_api:
+    build: ./under_6/games/knock6/backend
+    container_name: gundu_knock6_api
+    command: bash -lc "python manage.py migrate --noinput && python manage.py runserver 0.0.0.0:8000"
+    ports: ["8141:8000"]
+    volumes:
+      - ./under_6/games/knock6/backend:/app
+      - knock6_data:/app/data
+    restart: unless-stopped
+
+  tripleedge_api:
+    build: ./under_6/games/tripleedge/backend
+    container_name: gundu_tripleedge_api
+    command: bash -lc "python manage.py migrate --noinput && python manage.py runserver 0.0.0.0:8000"
+    ports: ["8142:8000"]
+    volumes:
+      - ./under_6/games/tripleedge/backend:/app
+      - tripleedge_data:/app/data
+    restart: unless-stopped
+
+  mirror_api:
+    build: ./under_6/games/mirror/backend
+    container_name: gundu_mirror_api
+    command: bash -lc "python manage.py migrate --noinput && python manage.py runserver 0.0.0.0:8000"
+    ports: ["8143:8000"]
+    volumes:
+      - ./under_6/games/mirror/backend:/app
+      - mirror_data:/app/data
+    restart: unless-stopped
+
+  goldlane_api:
+    build: ./under_6/games/goldlane/backend
+    container_name: gundu_goldlane_api
+    command: bash -lc "python manage.py migrate --noinput && python manage.py runserver 0.0.0.0:8000"
+    ports: ["8144:8000"]
+    volumes:
+      - ./under_6/games/goldlane/backend:/app
+      - goldlane_data:/app/data
+    restart: unless-stopped
+
+  dead7_api:
+    build: ./under_6/games/dead7/backend
+    container_name: gundu_dead7_api
+    command: bash -lc "python manage.py migrate --noinput && python manage.py runserver 0.0.0.0:8000"
+    ports: ["8145:8000"]
+    volumes:
+      - ./under_6/games/dead7/backend:/app
+      - dead7_data:/app/data
+    restart: unless-stopped
+
+  teenpatti_api:
+    build: ./under_6/games/teenpatti/backend
+    container_name: gundu_teenpatti_api
+    command: bash -lc "python manage.py migrate --noinput && python manage.py runserver 0.0.0.0:8000"
+    ports: ["8146:8000"]
+    volumes:
+      - ./under_6/games/teenpatti/backend:/app
+      - teenpatti_data:/app/data
+    restart: unless-stopped
+
+volumes:
+  rushbet_data:
+  knock6_data:
+  tripleedge_data:
+  mirror_data:
+  goldlane_data:
+  dead7_data:
+  teenpatti_data:

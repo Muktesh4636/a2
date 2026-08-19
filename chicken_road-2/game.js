@@ -56,6 +56,104 @@ async function api(path, { method = "GET", body, requireAuth = true } = {}) {
   return data;
 }
 
+const jumpSfx = (() => {
+  try {
+    const a = new Audio(new URL("./static/sounds/jump.mp3", location.href).href);
+    a.preload = "auto";
+    a.volume = 1;
+    return a;
+  } catch (_) {
+    return null;
+  }
+})();
+
+let jumpUnlocked = false;
+
+function unlockJumpSound() {
+  if (!jumpSfx || jumpUnlocked) return;
+  jumpSfx.muted = true;
+  const p = jumpSfx.play();
+  const done = () => {
+    jumpUnlocked = true;
+    jumpSfx.muted = false;
+  };
+  if (p && typeof p.then === "function") {
+    void p
+      .then(() => {
+        jumpSfx.pause();
+        jumpSfx.currentTime = 0;
+        done();
+      })
+      .catch(() => done());
+  } else {
+    done();
+  }
+}
+
+function playJumpSound() {
+  if (!jumpSfx) return;
+  try {
+    jumpSfx.muted = false;
+    jumpSfx.volume = 1;
+    const shot = jumpSfx.cloneNode(true);
+    shot.volume = 1;
+    const p = shot.play();
+    if (p && typeof p.catch === "function") {
+      p.catch(() => {
+        jumpSfx.currentTime = 0;
+        void jumpSfx.play().catch(() => {});
+      });
+    }
+  } catch (_) {}
+}
+
+document.addEventListener("pointerdown", unlockAudio, { capture: true });
+document.addEventListener("touchstart", unlockAudio, { capture: true });
+
+const bgm = (() => {
+  try {
+    const a = new Audio(new URL("./static/sounds/purity-piano.mp3", location.href).href);
+    a.preload = "auto";
+    a.loop = true;
+    a.volume = 0.32;
+    return a;
+  } catch (_) {
+    return null;
+  }
+})();
+
+let musicOn = localStorage.getItem("chicken2_music_off") !== "1";
+
+function syncMusicToggle() {
+  const btn = document.getElementById("musicToggle");
+  if (btn) btn.textContent = musicOn ? "Music: On" : "Music: Off";
+}
+
+function startBgm() {
+  if (!bgm || !musicOn) return;
+  bgm.muted = false;
+  const p = bgm.play();
+  if (p && typeof p.catch === "function") p.catch(() => {});
+}
+
+function stopBgm() {
+  if (!bgm) return;
+  bgm.pause();
+}
+
+function setMusicOn(on) {
+  musicOn = !!on;
+  localStorage.setItem("chicken2_music_off", musicOn ? "0" : "1");
+  syncMusicToggle();
+  if (musicOn) startBgm();
+  else stopBgm();
+}
+
+function unlockAudio() {
+  unlockJumpSound();
+  startBgm();
+}
+
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
 
@@ -1072,6 +1170,7 @@ async function attemptStep(diesOverride) {
   state.hopTo = laneX(lane);
   state.hopT = 0;
   state.landingLane = lane;
+  playJumpSound();
 
   if (dies) {
     cueHitCar(lane);
@@ -1860,6 +1959,10 @@ function wire() {
 
   els.menuBtn.onclick = () => (els.menuDrawer.hidden = false);
   els.closeMenu.onclick = () => (els.menuDrawer.hidden = true);
+  document.getElementById("musicToggle")?.addEventListener("click", () => {
+    setMusicOn(!musicOn);
+  });
+  syncMusicToggle();
   els.resetBalance.onclick = () => {
     alert("Balance is your Gundu wallet — top up from the app.");
   };

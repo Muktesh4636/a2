@@ -1,0 +1,98 @@
+[
+  {
+    "id": "01-chestnut",
+    "kind": "chestnut",
+    "coat": [
+      142,
+      87,
+      53
+    ],
+    "mane": [
+      75,
+      82,
+      45
+    ],
+    "coatHex": 9328437,
+    "maneHex": 4936237
+  },
+  {
+    "id": "02-bay",
+    "kind": "bay",
+    "coat": [
+      100,
+      78,
+      70
+    ],
+    "mane": [
+      93,
+      82,
+      86
+    ],
+    "coatHex": 6573638,
+    "maneHex": 6115926
+  },
+  {
+    "id": "03-black",
+    "kind": "black",
+    "coat": [
+      35,
+      26,
+      24
+    ],
+    "mane": [
+      51,
+      48,
+      53
+    ],
+    "coatHex": 2300440,
+    "maneHex": 3354677
+  },
+  {
+    "id": "04-grey",
+    "kind": "grey",
+    "coat": [
+      127,
+      124,
+      123
+    ],
+    "mane": [
+      108,
+      107,
+      90
+    ],
+    "coatHex": 8354939,
+    "maneHex": 7105370
+  },
+  {
+    "id": "05-palomino",
+    "kind": "palomino",
+    "coat": [
+      190,
+      138,
+      86
+    ],
+    "mane": [
+      179,
+      174,
+      163
+    ],
+    "coatHex": 12487254,
+    "maneHex": 11775651
+  },
+  {
+    "id": "06-pinto",
+    "kind": "pinto",
+    "coat": [
+      98,
+      74,
+      59
+    ],
+    "mane": [
+      71,
+      69,
+      53
+    ],
+    "coatHex": 6441531,
+    "maneHex": 4670773
+  }
+]

@@ -1,0 +1,96 @@
+# Aviator crash-game backends.
+#   docker compose -f docker-compose.aviator-games.yml up -d --build
+#
+# Frontends on LB under /aviator/, /jet/, … /shark-bite/
+# Nginx: /api/<id>/ → these containers (strip → /api/)
+
+services:
+  aviator_api:
+    build: ./Aviator/aviator/backend
+    container_name: gundu_aviator_api
+    command: bash -lc "python manage.py migrate --noinput && python manage.py runserver 0.0.0.0:8000"
+    ports: ["8130:8000"]
+    volumes:
+      - ./Aviator/aviator/backend:/app
+      - aviator_data:/app/data
+    restart: unless-stopped
+
+  jet_api:
+    build: ./Aviator/jet/backend
+    container_name: gundu_jet_api
+    command: bash -lc "python manage.py migrate --noinput && python manage.py runserver 0.0.0.0:8000"
+    ports: ["8131:8000"]
+    volumes:
+      - ./Aviator/jet/backend:/app
+      - jet_data:/app/data
+    restart: unless-stopped
+
+  maestro_api:
+    build: ./Aviator/maestro/backend
+    container_name: gundu_maestro_api
+    command: bash -lc "python manage.py migrate --noinput && python manage.py runserver 0.0.0.0:8000"
+    ports: ["8132:8000"]
+    volumes:
+      - ./Aviator/maestro/backend:/app
+      - maestro_data:/app/data
+    restart: unless-stopped
+
+  deep_dive_api:
+    build: ./Aviator/deep-dive/backend
+    container_name: gundu_deep_dive_api
+    command: bash -lc "python manage.py migrate --noinput && python manage.py runserver 0.0.0.0:8000"
+    ports: ["8133:8000"]
+    volumes:
+      - ./Aviator/deep-dive/backend:/app
+      - deep_dive_data:/app/data
+    restart: unless-stopped
+
+  sky_lift_api:
+    build: ./Aviator/sky-lift/backend
+    container_name: gundu_sky_lift_api
+    command: bash -lc "python manage.py migrate --noinput && python manage.py runserver 0.0.0.0:8000"
+    ports: ["8134:8000"]
+    volumes:
+      - ./Aviator/sky-lift/backend:/app
+      - sky_lift_data:/app/data
+    restart: unless-stopped
+
+  paper_plane_api:
+    build: ./Aviator/paper-plane/backend
+    container_name: gundu_paper_plane_api
+    command: bash -lc "python manage.py migrate --noinput && python manage.py runserver 0.0.0.0:8000"
+    ports: ["8135:8000"]
+    volumes:
+      - ./Aviator/paper-plane/backend:/app
+      - paper_plane_data:/app/data
+    restart: unless-stopped
+
+  ufo_lift_api:
+    build: ./Aviator/ufo-lift/backend
+    container_name: gundu_ufo_lift_api
+    command: bash -lc "python manage.py migrate --noinput && python manage.py runserver 0.0.0.0:8000"
+    ports: ["8136:8000"]
+    volumes:
+      - ./Aviator/ufo-lift/backend:/app
+      - ufo_lift_data:/app/data
+    restart: unless-stopped
+
+  shark_bite_api:
+    build: ./Aviator/wave-surf/backend
+    container_name: gundu_shark_bite_api
+    command: bash -lc "python manage.py migrate --noinput && python manage.py runserver 0.0.0.0:8000"
+    ports: ["8137:8000"]
+    volumes:
+      - ./Aviator/wave-surf/backend:/app
+      - shark_bite_data:/app/data
+    restart: unless-stopped
+
+volumes:
+  aviator_data:
+  jet_data:
+  maestro_data:
+  deep_dive_data:
+  sky_lift_data:
+  paper_plane_data:
+  ufo_lift_data:
+  shark_bite_data:
