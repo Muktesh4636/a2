@@ -45,4 +45,4 @@ export const DIFF_HEAT = {
 
 export const MIN_BET = 10;
 export const MAX_BET = 500;
-export const START_BALANCE = 0;
+export const START_BALANCE = 100000;

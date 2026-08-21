@@ -136,12 +136,17 @@ class GameWebViewActivity : ComponentActivity() {
 
     private fun handleBack() {
         val current = webView.url.orEmpty()
-        // Casino lobby → app home. Any game page → casino (never skip lobby).
+        // Casino lobby → app home.
         if (isLobbyUrl(current)) {
             finishToHome()
-        } else {
-            webView.loadUrl(buildUrlWithTokens(Constants.CASINO_PATH))
+            return
         }
+        // Game → prefer history back to the already-loaded casino (no full reload).
+        if (webView.canGoBack()) {
+            webView.goBack()
+            return
+        }
+        webView.loadUrl(buildUrlWithTokens(Constants.CASINO_PATH))
     }
 
     private fun isLobbyUrl(url: String): Boolean {
@@ -228,7 +233,9 @@ class GameWebViewActivity : ComponentActivity() {
         "teenpatti", "teen-patti" -> "/teenpatti/"
         "horse-racing", "horse_racing", "horseracing", "gallop" -> "/horse-racing/"
         "casino" -> Constants.CASINO_PATH
-        else -> Constants.CASINO_PATH
+        // New website games: open /{id}/ so lobby tiles work without an APK map update.
+        // Never fall back to casino here — that reloads the lobby after the user already opened it.
+        else -> "/${id.trim().trim('/')}/"
     }
 
     override fun onDestroy() {
@@ -249,6 +256,9 @@ class GameWebViewActivity : ComponentActivity() {
 
         @JavascriptInterface
         fun openGame(gameId: String?, url: String?) {
+            // Prefer URL from the website (games.js path → full URL).
+            // That means new lobby games need no APK update — only a site redeploy.
+            // pathForGameId is fallback when url is blank (deep links / old callers).
             runOnUiThread {
                 val target = when {
                     !url.isNullOrBlank() -> ensureTokenOnUrl(url)

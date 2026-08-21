@@ -22,24 +22,71 @@ def health(request):
 @api_view(['GET'])
 @permission_classes([AllowAny])
 def time_now(request):
-    """Public current server time (UTC + IST) for clients."""
+    """Public current server time + current round start (for WebGL RoundManager).
+
+    Ansh v1.2 (and similar clients) poll this endpoint and require:
+      - ist: "yyyy-MM-ddTHH:mm:ss.fff"  (no timezone offset)
+      - round_started: { round_id, start_time_ist } in the same IST format
+    Without round_started the client retries forever and gameplay never advances.
+    """
     import time
     from datetime import datetime
     import pytz
+    from django.utils import timezone
 
     now_utc = datetime.now(pytz.UTC)
     ist = pytz.timezone('Asia/Kolkata')
-    now_ist = now_utc.astimezone(ist)
     epoch = int(time.time())
 
-    return JsonResponse(
-        {
-            'utc': now_utc.isoformat(),
-            'ist': now_ist.isoformat(),
-            'epoch': epoch,
-        },
-        status=200,
-    )
+    def _fmt_ist(dt):
+        """Match Unity TryParseExact formats (no offset, up to 3 fractional digits)."""
+        if dt is None:
+            return None
+        if timezone.is_naive(dt):
+            dt = timezone.make_aware(dt, pytz.UTC)
+        local = dt.astimezone(ist)
+        # Truncate to milliseconds so Unity's .fff parser accepts it.
+        return local.strftime('%Y-%m-%dT%H:%M:%S.') + f'{int(local.microsecond / 1000):03d}'
+
+    payload = {
+        'utc': now_utc.isoformat(),
+        'ist': _fmt_ist(now_utc),
+        'epoch': epoch,
+    }
+
+    try:
+        from game.utils import get_current_round_state, get_redis_client
+        redis_client = get_redis_client()
+        round_obj, timer, status, round_data = get_current_round_state(redis_client)
+        if round_obj is not None and getattr(round_obj, 'start_time', None):
+            payload['round_started'] = {
+                'round_id': round_obj.round_id,
+                'start_time_ist': _fmt_ist(round_obj.start_time),
+                'status': status,
+                'timer': timer,
+            }
+        elif isinstance(round_data, dict) and round_data.get('round_id'):
+            # Engine state without a DB row — still give the client a round id.
+            start_raw = round_data.get('start_time') or round_data.get('start_time_ist')
+            start_ist = None
+            if start_raw:
+                try:
+                    parsed = datetime.fromisoformat(str(start_raw).replace('Z', '+00:00'))
+                    start_ist = _fmt_ist(parsed)
+                except Exception:
+                    start_ist = None
+            if start_ist:
+                payload['round_started'] = {
+                    'round_id': round_data['round_id'],
+                    'start_time_ist': start_ist,
+                    'status': status,
+                    'timer': timer,
+                }
+    except Exception as exc:
+        # Time endpoint must stay public/cheap even if Redis/DB is briefly down.
+        payload['round_started_error'] = str(exc)[:120]
+
+    return JsonResponse(payload, status=200)
 
 
 def api_root(request):

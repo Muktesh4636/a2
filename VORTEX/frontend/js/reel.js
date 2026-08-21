@@ -191,14 +191,14 @@ export function createReel(coreEl) {
       const face = normalizeDrop(drop);
       currentFace = face;
 
-      speed = cellH * (turbo ? 10 : 8);
+      // Softer, longer coast so landing fills ~1.5s of the spin SFX
+      speed = cellH * (turbo ? 9 : 6);
 
       const c = cyclePx();
-      // Short coast: land within ~1 cycle
       const posInCycle = ((offset % c) + c) % c;
       let delta = facePos(face) - posInCycle;
       if (delta < cellH * 0.35) delta += c;
-      stopTarget = offset + delta + (turbo ? 0 : 1) * c;
+      stopTarget = offset + delta + (turbo ? 0 : 2) * c;
 
       const dist = Math.max(cellH * 0.75, stopTarget - offset);
       stopDecel = -((speed * speed) / (2 * dist));

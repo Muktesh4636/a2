@@ -81,6 +81,30 @@ The game UI stores the token and sends `Authorization: Bearer <JWT>` on API call
 
 ## Adding more games
 
+**No APK update required.** Put everything on the website:
+
+```js
+// casino/games.js
+{
+  id: "new-game",
+  title: "New Game",
+  image: "images/new-game.png",
+  path: "/new-game/",
+}
+```
+
+Lobby open path (`app.js`):
+
+```js
+AndroidBridge.openGame(game.id, fullUrlWithOrWithoutToken)
+```
+
+`fullUrl` is built as `https://gunduata.tech/new-game/?token=…`. The APK prefers the URL argument and only uses the Kotlin `pathForGameId` map when `url` is blank.
+
+Steps:
 1. Drop PNG into `images/`
 2. Append entry in `games.js`
-3. Redeploy
+3. Host the game under that `path` + nginx/API if needed
+4. Redeploy casino static files
+
+Optional later: add the id to `pathForGameId` only if something opens the game by id alone (no URL).

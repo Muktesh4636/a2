@@ -209,6 +209,21 @@ function withToken(path) {
   const token = readAccessToken();
   const url = new URL(path, location.origin);
   if (token) url.searchParams.set("token", token);
+  // Pass refresh through when present so in-WebView location navigations stay authed.
+  try {
+    const params = new URLSearchParams(location.search);
+    const refresh =
+      params.get("refresh") ||
+      localStorage.getItem("gundu_refresh_token") ||
+      localStorage.getItem("refresh_token") ||
+      "";
+    if (refresh) {
+      url.searchParams.set("refresh", refresh);
+      try {
+        localStorage.setItem("gundu_refresh_token", refresh);
+      } catch (_) {}
+    }
+  } catch (_) {}
   return url;
 }
 
@@ -260,6 +275,8 @@ function playGame(game) {
     return;
   }
   rememberPlayed(game.id);
+  // Always open the game path from games.js.
+  // App launch loads casino once; tapping a tile must NOT reload casino.
   const url = withToken(game.path).toString();
   try {
     if (window.AndroidBridge && typeof window.AndroidBridge.openGame === "function") {

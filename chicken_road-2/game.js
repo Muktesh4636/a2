@@ -222,8 +222,9 @@ const TRUCK_BRAND = "PRIDE";
 const MIN_CAR_GAP = 200;
 /** Queue spacing at a barricade — must clear tall truck sprites. */
 const PARK_CAR_GAP = 130;
-/** How fast a death truck races from the top for a sudden splat. */
-const DEATH_RUSH_SPEED = 720;
+/** How fast a death truck races into the hen — official slam is short, not a teleport. */
+const DEATH_RUSH_SPEED = 900;
+const DEATH_SPAWN_Y = -90;
 
 /* Spine atlas body (Y from bottom of page) */
 const CHICK = {
@@ -250,6 +251,8 @@ function loadImg(src) {
 const state = {
   balance: 0,
   roundId: null,
+  /** True when wallet JWT is missing or /me failed — local crash roll, demo chips */
+  demoMode: false,
   authError: "",
   pendingRequest: false,
   bet: 10,
@@ -551,16 +554,18 @@ function updateBalance() {
 
 function setPlayingUI(playing) {
   const mid = playing && state.step > 0;
+  const dying = state.pendingDeath || state.hitAnim > 0;
+  const locked = playing || dying;
   els.playBtn.hidden = true;
   els.cashBtn.hidden = !mid;
   els.goBtn.hidden = !playing;
   els.actionButtons.classList.toggle("split", mid);
-  els.diffSelect.hidden = playing;
-  els.betInput.disabled = playing;
-  els.betMin.disabled = playing;
-  els.betMax.disabled = playing;
-  els.diffBtn.disabled = playing;
-  [...els.quickBets.querySelectorAll("button")].forEach((b) => (b.disabled = playing));
+  els.diffSelect.hidden = locked;
+  els.betInput.disabled = locked;
+  els.betMin.disabled = locked;
+  els.betMax.disabled = locked;
+  els.diffBtn.disabled = locked;
+  [...els.quickBets.querySelectorAll("button")].forEach((b) => (b.disabled = locked));
 
   if (mid) {
     const m = mults()[state.step - 1];
@@ -572,12 +577,14 @@ function setPlayingUI(playing) {
   }
 
   if (!playing) {
-    els.playBtn.hidden = false;
+    const dying = state.pendingDeath || state.hitAnim > 0;
+    els.playBtn.hidden = dying;
     els.cashBtn.hidden = true;
     els.goBtn.hidden = true;
-    els.diffSelect.hidden = false;
+    els.diffSelect.hidden = dying;
     els.actionButtons.classList.remove("split");
     els.multBadge.hidden = true;
+    if (!dying) els.diffSelect.hidden = false;
   }
 }
 
@@ -675,7 +682,7 @@ async function onPlay() {
   if (state.balance < state.bet) return;
 
   // Local demo (original localhost feel) — client crash roll + real truck kills
-  if (!hasToken) {
+  if (state.demoMode || !hasToken) {
     state.balance -= state.bet;
     updateBalance();
     state.crashAt = rollCrash();
@@ -797,9 +804,9 @@ function padY(h) {
   return h * 0.52;
 }
 
-/** Barricade anchor Y (matches drawBarriers). */
+/** Barricade just above the hen (official: stopper sits behind her on the pad). */
 function barrierY(h) {
-  return h * 0.22;
+  return padY(h) - 58;
 }
 
 /** Drawn stopper size — keep park math in sync with drawBarriers. */
@@ -1017,7 +1024,9 @@ function waitForSafeCrossing(lane, maxMs = 700) {
   if (!laneBlockedForHop(lane)) return Promise.resolve();
   const start = performance.now();
   return new Promise((resolve) => {
-    function tick(now) {
+    let settled = false;
+    const tick = () => {
+      if (settled) return;
       for (const car of carsOnLane(lane)) {
         if (carBlocksCrossing(car, lane)) {
           car.exiting = true;
@@ -1025,13 +1034,14 @@ function waitForSafeCrossing(lane, maxMs = 700) {
           car.speed = cappedExitSpeed(car, HEN_CLEAR_SPEED);
         }
       }
-      if (!laneBlockedForHop(lane) || now - start >= maxMs) {
+      if (!laneBlockedForHop(lane) || performance.now() - start >= maxMs) {
+        settled = true;
+        clearInterval(id);
         resolve();
-        return;
       }
-      requestAnimationFrame(tick);
-    }
-    requestAnimationFrame(tick);
+    };
+    const id = setInterval(tick, 32);
+    tick();
   });
 }
 
@@ -1092,8 +1102,7 @@ function killFromCollision(car) {
   car.stopped = true;
   car.speed = 0;
   setPlayingUI(false);
-  els.playBtn.hidden = false;
-  disablePlayFor(3000);
+  els.playBtn.hidden = true;
   startDeathFx();
 }
 
@@ -1121,11 +1130,54 @@ function checkHenCarHits() {
   }
 }
 
-/** Death truck from the top — rushes immediately so the splat feels sudden. */
+/**
+ * Official death: a car already in that lane slams the hen on the pad.
+ * Prefer the closest truck approaching from above — never yank one from far
+ * off-screen if traffic is already there.
+ */
+function pickDeathCar(lane) {
+  const henY = henWorldY();
+  const onLane = carsOnLane(lane).filter((c) => !c.gone);
+  const above = onLane
+    .filter((c) => c.y < henY - 8)
+    .sort((a, b) => b.y - a.y);
+  if (above[0]) return above[0];
+  const overlapping = onLane.find((c) => carOverlapsHen(c));
+  return overlapping || null;
+}
+
+function armDeathRush(car, lane) {
+  car.lane = lane;
+  car.dir = 1;
+  car.approaching = false;
+  car.stopped = false;
+  car.parking = false;
+  car.exiting = false;
+  car.gone = false;
+  car.safePass = false;
+  car.rush = true;
+  car.hitCue = true;
+  car.speed = DEATH_RUSH_SPEED;
+  const henY = henWorldY();
+  // Keep on-screen traffic; only spawn just above the viewport if missing
+  if (!(car.y < henY - 24)) {
+    car.y = DEATH_SPAWN_Y;
+  }
+  car._prevY = car.y;
+  state.hitCar = car;
+  state.hitLane = lane;
+}
+
+/** Death truck — reuse lane traffic when possible. */
 function cueHitCar(lane) {
+  const existing = pickDeathCar(lane);
+  if (existing) {
+    armDeathRush(existing, lane);
+    return;
+  }
   const car = {
     lane,
-    y: -300 - Math.random() * 60,
+    y: DEATH_SPAWN_Y,
     dir: 1,
     speed: DEATH_RUSH_SPEED,
     key: CAR_KEYS[(lane + 2) % CAR_KEYS.length],
@@ -1158,9 +1210,12 @@ async function attemptStep(diesOverride) {
   els.goBtn.disabled = true;
   els.cashBtn.disabled = true;
 
-  // If a car's rear would clip the hen, hold Go a moment while it clears
-  await waitForSafeCrossing(lane);
-  if (state.phase === "ended" || state.hitAnim > 0) return;
+  // Survive hops wait for a gap. Death hops land into the truck that's
+  // already in that lane (official splat) — do not vault it away first.
+  if (!dies) {
+    await waitForSafeCrossing(lane);
+    if (state.phase === "ended" || state.hitAnim > 0) return;
+  }
 
   state.phase = "animating";
 
@@ -1181,9 +1236,14 @@ async function attemptStep(diesOverride) {
   const hopMs = state.step === 0 ? 640 : 480;
 
   await new Promise((resolve) => {
-    function frame(now) {
+    let settled = false;
+    const tick = () => {
+      if (settled) return;
+      const now = performance.now();
       // Collision may have already killed the hen mid-hop
       if (state.phase === "ended" || state.hitAnim > 0) {
+        settled = true;
+        clearInterval(id);
         resolve();
         return;
       }
@@ -1198,10 +1258,9 @@ async function attemptStep(diesOverride) {
           : state.chickenX - state.viewW * 0.28;
       state.cameraX += (focus - state.cameraX) * 0.28;
       state.cameraX = clampCamera(state.cameraX);
-      if (t < 1) {
-        requestAnimationFrame(frame);
-        return;
-      }
+      if (t < 1) return;
+      settled = true;
+      clearInterval(id);
       state.chickenX = state.hopTo;
       state.hopT = 1;
       state.cameraX = clampCamera(
@@ -1209,17 +1268,21 @@ async function attemptStep(diesOverride) {
           ? Math.max(0, state.chickenX - state.viewW * 0.38)
           : state.chickenX - state.viewW * 0.28
       );
-      els.goBtn.disabled = false;
-      els.cashBtn.disabled = false;
       if (state.phase === "ended" || state.hitAnim > 0) {
         resolve();
         return;
       }
-      if (dies) kill();
-      else survive(next);
+      if (dies) {
+        kill();
+      } else {
+        els.goBtn.disabled = false;
+        els.cashBtn.disabled = false;
+        survive(next);
+      }
       resolve();
-    }
-    requestAnimationFrame(frame);
+    };
+    const id = setInterval(tick, 16);
+    tick();
   });
 }
 
@@ -1332,11 +1395,12 @@ function startDeathFx() {
     });
   }
   scheduleReset(4000);
+  els.playBtn.hidden = false;
   disablePlayFor(3000);
 }
 
 function kill() {
-  // Force a car through the hen from the TOP, then she dies on impact
+  if (state.hitAnim > 0) return;
   forfeitServerRound();
   state.hitLane = Math.max(0, state.crashAt != null ? state.crashAt - 1 : state.step);
   state.phase = "ended";
@@ -1345,41 +1409,16 @@ function kill() {
   state.hitAnim = 0;
   state.pendingDeath = true;
 
-  let car =
-    state.hitCar && state.hitCar.lane === state.hitLane && !state.hitCar.gone
-      ? state.hitCar
-      : null;
-  if (!car) {
-    car = {
-      lane: state.hitLane,
-      y: -300 - Math.random() * 40,
-      dir: 1,
-      speed: DEATH_RUSH_SPEED,
-      key: CAR_KEYS[state.hitLane % CAR_KEYS.length],
-      scale: 0.2,
-      hitCue: true,
-    };
-    state.cars.push(car);
+  if (!(state.hitCar && state.hitCar.lane === state.hitLane && !state.hitCar.gone)) {
+    cueHitCar(state.hitLane);
+  } else {
+    armDeathRush(state.hitCar, state.hitLane);
   }
-  car.approaching = false;
-  car.stopped = false;
-  car.parking = false;
-  car.exiting = false;
-  car.gone = false;
-  car.safePass = false;
-  // Never teleport mid-screen — always keep / reset above the road
-  if (car.y > -40) {
-    car.y = -300 - Math.random() * 40;
-  }
-  car._prevY = car.y;
-  car.speed = DEATH_RUSH_SPEED;
-  car.rush = true;
-  car.hitCue = true;
-  state.hitCar = car;
 
   setPlayingUI(false);
-  els.playBtn.hidden = false;
-  disablePlayFor(3000);
+  els.playBtn.hidden = true;
+  els.goBtn.hidden = true;
+  els.cashBtn.hidden = true;
 
   // Impact kill in drawCars; fallback only if something stalls the rush
   if (killFallbackTimer != null) clearTimeout(killFallbackTimer);
@@ -1390,7 +1429,7 @@ function kill() {
       state.hitCar._prevY = state.hitCar.y;
       killFromCollision(state.hitCar);
     }
-  }, 1100);
+  }, 900);
 }
 
 function sampleRoadColor() {
@@ -1471,7 +1510,7 @@ function draw(dt) {
   if (!els.multBadge.hidden) {
     const sx = state.chickenX - cam;
     els.multBadge.style.left = `${Math.max(48, Math.min(w - 48, sx))}px`;
-    els.multBadge.style.bottom = `${h * 0.3}px`;
+    els.multBadge.style.bottom = `${Math.max(20, Math.round(h - padY(h) - 22))}px`;
   }
 
   if (state.hitAnim > 0) {
@@ -2033,23 +2072,18 @@ function wire() {
     els.winAmt.textContent = `+₹${fmtMoney(Math.round(Number(amt)))}`;
   }, 3500);
 
-  // Load Gundu wallet balance via JWT (?token=)
-  // Without token on localhost → original demo mode (local crash + truck kills)
+  // Without token → demo chips (localhost and public URL). JWT still uses wallet.
   (async () => {
     if (!readAccessToken()) {
-      const host = location.hostname;
-      if (host === "127.0.0.1" || host === "localhost") {
-        state.balance = START_BALANCE > 0 ? START_BALANCE : 100000;
-        state.authError = "";
-        updateBalance();
-        return;
-      }
-      state.authError = "Login required — open from the app";
+      state.demoMode = true;
+      state.balance = START_BALANCE > 0 ? START_BALANCE : 100000;
+      state.authError = "";
       updateBalance();
       return;
     }
     try {
       const me = await api("/me/");
+      state.demoMode = false;
       state.balance = Number(me.balance) || 0;
       updateBalance();
       // Resume an unfinished round with hen/camera on the correct pad
@@ -2067,8 +2101,9 @@ function wire() {
         setPlayingUI(true);
       }
     } catch (e) {
-      state.authError = e.message || "Login required";
-      console.warn(e);
+      state.demoMode = true;
+      state.balance = START_BALANCE > 0 ? START_BALANCE : 100000;
+      updateBalance();
     }
   })();
 }

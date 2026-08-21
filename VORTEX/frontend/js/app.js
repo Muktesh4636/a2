@@ -29,6 +29,34 @@ let payoutAmt = 0;
 const fmt = (n) => Number(n || 0).toLocaleString("en-IN");
 const delay = (ms) => new Promise((r) => setTimeout(r, turbo ? ms * 0.45 : ms));
 
+const spinSfx = (() => {
+  try {
+    const a = new Audio(new URL("./sounds/spin.wav", location.href).href);
+    a.preload = "auto";
+    a.volume = 0.85;
+    return a;
+  } catch (_) {
+    return null;
+  }
+})();
+
+const playSpinSound = () => {
+  if (!spinSfx) return;
+  try {
+    spinSfx.pause();
+    spinSfx.currentTime = 0;
+    void spinSfx.play().catch(() => {});
+  } catch (_) {}
+};
+
+const stopSpinSound = () => {
+  if (!spinSfx) return;
+  try {
+    spinSfx.pause();
+    spinSfx.currentTime = 0;
+  } catch (_) {}
+};
+
 const isSnap = (data) =>
   !!data &&
   typeof data === "object" &&
@@ -157,14 +185,18 @@ const spin = async () => {
   balance = +(balance - bet);
   render();
 
+  playSpinSound();
   reel.startSpin();
-  const minSpinMs = turbo ? 180 : 350;
+  // Match sounds/spin.wav (8s): cruise most of it, then decelerate into the landing.
+  const SPIN_SOUND_MS = 8000;
+  const stopBudgetMs = turbo ? 900 : 1600;
+  const minSpinMs = Math.max(0, (turbo ? Math.round(SPIN_SOUND_MS * 0.5) : SPIN_SOUND_MS) - stopBudgetMs);
   const spunAt = performance.now();
 
   try {
     const data = await postSpin();
     const wait = Math.max(0, minSpinMs - (performance.now() - spunAt));
-    if (wait) await delay(wait);
+    if (wait) await new Promise((r) => setTimeout(r, wait));
     if (!applyState(data)) await recoverState();
     await reel.stopOn(data.drop || "fire", { turbo });
     toast(data.message);
@@ -187,6 +219,7 @@ const spin = async () => {
       reel.setFaceInstant("fire");
     }
   } finally {
+    stopSpinSound();
     busy = false;
     controls.setSpinning(false);
     render();

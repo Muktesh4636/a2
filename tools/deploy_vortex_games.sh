@@ -23,10 +23,13 @@ deploy_frontend() {
   local id="$1"
   local src="$2"
   echo "  /$id/ from $src"
-  $SSH root@$LB "mkdir -p /var/www/gunduata/$id/css /var/www/gunduata/$id/js /var/www/gunduata/$id/images"
+  $SSH root@$LB "mkdir -p /var/www/gunduata/$id/css /var/www/gunduata/$id/js /var/www/gunduata/$id/images /var/www/gunduata/$id/sounds"
   $SCP "$src/index.html" "$src/styles.css" "root@$LB:/var/www/gunduata/$id/"
   $SCP -r "$src/css/." "root@$LB:/var/www/gunduata/$id/css/"
   $SCP -r "$src/js/." "root@$LB:/var/www/gunduata/$id/js/"
+  if [[ -d "$src/sounds" ]]; then
+    $SCP -r "$src/sounds/." "root@$LB:/var/www/gunduata/$id/sounds/"
+  fi
   # images sit next to frontend (../images relative to js → /game/images)
   local imgs="$(dirname "$src")/images"
   for f in earth-flower.png fire-flame.png skull-icon.png spin-button.png water-wave.png wind-icon.png \
@@ -36,7 +39,8 @@ deploy_frontend() {
   $SSH root@$LB "chown -R www-data:www-data /var/www/gunduata/$id"
 }
 
-deploy_frontend "vortex-2" "$ROOT/VORTEX/vortex-2/frontend"
+deploy_frontend "vortex" "$ROOT/VORTEX/frontend"
+deploy_frontend "vortex-1" "$ROOT/VORTEX/vortex-1/frontend"
 deploy_frontend "vip-vortex" "$ROOT/VORTEX/vip-vortex/frontend"
 
 echo "=== 3) Backends + compose → app server ==="

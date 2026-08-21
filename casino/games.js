@@ -1,12 +1,15 @@
 /**
  * Casino Games list — all tiles link to web games (APK WebView + browser).
  *
+ * Flow (no APK update for new games):
+ * 1. App Play → loads website /casino/ once
+ * 2. Tap a tile → AndroidBridge.openGame(id, fullUrl) opens that game path
+ * 3. Never reload casino when opening a game from the lobby
+ *
  * To add a game:
  * 1. Put the tile image in ./images/
- * 2. Append an object below with id, title, image, path
- * 3. Redeploy — APK openGame uses the same id → path map
- *
- * path: web URL on gunduata.tech (?token= is appended automatically)
+ * 2. Append { id, title, image, path } below
+ * 3. Redeploy casino (+ host the game under path)
  */
 export const GAMES = [
   {
