@@ -85,7 +85,11 @@ public class GameController : MonoBehaviour
     /// </summary>
     private void OnApplicationFocus(bool focus)
     {
-        if (!focus) return;
+        if (!focus)
+        {
+            try { AudioManager.Instance?.StopAllAudio(); } catch { }
+            return;
+        }
 
         if (isFreshLaunched)
         {
@@ -106,8 +110,13 @@ public class GameController : MonoBehaviour
     /// </summary>
     private void OnApplicationPause(bool paused)
     {
-        if (!paused)
-            TryResumeReconnect();
+        if (paused)
+        {
+            try { AudioManager.Instance?.StopAllAudio(); } catch { }
+            return;
+        }
+
+        TryResumeReconnect();
     }
 
     #region Event Subscriptions

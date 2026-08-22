@@ -29,6 +29,7 @@ import com.sikwin.app.utils.Constants
  *
  * JS bridge (window.AndroidBridge):
  *  - goBack()
+ *  - goHome()
  *  - openGame(id, url)
  *  - openDeposit(url?)
  */
@@ -141,9 +142,18 @@ class GameWebViewActivity : ComponentActivity() {
             finishToHome()
             return
         }
-        // Game → prefer history back to the already-loaded casino (no full reload).
+        // Opened from site/app home (?from=home) → native home in one back.
+        if (current.contains("/game") && current.contains("from=home")) {
+            finishToHome()
+            return
+        }
+        // Opened from casino (?from=casino) → WebView back to casino.
         if (webView.canGoBack()) {
             webView.goBack()
+            return
+        }
+        if (current.contains("/game")) {
+            webView.loadUrl(buildUrlWithTokens(Constants.CASINO_PATH))
             return
         }
         webView.loadUrl(buildUrlWithTokens(Constants.CASINO_PATH))
@@ -252,6 +262,11 @@ class GameWebViewActivity : ComponentActivity() {
         @JavascriptInterface
         fun goBack() {
             runOnUiThread { handleBack() }
+        }
+
+        @JavascriptInterface
+        fun goHome() {
+            runOnUiThread { finishToHome() }
         }
 
         @JavascriptInterface

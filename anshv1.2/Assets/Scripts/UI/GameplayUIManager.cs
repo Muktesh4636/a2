@@ -81,8 +81,6 @@ public class GameplayUIManager : MonoBehaviour
     private List<TextMeshProUGUI> numberFrequency = new List<TextMeshProUGUI>();
     private List<Image> winBadges = new List<Image>();
 
-    private bool isMuted = false;
-
     // Track current round status so button handler can decide between betting and prediction
     private RoundStatus currentStatus = RoundStatus.NONE;
 
@@ -107,14 +105,9 @@ public class GameplayUIManager : MonoBehaviour
         }
         lastRoundResults.ToList().ForEach(t => t.gameObject.SetActive(false));
         //userProfileBtn.onClick.AddListener(ShowUserProfile);
-        soundBtn.onClick.AddListener(() =>
-        {
-            isMuted = !isMuted;
-            AudioManager.Instance.SetMuted(isMuted);
-            soundBtn.GetComponent<Image>().sprite = isMuted ? muteImg : unmuteImg;
-        });
 
-        soundBtn.GetComponent<Image>().sprite = isMuted ? muteImg : unmuteImg;
+        if (soundBtn != null)
+            soundBtn.gameObject.SetActive(false);
 
         // ensure reconnect UI is hidden initially
         if (reconnectPanel != null) reconnectPanel.SetActive(false);

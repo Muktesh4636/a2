@@ -230,14 +230,14 @@ fun AppNavigation(
                 "executeGameLaunch(web): token=${if (authToken.isNullOrBlank()) "EMPTY" else "${authToken.take(8)}..."}, refresh=${if (refreshToken.isNullOrBlank()) "EMPTY" else "${refreshToken.take(8)}..."}"
             )
 
-            // Same pattern as roulette / trading / chicken / vortex: WebView + ?token=
-            val casinoUrl = GameWebViewActivity.buildGameUrl(
-                Constants.CASINO_PATH,
+            // Gundu Ata from native home → web game directly (back returns to app home).
+            val gameUrl = GameWebViewActivity.buildGameUrl(
+                "${Constants.GUNDU_ATA_PATH}?v=36&from=home",
                 authToken,
                 refreshToken
             )
             val intent = Intent(context, GameWebViewActivity::class.java).apply {
-                putExtra(GameWebViewActivity.EXTRA_URL, casinoUrl)
+                putExtra(GameWebViewActivity.EXTRA_URL, gameUrl)
                 putExtra(GameWebViewActivity.EXTRA_TOKEN, authToken ?: "")
                 putExtra(GameWebViewActivity.EXTRA_REFRESH, refreshToken ?: "")
             }

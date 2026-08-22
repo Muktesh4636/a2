@@ -89,6 +89,20 @@ public class GameManager : MonoBehaviour
         // Keep existing behavior minimal.
     }
 
+    /// <summary>Called from WebGL index.html on back / tab close via SendMessage.</summary>
+    public void StopAllAudio()
+    {
+        try { AudioManager.Instance?.StopAllAudio(); } catch { }
+        try
+        {
+            AudioListener.pause = true;
+            AudioListener.volume = 0f;
+        }
+        catch { }
+    }
+
+    public void StopAllAudio(string _) => StopAllAudio();
+
     private void OnApplicationQuit()
     {
 #if !UNITY_EDITOR

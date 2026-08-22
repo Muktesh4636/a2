@@ -277,21 +277,25 @@ function playGame(game) {
   rememberPlayed(game.id);
   // Always open the game path from games.js.
   // App launch loads casino once; tapping a tile must NOT reload casino.
-  const url = withToken(game.path).toString();
+  const url = withToken(game.path);
+  url.searchParams.set("from", "casino");
+  const urlStr = url.toString();
   try {
     if (window.AndroidBridge && typeof window.AndroidBridge.openGame === "function") {
-      window.AndroidBridge.openGame(game.id, url);
+      window.AndroidBridge.openGame(game.id, urlStr);
       return;
     }
   } catch (_) {}
-  location.href = url;
+  location.href = urlStr;
 }
 
 function showPlayLoginPrompt(game) {
   const existing = document.getElementById("casino-login-prompt");
   if (existing) existing.remove();
 
-  const next = withToken(game.path).pathname + withToken(game.path).search;
+  const nextUrl = withToken(game.path);
+  nextUrl.searchParams.set("from", "casino");
+  const next = nextUrl.pathname + nextUrl.search;
   const nextQ = encodeURIComponent(next);
 
   const overlay = document.createElement("div");
@@ -1019,7 +1023,9 @@ function syncTopPlayBtn() {
   if (!el) return;
   if (readAccessToken()) {
     el.textContent = "Play";
-    el.setAttribute("href", withToken("/game/?v=8").pathname + withToken("/game/?v=8").search);
+    const u = withToken("/game/?v=36");
+    u.searchParams.set("from", "casino");
+    el.setAttribute("href", u.pathname + u.search);
   } else {
     el.textContent = "Login";
     el.setAttribute("href", "/login?next=" + encodeURIComponent("/casino/"));

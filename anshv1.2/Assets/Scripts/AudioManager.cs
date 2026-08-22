@@ -156,4 +156,44 @@ public class AudioManager : MonoBehaviour
             PlayBackgroundMusic();
         }
     }
+
+    /// <summary>
+    /// Hard stop for tab close / back navigation (WebGL). Prevents audio continuing in bfcache.
+    /// </summary>
+    public void StopAllAudio()
+    {
+        isMuted = true;
+        StopSfx();
+        if (bgSource != null)
+        {
+            bgSource.loop = false;
+            bgSource.Stop();
+        }
+
+        foreach (var src in GetComponents<AudioSource>())
+        {
+            if (src == null) continue;
+            src.loop = false;
+            src.Stop();
+        }
+
+        try
+        {
+            AudioListener.pause = true;
+            AudioListener.volume = 0f;
+        }
+        catch { /* WebGL */ }
+    }
+
+    private void OnApplicationPause(bool paused)
+    {
+        if (paused)
+            StopAllAudio();
+    }
+
+    private void OnApplicationFocus(bool hasFocus)
+    {
+        if (!hasFocus)
+            StopAllAudio();
+    }
 }
