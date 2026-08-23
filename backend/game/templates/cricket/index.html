@@ -6,6 +6,7 @@
   <meta name="theme-color" content="#0d1117" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <title>CRICKET</title>
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.15/dist/hls.min.js"></script>
   <script>
     /* APK WebView already pads below the status bar — avoid a second top gap */
     (function () {
@@ -133,6 +134,16 @@
       background: rgba(46,125,50,.18); color: #81c784;
     }
     .badge.up { background: rgba(84,110,122,.25); color: #b0bec5; }
+    .badge.tv {
+      display: inline-flex; align-items: center; gap: 4px;
+      background: rgba(26, 158, 158, 0.18); color: #4dd0e1;
+      border: 1px solid rgba(77, 208, 225, 0.35);
+      animation: tv-glow 1.6s ease-in-out infinite;
+    }
+    @keyframes tv-glow {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(77, 208, 225, 0.35); }
+      50% { box-shadow: 0 0 8px 2px rgba(77, 208, 225, 0.2); }
+    }
     .odds-row { display: flex; gap: 8px; }
     .odd-btn {
       flex: 1; border: 0; border-radius: 8px; padding: 8px 8px;
@@ -158,8 +169,51 @@
       color: var(--muted); border-radius: 10px; padding: 10px 12px; cursor: pointer;
       font-size: 13px; font-weight: 600;
     }
+    .icon-btn.on { color: #1a9e9e; border-color: #1a9e9e; background: #132428; }
     .pill { border-radius: 20px; }
     .pill.on { color: var(--blue); border-color: var(--blue); background: #1a2836; }
+
+    .live-tv-panel {
+      margin-bottom: 14px; border-radius: 12px; overflow: hidden;
+      border: 1px solid var(--border); background: #000;
+    }
+    .live-tv-head {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 8px 12px; background: #1a9e9e; color: #fff;
+      font-size: 12px; font-weight: 800; letter-spacing: .04em;
+    }
+    .live-tv-frame {
+      width: 100%; aspect-ratio: 16 / 9; border: 0; display: block;
+      background: #0a1628;
+    }
+    .live-tv-body {
+      position: relative; background: #000; line-height: 0;
+    }
+    .live-tv-video {
+      width: 100%; aspect-ratio: 16 / 9; display: block;
+      background: #000; object-fit: cover;
+    }
+    .live-tv-mute {
+      position: absolute; right: 10px; bottom: 10px; z-index: 2;
+      width: 42px; height: 42px; border: 0; border-radius: 50%;
+      background: rgba(0, 0, 0, 0.55); color: #fff;
+      font-size: 20px; line-height: 42px; text-align: center;
+      cursor: pointer; padding: 0;
+    }
+    .live-tv-mute:active { background: rgba(0, 0, 0, 0.75); }
+    .live-tv-video::-webkit-media-controls { display: none !important; }
+    .live-tv-video::-webkit-media-controls-enclosure { display: none !important; }
+    .live-tv-video::-webkit-media-controls-start-playback-button,
+    .live-tv-video::-webkit-media-controls-overlay-play-button,
+    .live-tv-video::-webkit-media-controls-play-button {
+      display: none !important;
+      opacity: 0 !important;
+      pointer-events: none !important;
+    }
+    .live-tv-msg {
+      padding: 28px 16px; text-align: center; color: var(--muted);
+      font-size: 13px;
+    }
 
     .score-card { padding: 0; overflow: hidden; }
     .score-head {
@@ -259,6 +313,7 @@
   <div class="toast" id="toast"></div>
 
   <script src="/sports/auth-wallet.js"></script>
+  <script src="/sports/live-tv.js"></script>
   <script>
     const app = document.getElementById('app');
     const backBtn = document.getElementById('backBtn');
@@ -267,7 +322,102 @@
     let listTab = 'pre'; // live | pre
     let filter = 'all';
     let showScoreboard = true;
+    let showLiveTv = false;
+    let liveTvHls = null;
+    let liveTvPlayer = null;
     let pollTimer = null;
+
+    function radheEventIdFromQuery() {
+      const p = qs();
+      return p.get('radhe_event_id') || p.get('radhe_id') || '';
+    }
+
+    function stopLiveTv() {
+      if (liveTvPlayer) { liveTvPlayer.destroy(); liveTvPlayer = null; }
+      liveTvHls = null;
+    }
+
+    function isLiveTvPlaying() {
+      return showLiveTv && (document.getElementById('liveTvVideo') || document.getElementById('liveTvFrame'));
+    }
+
+    function updateScoresOnly(d) {
+      const foot = document.querySelector('.score-foot');
+      if (foot) foot.textContent = d.current_innings || '';
+      document.querySelectorAll('.score-row .score').forEach((el, i) => {
+        const s = (d.scores || [])[i];
+        if (s) el.textContent = s.score || '0-0';
+      });
+      const upd = document.querySelector('.updated');
+      if (upd && (d.last_sync || d.updated)) upd.textContent = 'Updated ' + esc(d.last_sync || d.updated);
+    }
+
+    function playLiveHls(src, embedUrl) {
+      const video = document.getElementById('liveTvVideo');
+      if (!video || !src) return;
+      if (video.dataset.liveSrc === src && video.dataset.livePlayer === '1' && !video.paused) return;
+      stopLiveTv();
+      if (window.GunduLiveTv && GunduLiveTv.createPlayer) {
+        liveTvPlayer = GunduLiveTv.createPlayer(video, src, {
+          onFatal: () => {
+            if (embedUrl) {
+              stopLiveTv();
+              const panel = document.getElementById('liveTvPanel');
+              if (panel) {
+                panel.innerHTML = `<iframe class="live-tv-frame" allow="autoplay; fullscreen" referrerpolicy="no-referrer-when-downgrade" src="${embedUrl}"></iframe>`;
+              }
+            }
+          },
+        });
+        liveTvHls = liveTvPlayer.hls || null;
+        if (!liveTvPlayer.hls) GunduLiveTv.wireSpeaker(video);
+        return;
+      }
+      if (window.Hls && Hls.isSupported()) {
+        liveTvHls = new Hls(window.GunduLiveTv && GunduLiveTv.hlsConfig ? GunduLiveTv.hlsConfig() : { liveSyncDuration: 6, maxLiveSyncPlaybackRate: 1.05 });
+        liveTvHls.loadSource(src);
+        liveTvHls.attachMedia(video);
+        liveTvHls.on(Hls.Events.MANIFEST_PARSED, () => {
+          if (window.GunduLiveTv) GunduLiveTv.wireSpeaker(video);
+          video.play().catch(() => {});
+        });
+      } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+        video.src = src;
+        if (window.GunduLiveTv) GunduLiveTv.wireSpeaker(video);
+        video.play().catch(() => {});
+      }
+    }
+
+    async function loadLiveTv(matchName, competition, teamNames) {
+      if (window.GunduLiveTv) {
+        return GunduLiveTv.lookup({
+          sport: 'cricket',
+          matchName,
+          competition,
+          teamNames,
+        });
+      }
+      const q = new URLSearchParams({ sport: 'cricket' });
+      if (matchName) q.set('match_name', matchName);
+      if (competition) q.set('competition', competition);
+      return getJson(`/api/sports/live-tv/lookup/?${q}`);
+    }
+
+    function liveTvFromApi(d) {
+      const tv = d && d.live_tv;
+      if (!tv || (!tv.embed_url && !tv.radhe_event_id)) return null;
+      return {
+        ok: true,
+        event_id: tv.radhe_event_id,
+        channel_id: tv.channel_id,
+        embed_url: tv.embed_url,
+        relay_hls_url: tv.relay_hls_url || (tv.radhe_event_id ? `/sports-live/${tv.radhe_event_id}/stream.m3u8` : ''),
+      };
+    }
+
+    function teamNamesFromDetail(d) {
+      return (d.scores || []).map(s => s.team).filter(Boolean);
+    }
 
     function toast(msg) {
       toastEl.textContent = msg;
@@ -344,6 +494,33 @@
         '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
       }[c]));
     }
+    function hasLiveTv(tv) {
+      return !!(tv && (tv.relay_hls_url || tv.embed_url || tv.radhe_event_id || tv.event_id));
+    }
+    function sortLiveTvFirst(events, hasTvFn) {
+      return [...events].sort((a, b) => Number(hasTvFn(b)) - Number(hasTvFn(a)));
+    }
+    function tvBadgeHtml() {
+      return '<span class="badge tv" title="Live TV running">📺 TV</span>';
+    }
+    async function enrichEventsLiveTv(events) {
+      if (!window.GunduLiveTv || listTab !== 'live') return events;
+      let streams;
+      try { streams = await GunduLiveTv.fetchIndex(false); } catch { return events; }
+      const filtered = streams.filter(s => s.sport === 'cricket');
+      return events.map(e => {
+        if (hasLiveTv(e.live_tv)) return e;
+        const teams = (e.scores || []).map(s => s.team).filter(Boolean);
+        const matchName = e.match_name || (teams.length >= 2 ? `${teams[0]} vs ${teams[1]}` : '');
+        let best = null, bestScore = 0;
+        for (const s of filtered) {
+          const sc = GunduLiveTv.pairScore(matchName, s.name);
+          if (sc > bestScore) { bestScore = sc; best = s; }
+        }
+        if (best && bestScore >= 0.45) e.live_tv = { ...best, ok: true };
+        return e;
+      });
+    }
 
     function setBottomNavVisible(show) {
       document.body.classList.toggle('no-bottom-nav', !show);
@@ -367,7 +544,11 @@
       try {
         const url = listTab === 'live' ? '/api/cricket/live-events/' : '/api/cricket/pre-events/';
         const data = await getJson(url);
-        const events = data.events || [];
+        let events = data.events || [];
+        if (listTab === 'live') {
+          events = await enrichEventsLiveTv(events);
+          events = sortLiveTvFirst(events, e => hasLiveTv(e.live_tv));
+        }
         if (!events.length) {
           app.querySelector('.loading').outerHTML = `<div class="empty">${listTab === 'live' ? 'No live matches right now.' : 'No pre-match events available.'}</div>`;
           return;
@@ -378,8 +559,9 @@
             : status === 'NOT_STARTED' || !status ? '<span class="badge up">UPCOMING</span>'
             : `<span class="badge up">${esc(status)}</span>`;
           const odds = (e.match_odds || []).map(o => ({ name: o.team, price_format: o.price_format }));
+          const tvMark = hasLiveTv(e.live_tv) ? tvBadgeHtml() : '';
           return `<article class="match-card" data-id="${e.event_id}">
-            <h3>${esc(e.match_name)} ${badge}</h3>
+            <h3>${esc(e.match_name)} ${badge}${tvMark}</h3>
             <div class="meta">${esc(e.competition || e.current_innings || (listTab === 'pre' ? 'Upcoming' : ''))}</div>
             ${oddButtons(odds)}
           </article>`;
@@ -408,12 +590,39 @@
       backBtn.style.display = 'block';
       app.innerHTML = `<div class="loading">Loading markets…</div>`;
       if (pollTimer) clearInterval(pollTimer);
+      stopLiveTv();
 
-      async function load() {
+      const radheEventId = radheEventIdFromQuery();
+      let liveTvInfo = null;
+      let liveTvAvailable = false;
+
+      async function resolveLiveTv(d) {
+        if (liveTvInfo && liveTvInfo.ok) return liveTvInfo;
+        const cached = liveTvFromApi(d);
+        if (cached) return cached;
+        try {
+          return await loadLiveTv(d.match_name, d.competition, teamNamesFromDetail(d));
+        } catch (_) {
+          return { ok: false };
+        }
+      }
+
+      async function load({ fromPoll = false } = {}) {
         const url = isPre
           ? `/api/cricket/preevent-odds/?event_id=${eventId}`
           : `/api/cricket/live-odds/?event_id=${eventId}`;
         const d = await getJson(url);
+        if (!isPre && !liveTvInfo) {
+          const tv = await resolveLiveTv(d);
+          liveTvInfo = tv && tv.ok ? tv : null;
+          liveTvAvailable = !!(liveTvInfo && (liveTvInfo.relay_hls_url || liveTvInfo.embed_url || liveTvInfo.event_id));
+        } else if (!isPre && liveTvInfo) {
+          liveTvAvailable = !!(liveTvInfo.ok && (liveTvInfo.relay_hls_url || liveTvInfo.embed_url || liveTvInfo.event_id));
+        }
+        if (fromPoll && isLiveTvPlaying()) {
+          updateScoresOnly(d);
+          return;
+        }
         const markets = d.all_markets || [];
         const main = filterMarkets(markets, 'main');
         const over = filterMarkets(markets, 'over');
@@ -441,13 +650,26 @@
             </div>
           </div>` : '';
 
+        const relayHls = liveTvInfo && (liveTvInfo.relay_hls_url || (liveTvInfo.event_id ? `/sports-live/${liveTvInfo.event_id}/stream.m3u8` : ''));
+        if (!liveTvAvailable) showLiveTv = false;
+        const tvBtnHtml = liveTvAvailable
+          ? `<button class="icon-btn ${showLiveTv ? 'on' : ''}" id="tvBtn" title="Live TV">📺</button>`
+          : '';
+        const liveTvHtml = (liveTvInfo && liveTvInfo.ok && showLiveTv) ? `
+          <div class="live-tv-panel" id="liveTvPanel">
+            ${relayHls ? (window.GunduLiveTv ? GunduLiveTv.videoMarkup() : '<video class="live-tv-video" id="liveTvVideo" playsinline muted autoplay></video>')
+              : liveTvInfo.embed_url ? `<iframe class="live-tv-frame" id="liveTvFrame" src="${esc(liveTvInfo.embed_url)}" allow="autoplay; fullscreen" referrerpolicy="no-referrer-when-downgrade"></iframe>`
+              : `<div class="live-tv-msg">Stream starting soon</div>`}
+          </div>` : '';
+
         app.innerHTML = `
           <div class="crumb">${esc(crumb)}</div>
           <h1 class="title">${esc(d.match_name || 'Match')}</h1>
           <div class="actions">
-            <button class="icon-btn" id="tvBtn">📺</button>
+            ${tvBtnHtml}
             <button class="pill ${showScoreboard ? 'on' : ''}" id="scoreBtn">Scoreboard</button>
           </div>
+          ${liveTvHtml}
           ${scoreHtml}
           <div class="section-title">Markets & Odds</div>
           <div class="filters">
@@ -468,7 +690,24 @@
             }).join('') : '<div class="empty">No markets in this filter.</div>'}
           </div>`;
 
-        document.getElementById('tvBtn').onclick = () => toast('Live stream coming soon');
+        const tvBtn = document.getElementById('tvBtn');
+        if (tvBtn) {
+          tvBtn.onclick = async () => {
+            showLiveTv = !showLiveTv;
+            if (showLiveTv && !liveTvInfo) {
+              try {
+                liveTvInfo = await resolveLiveTv(d);
+                liveTvAvailable = !!(liveTvInfo && liveTvInfo.ok && (liveTvInfo.relay_hls_url || liveTvInfo.embed_url || liveTvInfo.event_id));
+                if (!liveTvAvailable) throw new Error('No stream');
+              } catch (e) {
+                toast(e.message || 'Could not load live TV');
+                showLiveTv = false;
+                return;
+              }
+            }
+            await load();
+          };
+        }
         document.getElementById('scoreBtn').onclick = () => {
           showScoreboard = !showScoreboard;
           const el = document.getElementById('scoreboard');
@@ -483,12 +722,19 @@
         app.querySelectorAll('.odd-btn').forEach(btn => {
           btn.onclick = () => toast(`Bet slip: ${btn.dataset.name} @ ${btn.dataset.price}`);
         });
+
+        if (showLiveTv && relayHls) {
+          const video = document.getElementById('liveTvVideo');
+          if (!video || video.dataset.liveSrc !== relayHls) {
+            setTimeout(() => playLiveHls(relayHls, liveTvInfo.embed_url), 0);
+          }
+        }
       }
 
       try {
         await load();
-        const interval = isPre ? 30000 : 5000;
-        pollTimer = setInterval(() => load().catch(() => {}), interval);
+        const interval = isPre ? 30000 : 8000;
+        pollTimer = setInterval(() => load({ fromPoll: true }).catch(() => {}), interval);
       } catch (err) {
         app.innerHTML = `<div class="error">${esc(err.message)}. <a href="javascript:location.reload()">Retry</a></div>`;
       }
@@ -496,6 +742,8 @@
 
     backBtn.onclick = () => {
       if (pollTimer) clearInterval(pollTimer);
+      stopLiveTv();
+      showLiveTv = false;
       setQuery({ view: '', event_id: '' });
       renderList();
     };

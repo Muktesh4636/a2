@@ -44,11 +44,17 @@ from decimal import Decimal
 
 logger = logging.getLogger("game")
 
+import os
+
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
 
-_BASE = "https://sports.nowdafa.com/xapi/rest"
+# DafaBet moved off sports.nowdafa.com — old host 301-redirects with a broken query string → 401.
+_BASE = os.environ.get(
+    "DAFABET_SPORTS_API_BASE",
+    "https://sports.dafabetin.com/xapi/rest",
+).rstrip("/")
 
 _HEADERS = {
     "Accept": "application/json",
@@ -1787,7 +1793,7 @@ def _event_card_payload(match: dict) -> dict:
         }
         for s in (match.get("scores") or [])
     ]
-    return {
+    payload = {
         "event_id": match.get("id"),
         "match_name": match.get("match") or "",
         "competition": match.get("competition") or "",
@@ -1799,6 +1805,14 @@ def _event_card_payload(match: dict) -> dict:
         "match_odds": _head_to_head_match_odds(match),
         "date": match.get("date"),
     }
+    try:
+        from game.radhexchange_stream import live_tv_for_match
+        tv = live_tv_for_match(match, sport="cricket", in_play_only=True)
+        if tv:
+            payload["live_tv"] = tv
+    except Exception:
+        pass
+    return payload
 
 
 def _match_odds_detail_payload(match: dict, *, poll_interval: int, last_sync=None) -> dict:
@@ -1834,7 +1848,7 @@ def _match_odds_detail_payload(match: dict, *, poll_interval: int, last_sync=Non
             "market_status": (market.get("status") or "open").lower(),
             "outcomes": outcomes,
         })
-    return {
+    payload = {
         "event_id": match.get("id"),
         "match_name": match.get("match") or "",
         "competition": match.get("competition") or "",
@@ -1848,6 +1862,14 @@ def _match_odds_detail_payload(match: dict, *, poll_interval: int, last_sync=Non
         "last_sync": last_sync,
         "updated": last_sync,
     }
+    try:
+        from game.radhexchange_stream import live_tv_for_match
+        tv = live_tv_for_match(match, sport="cricket", in_play_only=True)
+        if tv:
+            payload["live_tv"] = tv
+    except Exception:
+        pass
+    return payload
 
 
 def _find_cached_match(event_id: int) -> dict | None:
@@ -1882,6 +1904,53 @@ def cricket_ui(request):
     Mobile-style cricket markets UI (browser preview of the Kokoroko screens).
     """
     return render(request, "cricket/index.html")
+
+
+@api_view(["GET"])
+@permission_classes([AllowAny])
+def cricket_live_stream(request):
+    """
+    GET /api/cricket/live-stream/?event_id=<radhexchange_event_id>
+
+    Resolves Radhe Exchange live TV embed (and upstream HLS when available).
+    Example: event_id=28327605 → Caribbean Premier League channel feed.
+    """
+    event_id = (request.query_params.get("event_id") or "").strip()
+    match_name = (request.query_params.get("match_name") or "").strip()
+    competition = (request.query_params.get("competition") or "").strip()
+    try:
+        from game.radhexchange_stream import resolve_radhe_stream, lookup_radhe_tv
+
+        relay_ip = request.META.get("HTTP_X_RELAY_IP") or None
+
+        channel_id = None
+        if not event_id and (match_name or competition):
+            hit = lookup_radhe_tv(
+                match_name,
+                sport="cricket",
+                competition=competition or None,
+                in_play_only=True,
+            )
+            if hit:
+                event_id = str(hit.get("radhe_event_id") or "")
+                channel_id = hit.get("channel_id")
+
+        if not event_id:
+            return Response(
+                {"ok": False, "error": "missing_event_id"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        payload = resolve_radhe_stream(
+            event_id, relay_ip=relay_ip, channel_id=channel_id
+        )
+        return Response(payload)
+    except Exception as exc:
+        logger.exception("cricket_live_stream failed for event_id=%s", event_id)
+        return Response(
+            {"ok": False, "event_id": event_id, "error": str(exc)},
+            status=status.HTTP_502_BAD_GATEWAY,
+        )
 
 
 @api_view(["GET"])

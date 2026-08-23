@@ -24,6 +24,8 @@ from game import admin_views as game_admin_views
 from game import cricket_views
 from game import soccer_tennis_views
 from game import sports_logo
+from game import sports_live_tv_views
+from game import sports_views
 from game import roulette_views
 from game import trading_views
 from game import chicken_road_views
@@ -167,6 +169,10 @@ urlpatterns = [
     # ----------------------------------------------------------------
     path('cricket/', cricket_views.cricket_ui, name='cricket_ui'),
     path('cricket', cricket_views.cricket_ui, name='cricket_ui_noslash'),
+    path('sports/', sports_views.sports_ui, name='sports_ui'),
+    path('sports/match/', sports_views.sports_match_ui, name='sports_match_ui'),
+    path('sports/auth-wallet.js', sports_views.sports_auth_wallet_js, name='sports_auth_wallet_js'),
+    path('sports/live-tv.js', sports_views.sports_live_tv_js, name='sports_live_tv_js'),
     path('api/cricket/matches/',               cricket_views.cricket_match_list,     name='cricket_match_list'),
     path('api/cricket/matches/<int:match_id>/', cricket_views.cricket_match_detail, name='cricket_match_detail'),
     path('api/cricket/upcoming/',              cricket_views.cricket_upcoming_matches, name='cricket_upcoming_matches'),
@@ -179,6 +185,7 @@ urlpatterns = [
     path('api/cricket/all-live-events/', cricket_views.cricket_all_live_events, name='cricket_all_live_events'),
     path('api/cricket/sync-status/',     cricket_views.cricket_sync_status,     name='cricket_sync_status'),
     # Kokoroko Android adapters
+    path('api/cricket/live-stream/',      cricket_views.cricket_live_stream,      name='cricket_live_stream'),
     path('api/cricket/live-events/',     cricket_views.cricket_live_events,     name='cricket_live_events'),
     path('api/cricket/pre-events/',      cricket_views.cricket_pre_events,      name='cricket_pre_events'),
     path('api/cricket/live-odds/',       cricket_views.cricket_live_odds,       name='cricket_live_odds'),
@@ -190,6 +197,8 @@ urlpatterns = [
 
     # Shared sports assets (team / player logos)
     path('api/sports/team-logo/', sports_logo.team_logo, name='sports_team_logo'),
+    path('api/sports/live-tv/', sports_live_tv_views.sports_live_tv_list, name='sports_live_tv_list'),
+    path('api/sports/live-tv/lookup/', sports_live_tv_views.sports_live_tv_lookup, name='sports_live_tv_lookup'),
 
     # Soccer (Football) — same Redis-backed pattern as cricket
     path('api/soccer/matches/',                soccer_tennis_views.match_list,        name='soccer_match_list'),
@@ -349,7 +358,7 @@ urlpatterns = [
     # Updated regex to properly match all paths except API/admin/static/media/ws/assets/apk/download paths
     # Handles potential double slashes and varying prefixes
     # Explicitly exclude download paths and .apk files
-    re_path(r'^(?!/?api/|/?admin/|/?game-admin/|/?static/|/?media/|/?ws/|/?assets/|/?cricket/?$|^apk$|^download-apk$|.*\.apk$).*', project_views.serve_react_app, name='react_app'),
+    re_path(r'^(?!/?api/|/?admin/|/?game-admin/|/?static/|/?media/|/?ws/|/?assets/|/?cricket/?$|/?sports/?$|/?sports/match/?$|^apk$|^download-apk$|.*\.apk$).*', project_views.serve_react_app, name='react_app'),
 ]
 
 # Serve static and media files (always in development, only static in production)

@@ -131,6 +131,86 @@ body {
   opacity: 0.9;
 }
 
+.dealer-live {
+  margin: 0 0 1rem;
+  animation: rise 0.8s ease-out both;
+}
+
+.dealer-live-frame {
+  position: relative;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #0a0a0a;
+  border: 1px solid rgba(224, 168, 74, 0.35);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.55);
+  aspect-ratio: 16 / 9;
+}
+
+.dealer-live-video {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  background: #111;
+}
+
+.dealer-live-badge {
+  position: absolute;
+  top: 0.55rem;
+  left: 0.65rem;
+  padding: 0.2rem 0.55rem;
+  border-radius: 4px;
+  background: rgba(196, 30, 58, 0.92);
+  color: #fff;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+}
+
+.dealer-live-sound {
+  position: absolute;
+  right: 0.55rem;
+  bottom: 0.55rem;
+  width: 2.25rem;
+  height: 2.25rem;
+  border: none;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  font-size: 1rem;
+}
+
+.dealer-live-sound .sound-on {
+  display: none;
+}
+
+.dealer-live-sound.unmuted .sound-on {
+  display: inline;
+}
+
+.dealer-live-sound.unmuted .sound-off {
+  display: none;
+}
+
+.dealer-live-frame[data-state="error"] .dealer-live-badge {
+  background: rgba(80, 80, 80, 0.9);
+  content: "OFFLINE";
+}
+
+.dealer-live-frame[data-state="error"]::after {
+  content: "Live stream reconnecting…";
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgba(0, 0, 0, 0.72);
+  color: var(--sand);
+  font-size: 0.9rem;
+}
+
 .table {
   opacity: 1;
 }

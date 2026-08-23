@@ -1,0 +1,5 @@
+FROM alpine:3.20
+RUN apk add --no-cache ffmpeg bash
+COPY relay.sh /relay.sh
+RUN chmod +x /relay.sh
+CMD ["/relay.sh"]

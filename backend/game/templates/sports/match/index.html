@@ -6,6 +6,7 @@
   <meta name="theme-color" content="#0d1117" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <title>Match — Sports</title>
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.15/dist/hls.min.js"></script>
   <script>
     (function () {
       try {
@@ -98,6 +99,48 @@
     }
     .pill { border-radius: 20px; }
     .pill.on { color: var(--blue); border-color: var(--blue); background: #1a2836; }
+
+    .live-tv-panel {
+      margin-bottom: 14px; border-radius: 12px; overflow: hidden;
+      border: 1px solid var(--border); background: #000;
+    }
+    .live-tv-head {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 8px 12px; background: #1a9e9e; color: #fff;
+      font-size: 12px; font-weight: 800; letter-spacing: .04em;
+    }
+    .live-tv-frame {
+      width: 100%; aspect-ratio: 16 / 9; border: 0; display: block;
+      background: #0a1628;
+    }
+    .live-tv-body {
+      position: relative; background: #000; line-height: 0;
+    }
+    .live-tv-msg {
+      padding: 28px 16px; text-align: center; color: var(--muted);
+      font-size: 13px;
+    }
+    .live-tv-video {
+      width: 100%; aspect-ratio: 16 / 9; display: block;
+      background: #000; object-fit: cover;
+    }
+    .live-tv-mute {
+      position: absolute; right: 10px; bottom: 10px; z-index: 2;
+      width: 42px; height: 42px; border: 0; border-radius: 50%;
+      background: rgba(0, 0, 0, 0.55); color: #fff;
+      font-size: 20px; line-height: 42px; text-align: center;
+      cursor: pointer; padding: 0;
+    }
+    .live-tv-mute:active { background: rgba(0, 0, 0, 0.75); }
+    .live-tv-video::-webkit-media-controls { display: none !important; }
+    .live-tv-video::-webkit-media-controls-enclosure { display: none !important; }
+    .live-tv-video::-webkit-media-controls-start-playback-button,
+    .live-tv-video::-webkit-media-controls-overlay-play-button,
+    .live-tv-video::-webkit-media-controls-play-button {
+      display: none !important;
+      opacity: 0 !important;
+      pointer-events: none !important;
+    }
 
     .score-card { background: var(--card); border-radius: 12px; padding: 0; overflow: hidden; margin-bottom: 12px; border: 1px solid #2a3340; }
     .score-head {
@@ -201,6 +244,7 @@
   <div class="toast" id="toast"></div>
 
   <script src="/sports/auth-wallet.js"></script>
+  <script src="/sports/live-tv.js"></script>
   <script>
     const app = document.getElementById('app');
     const toastEl = document.getElementById('toast');
@@ -224,6 +268,11 @@
 
     let filter = 'all';
     let showScoreboard = true;
+    let showLiveTv = false;
+    let liveTvInfo = null;
+    let liveTvAvailable = false;
+    let liveTvHls = null;
+    let liveTvPlayer = null;
     let pollTimer = null;
     let lastMatch = null;
     let lastSyncCached = '';
@@ -285,6 +334,90 @@
       return r.json();
     }
 
+    async function loadLiveTv(match) {
+      const tv = match && match.live_tv;
+      if (tv && (tv.embed_url || tv.radhe_event_id)) {
+        return {
+          ok: true,
+          event_id: tv.radhe_event_id,
+          channel_id: tv.channel_id,
+          embed_url: tv.embed_url,
+          relay_hls_url: tv.relay_hls_url || (tv.radhe_event_id ? `/sports-live/${tv.radhe_event_id}/stream.m3u8` : ''),
+        };
+      }
+      const teamNames = (match.scores || []).map(s => s.team).filter(Boolean);
+      if (window.GunduLiveTv) {
+        return GunduLiveTv.lookup({
+          sport,
+          matchName: match.match,
+          competition: match.competition,
+          teamNames,
+        });
+      }
+      const q = new URLSearchParams({ sport });
+      if (match.match) q.set('match_name', match.match);
+      if (match.competition) q.set('competition', match.competition);
+      return getJson(`/api/sports/live-tv/lookup/?${q}`);
+    }
+
+    function stopLiveTv() {
+      if (liveTvPlayer) { liveTvPlayer.destroy(); liveTvPlayer = null; }
+      liveTvHls = null;
+    }
+
+    function isLiveTvPlaying() {
+      return showLiveTv && (document.getElementById('liveTvVideo') || document.getElementById('liveTvFrame'));
+    }
+
+    function updateScoresOnly(match, lastSync) {
+      lastMatch = match;
+      lastSyncCached = lastSync || '';
+      const foot = document.querySelector('.score-foot');
+      if (foot) foot.textContent = [match.period, clockText(match)].filter(Boolean).join(' · ');
+      document.querySelectorAll('.score-row .score').forEach((el, i) => {
+        const s = (match.scores || [])[i];
+        if (s) el.textContent = s.score ?? '—';
+      });
+      const upd = document.querySelector('.updated');
+      if (upd && lastSync) upd.textContent = 'Updated ' + lastSync;
+    }
+
+    function playLiveHls(src, embedUrl) {
+      const video = document.getElementById('liveTvVideo');
+      if (!video || !src) return;
+      if (video.dataset.liveSrc === src && video.dataset.livePlayer === '1' && !video.paused) return;
+      stopLiveTv();
+      if (window.GunduLiveTv && GunduLiveTv.createPlayer) {
+        liveTvPlayer = GunduLiveTv.createPlayer(video, src, {
+          onFatal: () => {
+            if (embedUrl) {
+              stopLiveTv();
+              const panel = document.getElementById('liveTvPanel');
+              if (panel) {
+                panel.innerHTML = `<iframe class="live-tv-frame" allow="autoplay; fullscreen" referrerpolicy="no-referrer-when-downgrade" src="${embedUrl}"></iframe>`;
+              }
+            }
+          },
+        });
+        liveTvHls = liveTvPlayer.hls || null;
+        if (!liveTvPlayer.hls) GunduLiveTv.wireSpeaker(video);
+        return;
+      }
+      if (window.Hls && Hls.isSupported()) {
+        liveTvHls = new Hls(window.GunduLiveTv && GunduLiveTv.hlsConfig ? GunduLiveTv.hlsConfig() : { liveSyncDuration: 6, maxLiveSyncPlaybackRate: 1.05 });
+        liveTvHls.loadSource(src);
+        liveTvHls.attachMedia(video);
+        liveTvHls.on(Hls.Events.MANIFEST_PARSED, () => {
+          if (window.GunduLiveTv) GunduLiveTv.wireSpeaker(video);
+          video.play().catch(() => {});
+        });
+      } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+        video.src = src;
+        if (window.GunduLiveTv) GunduLiveTv.wireSpeaker(video);
+        video.play().catch(() => {});
+      }
+    }
+
     function isMainMarket(q) {
       q = q.toLowerCase();
       if (sport === 'soccer') {
@@ -338,6 +471,7 @@
       const filtered = filterMarkets(markets, filter);
       const status = ((match.clock || {}).status || '').toUpperCase();
       const live = status === 'STARTED';
+      liveTvAvailable = live && !!(liveTvInfo && liveTvInfo.ok && (liveTvInfo.relay_hls_url || liveTvInfo.embed_url || liveTvInfo.event_id));
       const crumb = [
         meta.label.charAt(0) + meta.label.slice(1).toLowerCase(),
         match.competition || '',
@@ -358,14 +492,28 @@
           </div>
         </div>` : '';
 
+      const relayHls = liveTvInfo && (liveTvInfo.relay_hls_url || (liveTvInfo.event_id ? `/sports-live/${liveTvInfo.event_id}/stream.m3u8` : ''));
+      if (!liveTvAvailable) showLiveTv = false;
+      const tvBtnHtml = liveTvAvailable
+        ? `<button class="icon-btn ${showLiveTv ? 'on' : ''}" id="tvBtn" title="Live TV">📺</button>`
+        : '';
+      const liveTvHtml = (liveTvInfo && liveTvInfo.ok && showLiveTv) ? `
+        <div class="live-tv-panel" id="liveTvPanel">
+          ${relayHls ? (window.GunduLiveTv ? GunduLiveTv.videoMarkup() : '<video class="live-tv-video" id="liveTvVideo" playsinline muted autoplay></video>')
+            : liveTvInfo.embed_url
+            ? `<iframe class="live-tv-frame" id="liveTvFrame" src="${esc(liveTvInfo.embed_url)}" allow="autoplay; fullscreen" referrerpolicy="no-referrer-when-downgrade"></iframe>`
+            : `<div class="live-tv-msg">Stream starting soon</div>`}
+        </div>` : '';
+
       app.innerHTML = `
         <div class="crumb">${esc(crumb)}</div>
         <h1 class="title">${esc(match.match || 'Match')}</h1>
         <div class="actions">
-          <button class="icon-btn" id="tvBtn">📺</button>
+          ${tvBtnHtml}
           <button class="pill ${showScoreboard ? 'on' : ''}" id="scoreBtn">Scoreboard</button>
           ${live ? '<span style="color:var(--gold);font-size:12px;font-weight:700">● LIVE</span>' : ''}
         </div>
+        ${liveTvHtml}
         ${scoreHtml}
         <div class="section-title">Markets & Odds</div>
         <div class="filters">
@@ -386,7 +534,24 @@
           }).join('') : '<div class="empty">No markets in this filter.</div>'}
         </div>`;
 
-      document.getElementById('tvBtn').onclick = () => toast('Live stream coming soon');
+      const tvBtn = document.getElementById('tvBtn');
+      if (tvBtn) {
+        tvBtn.onclick = async () => {
+          showLiveTv = !showLiveTv;
+          if (showLiveTv && !liveTvInfo) {
+            try {
+              liveTvInfo = await loadLiveTv(match);
+              liveTvAvailable = !!(liveTvInfo && liveTvInfo.ok && (liveTvInfo.relay_hls_url || liveTvInfo.embed_url || liveTvInfo.event_id));
+              if (!liveTvAvailable) throw new Error('No stream');
+            } catch (e) {
+              toast('Could not load live TV');
+              showLiveTv = false;
+              return;
+            }
+          }
+          render(match, lastSync);
+        };
+      }
       document.getElementById('scoreBtn').onclick = () => {
         showScoreboard = !showScoreboard;
         const el = document.getElementById('scoreboard');
@@ -400,6 +565,12 @@
       app.querySelectorAll('.odd-btn').forEach(btn => {
         btn.onclick = () => toast(`Bet slip: ${btn.dataset.name} @ ${btn.dataset.price}`);
       });
+      if (showLiveTv && relayHls) {
+        const video = document.getElementById('liveTvVideo');
+        if (!video || video.dataset.liveSrc !== relayHls) {
+          setTimeout(() => playLiveHls(relayHls, liveTvInfo.embed_url), 0);
+        }
+      }
     }
 
     async function load({ fromPoll = false } = {}) {
@@ -423,12 +594,27 @@
       try {
         const data = await getJson(`/api/${meta.api}/matches/${eventId}/`);
         const match = data.match || {};
+        const isLive = ((match.clock || {}).status || '').toUpperCase() === 'STARTED';
+        if (isLive && !liveTvInfo) {
+          try {
+            liveTvInfo = await loadLiveTv(match);
+            liveTvAvailable = !!(liveTvInfo && liveTvInfo.ok && (liveTvInfo.relay_hls_url || liveTvInfo.embed_url || liveTvInfo.event_id));
+          } catch (_) {
+            liveTvInfo = null;
+            liveTvAvailable = false;
+          }
+        } else if (liveTvInfo) {
+          liveTvAvailable = !!(liveTvInfo.ok && (liveTvInfo.relay_hls_url || liveTvInfo.embed_url || liveTvInfo.event_id));
+        }
         writeMatchCache(match, data.last_sync);
-        // Warm team logos for this match
         (match.scores || []).forEach(s => {
           const img = new Image();
           img.src = logoUrl(s.team);
         });
+        if (fromPoll && isLiveTvPlaying()) {
+          updateScoresOnly(match, data.last_sync);
+          return;
+        }
         render(match, data.last_sync);
       } catch (err) {
         if (!lastMatch && !fromPoll) {

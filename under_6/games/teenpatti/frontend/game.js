@@ -384,6 +384,7 @@ els.foldBtn.addEventListener("click", () => decide("fold"));
 if (els.tableScene) els.tableScene.dataset.camera = "top";
 clearTable();
 updateUI();
+
 ensureSession()
   .then(() => updateUI())
   .catch((err) => {

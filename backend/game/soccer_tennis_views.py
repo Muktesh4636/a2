@@ -24,6 +24,19 @@ from rest_framework import status
 from game import sports_feed as feed
 
 
+def _attach_live_tv(match: dict, sport: str) -> dict:
+    try:
+        from game.radhexchange_stream import live_tv_for_match
+        tv = live_tv_for_match(match, sport=sport, in_play_only=True)
+        if tv:
+            out = dict(match)
+            out["live_tv"] = tv
+            return out
+    except Exception:
+        pass
+    return match
+
+
 def _sport_from_path(request) -> str:
     path = (request.path or "").lower()
     if "/api/tennis/" in path:
@@ -61,6 +74,8 @@ def live_matches(request):
     if matches is None:
         feed.fetch_and_cache_live(sport)
         matches = feed.cache_get(cache_key) or []
+
+    matches = [_attach_live_tv(m, sport) for m in matches]
 
     return Response({
         "count": len(matches),
@@ -172,7 +187,7 @@ def match_detail(request, match_id: int):
     return Response({
         "sport": cfg["name"],
         "last_sync": feed.cache_get(keys["sync_ts"]),
-        "match": match,
+        "match": _attach_live_tv(match, sport),
     })
 
 

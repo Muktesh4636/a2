@@ -10,10 +10,9 @@ Sport configs:
   tennis  → eventPathId 239 (Tennis)
 """
 
-from __future__ import annotations
-
 import json
 import logging
+import os
 import time
 from datetime import datetime, timezone as dt_timezone
 from typing import Any
@@ -23,7 +22,11 @@ from django.utils import timezone
 
 logger = logging.getLogger("game")
 
-_BASE = "https://sports.nowdafa.com/xapi/rest"
+# DafaBet moved off sports.nowdafa.com — old host 301-redirects with a broken query string → 401.
+_BASE = os.environ.get(
+    "DAFABET_SPORTS_API_BASE",
+    "https://sports.dafabetin.com/xapi/rest",
+).rstrip("/")
 
 _HEADERS = {
     "Accept": "application/json",

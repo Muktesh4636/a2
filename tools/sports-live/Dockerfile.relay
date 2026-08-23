@@ -1,0 +1,12 @@
+FROM node:22-alpine
+
+RUN apk add --no-cache ffmpeg bash
+
+WORKDIR /app
+COPY resolve_stream.js relay_manager.js relay.sh ./
+RUN chmod +x relay.sh relay_manager.js
+
+ENV OUT_DIR=/hls
+ENV POLL_SEC=30
+ENV MAX_STREAMS=24
+CMD ["node", "/app/relay_manager.js"]
