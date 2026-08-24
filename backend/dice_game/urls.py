@@ -27,6 +27,7 @@ from game import sports_logo
 from game import sports_live_tv_views
 from game import sports_views
 from game import roulette_views
+from game import roulette_live_views
 from game import trading_views
 from game import chicken_road_views
 from game import chicken_road2_views
@@ -173,6 +174,7 @@ urlpatterns = [
     path('sports/match/', sports_views.sports_match_ui, name='sports_match_ui'),
     path('sports/auth-wallet.js', sports_views.sports_auth_wallet_js, name='sports_auth_wallet_js'),
     path('sports/live-tv.js', sports_views.sports_live_tv_js, name='sports_live_tv_js'),
+    path('sports/betslip.js', sports_views.sports_betslip_js, name='sports_betslip_js'),
     path('api/cricket/matches/',               cricket_views.cricket_match_list,     name='cricket_match_list'),
     path('api/cricket/matches/<int:match_id>/', cricket_views.cricket_match_detail, name='cricket_match_detail'),
     path('api/cricket/upcoming/',              cricket_views.cricket_upcoming_matches, name='cricket_upcoming_matches'),
@@ -191,6 +193,7 @@ urlpatterns = [
     path('api/cricket/live-odds/',       cricket_views.cricket_live_odds,       name='cricket_live_odds'),
     path('api/cricket/preevent-odds/',   cricket_views.cricket_preevent_odds,   name='cricket_preevent_odds'),
     path('api/cricket/bet/',             cricket_views.place_cricket_bet,       name='place_cricket_bet'),
+    path('api/cricket/bet/<int:bet_id>/cashout/', cricket_views.cash_out_cricket_bet, name='cricket_cash_out_bet'),
     path('api/cricket/bets/',            cricket_views.my_cricket_bets,         name='my_cricket_bets'),
     path('api/cricket/results/',         cricket_views.cricket_results,         name='cricket_results'),
     path('api/cricket/settle/',          cricket_views.cricket_settle_now,      name='cricket_settle_now'),
@@ -210,6 +213,9 @@ urlpatterns = [
     path('api/soccer/changes/',                soccer_tennis_views.live_changes,      name='soccer_changes'),
     path('api/soccer/markets/',                soccer_tennis_views.markets,           name='soccer_markets'),
     path('api/soccer/sync-status/',            soccer_tennis_views.sync_status,       name='soccer_sync_status'),
+    path('api/soccer/bet/',                    soccer_tennis_views.place_bet,         name='soccer_place_bet'),
+    path('api/soccer/bet/<int:bet_id>/cashout/', soccer_tennis_views.cash_out_bet,  name='soccer_cash_out_bet'),
+    path('api/soccer/bets/',                   soccer_tennis_views.my_bets,           name='soccer_my_bets'),
 
     # Tennis — same Redis-backed pattern as cricket
     path('api/tennis/matches/',                soccer_tennis_views.match_list,        name='tennis_match_list'),
@@ -221,6 +227,9 @@ urlpatterns = [
     path('api/tennis/changes/',                soccer_tennis_views.live_changes,      name='tennis_changes'),
     path('api/tennis/markets/',                soccer_tennis_views.markets,           name='tennis_markets'),
     path('api/tennis/sync-status/',            soccer_tennis_views.sync_status,       name='tennis_sync_status'),
+    path('api/tennis/bet/',                    soccer_tennis_views.place_bet,         name='tennis_place_bet'),
+    path('api/tennis/bet/<int:bet_id>/cashout/', soccer_tennis_views.cash_out_bet,  name='tennis_cash_out_bet'),
+    path('api/tennis/bets/',                   soccer_tennis_views.my_bets,           name='tennis_my_bets'),
 
     # Colour game endpoints
     path('api/colour/round/', game_views.colour_round_status, name='colour_round_status'),
@@ -238,6 +247,8 @@ urlpatterns = [
     path('api/roulette/bets/clear/', roulette_views.roulette_clear, name='roulette_clear'),
     path('api/roulette/spin/', roulette_views.roulette_spin, name='roulette_spin'),
     path('api/roulette/history/', roulette_views.roulette_history, name='roulette_history'),
+    path('api/roulette/live-stream/', roulette_live_views.roulette_live_stream, name='roulette_live_stream'),
+    path('roulette/live/', roulette_live_views.roulette_live_ui, name='roulette_live_ui'),
 
 
     # Trading (Grow More) — real JWT + wallet only (no demo)

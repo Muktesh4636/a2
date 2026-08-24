@@ -29,3 +29,7 @@ def sports_auth_wallet_js(request):
 
 def sports_live_tv_js(request):
     return _serve_sports_asset("live-tv.js")
+
+
+def sports_betslip_js(request):
+    return _serve_sports_asset("betslip.js")

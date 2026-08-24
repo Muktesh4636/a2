@@ -197,7 +197,7 @@ class GameWebViewActivity : ComponentActivity() {
     private fun pathForGameId(id: String): String = when (id) {
         "gundu-ata", "gundu_ata", "dice" -> Constants.GUNDU_ATA_PATH
         "stock-market", "trading" -> "/trading/"
-        "auto-roulette", "roulette" -> "/roulette/"
+        "live-roulette", "auto-roulette", "roulette" -> "/roulette/"
         "chicken-road" -> "/chicken-road/"
         "chicken-road-2" -> "/chicken-road-2/"
         "vortex" -> "/vortex/"

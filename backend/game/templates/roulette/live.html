@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Auto Roulette Live</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; background: #0a0e14; color: #e8edf3;
+      font-family: system-ui, -apple-system, sans-serif;
+      min-height: 100vh; display: flex; flex-direction: column;
+    }
+    header {
+      padding: 14px 16px; border-bottom: 1px solid #2a3340;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    header h1 { margin: 0; font-size: 16px; color: #d4af37; }
+    .live { color: #e57373; font-size: 12px; font-weight: 800; }
+    main { flex: 1; display: grid; place-items: center; padding: 12px; }
+    .panel {
+      width: 100%; max-width: 960px; background: #000;
+      border: 1px solid #2a3340; border-radius: 12px; overflow: hidden;
+    }
+    video { width: 100%; display: block; aspect-ratio: 16 / 9; background: #000; }
+    .msg { padding: 12px 14px; font-size: 13px; color: #9aa3af; }
+    .err { color: #ef9a9a; }
+  </style>
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
+</head>
+<body>
+  <header>
+    <h1>Auto Roulette Live</h1>
+    <span class="live" id="badge">● LIVE</span>
+  </header>
+  <main>
+    <div class="panel">
+      <video id="video" playsinline muted autoplay></video>
+      <div class="msg" id="msg">Loading stream…</div>
+    </div>
+  </main>
+  <script>
+    const video = document.getElementById('video');
+    const msg = document.getElementById('msg');
+    const HLS = '/roulette-live/auto-roulette/stream.m3u8';
+
+    async function play() {
+      try {
+        if (window.Hls && Hls.isSupported()) {
+          const hls = new Hls({ liveSyncDuration: 4, maxLiveSyncPlaybackRate: 1.05 });
+          hls.loadSource(HLS);
+          hls.attachMedia(video);
+          hls.on(Hls.Events.MANIFEST_PARSED, () => {
+            msg.textContent = 'Playing relayed Evolution stream';
+            video.play().catch(() => {});
+          });
+          hls.on(Hls.Events.ERROR, (_, data) => {
+            if (data.fatal) {
+              msg.innerHTML = '<span class="err">Stream not ready yet — retrying…</span>';
+              setTimeout(() => { hls.destroy(); play(); }, 5000);
+            }
+          });
+        } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+          video.src = HLS;
+          video.addEventListener('loadedmetadata', () => {
+            msg.textContent = 'Playing relayed Evolution stream';
+            video.play().catch(() => {});
+          });
+        } else {
+          msg.innerHTML = '<span class="err">HLS not supported in this browser</span>';
+        }
+      } catch (e) {
+        msg.innerHTML = '<span class="err">' + e.message + '</span>';
+      }
+    }
+    play();
+  </script>
+</body>
+</html>

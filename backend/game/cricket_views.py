@@ -1835,6 +1835,7 @@ def _match_odds_detail_payload(match: dict, *, poll_interval: int, last_sync=Non
             outcomes.append({
                 "name": o.get("description") or "",
                 "price_format": _outcome_price_format(o),
+                "price_decimal": o.get("price_decimal"),
                 "status": (market.get("status") or "").lower(),
                 "outcome_id": o.get("id"),
             })
@@ -2274,7 +2275,20 @@ def my_cricket_bets(request):
     """
     from game.models import CricketBet
 
-    bets = CricketBet.objects.filter(user=request.user).order_by("-created_at")[:50]
+    bets = CricketBet.objects.filter(user=request.user).order_by("-created_at")
+    event_id = request.GET.get("event_id")
+    if event_id:
+        try:
+            bets = bets.filter(event_id=int(event_id))
+        except (TypeError, ValueError):
+            return Response(
+                {"error": "event_id must be an integer"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+    bet_status = (request.GET.get("status") or "").upper().strip()
+    if bet_status:
+        bets = bets.filter(status=bet_status)
+    bets = bets[:50]
     return Response({
         "bets": [
             {
@@ -2296,6 +2310,104 @@ def my_cricket_bets(request):
             for b in bets
         ]
     })
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def cash_out_cricket_bet(request, bet_id: int):
+    """
+    POST /api/cricket/bet/<id>/cashout/
+    Cancel an open bet early. Payout = stake × (bet_odds ÷ current_odds).
+    """
+    from django.db import transaction as db_transaction
+    from django.utils import timezone
+    from accounts.models import Wallet, Transaction as Txn
+    from game.models import CricketBet
+    from game.sports_betting import compute_cash_out_amount, _outcome_decimal
+
+    try:
+        bet = CricketBet.objects.get(pk=bet_id, user=request.user)
+    except CricketBet.DoesNotExist:
+        return Response({"error": "Bet not found"}, status=status.HTTP_404_NOT_FOUND)
+
+    if bet.status != "PENDING":
+        return Response(
+            {"error": f"Bet is already {bet.status.lower()}"},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    match = _find_cached_match(bet.event_id)
+    if not match:
+        return Response(
+            {"error": "Match data not available for cash out"},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    current_odds = _outcome_decimal(match, bet.market_id, bet.outcome_id)
+    if current_odds is None:
+        return Response(
+            {"error": "Current odds not available for this selection"},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    cash_out = compute_cash_out_amount(bet.stake, bet.odds, current_odds)
+    if cash_out <= 0:
+        return Response(
+            {"error": "Cash out amount is not available right now"},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    stake_int = int(bet.stake)
+    pnl = cash_out - stake_int
+
+    try:
+        with db_transaction.atomic():
+            locked = CricketBet.objects.select_for_update().get(pk=bet.pk)
+            if locked.status != "PENDING":
+                return Response(
+                    {"error": f"Bet is already {locked.status.lower()}"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            wallet = Wallet.objects.select_for_update().get(user=request.user)
+            balance_before = wallet.balance
+            wallet.balance += cash_out
+            wallet.save(update_fields=["balance", "updated_at"])
+
+            locked.status = "CASHED_OUT"
+            locked.payout_amount = cash_out
+            locked.settled_at = timezone.now()
+            locked.save(update_fields=["status", "payout_amount", "settled_at"])
+
+            Txn.objects.create(
+                user=request.user,
+                transaction_type="WIN",
+                amount=cash_out,
+                balance_before=balance_before,
+                balance_after=wallet.balance,
+                description=(
+                    f"Cricket cash out #{locked.id}: {locked.event_name} / "
+                    f"{locked.outcome_name} @ {current_odds} → ₹{cash_out}"
+                ),
+            )
+
+        return Response(
+            {
+                "id": locked.id,
+                "status": locked.status,
+                "cash_out_amount": cash_out,
+                "pnl": pnl,
+                "stake": stake_int,
+                "bet_odds": str(locked.odds),
+                "current_odds": str(current_odds),
+                "wallet_balance": wallet.balance,
+            }
+        )
+    except Wallet.DoesNotExist:
+        return Response({"error": "Wallet not found"}, status=status.HTTP_400_BAD_REQUEST)
+    except Exception as exc:
+        logger.exception("cash_out_cricket_bet bet=%s error: %s", bet_id, exc)
+        return Response({"error": "Failed to cash out bet"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 @api_view(["GET"])

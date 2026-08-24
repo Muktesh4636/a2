@@ -623,6 +623,7 @@ class CricketBet(models.Model):
         ('WON', 'Won'),
         ('LOST', 'Lost'),
         ('VOID', 'Void'),
+        ('CASHED_OUT', 'Cashed Out'),
     ]
 
     user = models.ForeignKey(
@@ -651,6 +652,46 @@ class CricketBet(models.Model):
 
     def __str__(self):
         return f"{self.user.username} — {self.event_name} — {self.outcome_name} — {self.status}"
+
+
+class SportsBet(models.Model):
+    """User bet on soccer / tennis (and other Dafa feed sports)."""
+
+    BET_STATUS = [
+        ('PENDING', 'Pending'),
+        ('WON', 'Won'),
+        ('LOST', 'Lost'),
+        ('VOID', 'Void'),
+        ('CASHED_OUT', 'Cashed Out'),
+    ]
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='sports_bets',
+    )
+    sport = models.CharField(max_length=20, db_index=True)
+    event_id = models.BigIntegerField()
+    event_name = models.CharField(max_length=255)
+    market_id = models.BigIntegerField()
+    market_name = models.CharField(max_length=255)
+    outcome_id = models.BigIntegerField()
+    outcome_name = models.CharField(max_length=255)
+    odds = models.DecimalField(max_digits=10, decimal_places=2)
+    stake = models.DecimalField(max_digits=12, decimal_places=2, help_text='Stake in rupees')
+    potential_payout = models.DecimalField(max_digits=12, decimal_places=2)
+    status = models.CharField(max_length=20, choices=BET_STATUS, default='PENDING')
+    payout_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    settled_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = 'Sports Bet'
+        verbose_name_plural = 'Sports Bets'
+
+    def __str__(self):
+        return f"{self.user.username} — {self.sport} — {self.outcome_name} — {self.status}"
 
 
 class CricketOutcomeResult(models.Model):

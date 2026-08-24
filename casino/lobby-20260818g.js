@@ -8,6 +8,8 @@ const LONG_PRESS_MS = 420;
 const MOVE_CANCEL_PX = 10;
 const CONTINUE_KEY = "casino_continue_ids";
 const NATIVE_ONLY = new Set(["chit-pat", "rangu"]);
+/** Old lobby tile ids → current games.js ids */
+const GAME_ID_ALIASES = { "auto-roulette": "live-roulette" };
 
 const TITLE_IN_ART = new Set([
   "gundu-ata",
@@ -228,10 +230,42 @@ function withToken(path) {
   return url;
 }
 
+function playGame(game) {
+  if (!readAccessToken()) {
+    showPlayLoginPrompt(game);
+    return;
+  }
+  rememberPlayed(game.id);
+  // Always open the game path from games.js.
+  // App launch loads casino once; tapping a tile must NOT reload casino.
+  const url = withToken(game.path).toString();
+  try {
+    if (window.AndroidBridge && typeof window.AndroidBridge.openGame === "function") {
+      // Prefer bridge so native can attach refresh if the page URL lacked it.
+      window.AndroidBridge.openGame(game.id, url);
+      return;
+    }
+  } catch (_) {}
+  location.href = url;
+}
+
+function normalizeGameId(id) {
+  return GAME_ID_ALIASES[id] || id;
+}
+
 function loadContinueIds() {
   try {
     const raw = JSON.parse(localStorage.getItem(CONTINUE_KEY) || "[]");
-    return Array.isArray(raw) ? raw.filter((id) => byId.has(id)) : [];
+    if (!Array.isArray(raw)) return [];
+    const seen = new Set();
+    const out = [];
+    for (const id of raw) {
+      const normalized = normalizeGameId(id);
+      if (!byId.has(normalized) || seen.has(normalized)) continue;
+      seen.add(normalized);
+      out.push(normalized);
+    }
+    return out;
   } catch (_) {
     return [];
   }
@@ -270,33 +304,11 @@ function selectCard(card, game) {
   card.classList.add("is-selected");
 }
 
-function playGame(game) {
-  if (!readAccessToken()) {
-    showPlayLoginPrompt(game);
-    return;
-  }
-  rememberPlayed(game.id);
-  // Always open the game path from games.js.
-  // App launch loads casino once; tapping a tile must NOT reload casino.
-  const url = withToken(game.path);
-  url.searchParams.set("from", "casino");
-  const urlStr = url.toString();
-  try {
-    if (window.AndroidBridge && typeof window.AndroidBridge.openGame === "function") {
-      window.AndroidBridge.openGame(game.id, urlStr);
-      return;
-    }
-  } catch (_) {}
-  location.href = urlStr;
-}
-
 function showPlayLoginPrompt(game) {
   const existing = document.getElementById("casino-login-prompt");
   if (existing) existing.remove();
 
-  const nextUrl = withToken(game.path);
-  nextUrl.searchParams.set("from", "casino");
-  const next = nextUrl.pathname + nextUrl.search;
+  const next = withToken(game.path).pathname + withToken(game.path).search;
   const nextQ = encodeURIComponent(next);
 
   const overlay = document.createElement("div");
@@ -1024,9 +1036,7 @@ function syncTopPlayBtn() {
   if (!el) return;
   if (readAccessToken()) {
     el.textContent = "Play";
-    const u = withToken("/game/?v=37");
-    u.searchParams.set("from", "casino");
-    el.setAttribute("href", u.pathname + u.search);
+    el.setAttribute("href", withToken("/game/?v=8").pathname + withToken("/game/?v=8").search);
   } else {
     el.textContent = "Login";
     el.setAttribute("href", "/login?next=" + encodeURIComponent("/casino/"));

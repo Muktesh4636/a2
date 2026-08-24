@@ -3,8 +3,9 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>Speed Auto Roulette</title>
-  <link rel="stylesheet" href="styles.css?v=196" />
+  <title>Live Roulette</title>
+  <link rel="stylesheet" href="styles.css?v=207" />
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
   <script type="importmap">
   {
     "imports": {
@@ -38,6 +39,7 @@
           </div>
           <div class="top-balance">Balance <strong id="top-balance">₹10,000</strong></div>
         </header>
+        <video id="live-feed" class="live-feed" playsinline muted autoplay></video>
         <canvas id="wheel-canvas"></canvas>
         <button type="button" id="spin-btn" class="spin-btn" hidden>Spin</button>
         <div id="result" class="result" aria-live="polite"></div>

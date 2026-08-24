@@ -17,11 +17,12 @@ Users fetch from OUR APIs only — background worker fills Redis from DafaBet.
 """
 
 from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework import status
 
 from game import sports_feed as feed
+from game.sports_betting import cash_out_sports_bet, my_sports_bets, place_sports_bet
 
 
 def _attach_live_tv(match: dict, sport: str) -> dict:
@@ -328,3 +329,21 @@ def sync_status(request):
         "cached_markets": total_markets,
         "last_batch_number": sync_bn,
     })
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def place_bet(request):
+    return place_sports_bet(request, _sport_from_path(request))
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def my_bets(request):
+    return my_sports_bets(request, _sport_from_path(request))
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def cash_out_bet(request, bet_id: int):
+    return cash_out_sports_bet(request, _sport_from_path(request), bet_id)

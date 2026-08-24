@@ -70,8 +70,8 @@ public class GameplaySettingsMenu : MonoBehaviour
         panelSheet = Resources.Load<Sprite>("UI/settings_panel_sheet");
         iconHighlight = Resources.Load<Sprite>("UI/settings_icon_highlight");
 
-        RectTransform host = bottomBar != null ? bottomBar : transform as RectTransform;
-        CreateGearButton(host);
+        // Gear sits in the red bar below the number grid (Bottom panel), right side.
+        CreateGearButton(transform as RectTransform);
         CreateOverlay(transform as RectTransform);
         CloseAll();
     }
@@ -80,19 +80,45 @@ public class GameplaySettingsMenu : MonoBehaviour
     {
         var go = new GameObject("SettingsGearBtn", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image), typeof(Button));
         var rt = go.GetComponent<RectTransform>();
-        rt.SetParent(host, false);
-        rt.anchorMin = new Vector2(1f, 0.5f);
-        rt.anchorMax = new Vector2(1f, 0.5f);
-        rt.pivot = new Vector2(1f, 0.5f);
-        rt.sizeDelta = new Vector2(78f, 78f);
-        rt.anchoredPosition = new Vector2(-8f, 0f);
+        RectTransform parent = bottomBar != null ? bottomBar : host;
+        rt.SetParent(parent, false);
+
+        if (bottomBar != null)
+        {
+            // Right slot inside the maroon bar under the dice numbers.
+            rt.anchorMin = new Vector2(0.895f, 0.24f);
+            rt.anchorMax = new Vector2(0.965f, 0.76f);
+            rt.pivot = new Vector2(1f, 0.5f);
+            rt.offsetMin = Vector2.zero;
+            rt.offsetMax = Vector2.zero;
+        }
+        else
+        {
+            rt.anchorMin = new Vector2(1f, 0.5f);
+            rt.anchorMax = new Vector2(1f, 0.5f);
+            rt.pivot = new Vector2(1f, 0.5f);
+            rt.sizeDelta = new Vector2(62f, 62f);
+            rt.anchoredPosition = new Vector2(-12f, -280f);
+        }
+
+        rt.SetAsLastSibling();
 
         var img = go.GetComponent<Image>();
         img.preserveAspect = true;
-        img.color = Color.white;
-        Sprite spr = gearSprite != null ? gearSprite : Resources.Load<Sprite>("UI/settings_gear");
-        if (spr != null) img.sprite = spr;
-        else img.color = Gold;
+        img.raycastTarget = true;
+        Sprite spr = gearSprite != null
+            ? gearSprite
+            : Resources.Load<Sprite>("UI/settings_gear_only")
+              ?? Resources.Load<Sprite>("UI/settings_gear");
+        if (spr != null)
+        {
+            img.sprite = spr;
+            img.color = Color.white;
+        }
+        else
+        {
+            img.color = Gold;
+        }
 
         var btn = go.GetComponent<Button>();
         btn.targetGraphic = img;
@@ -124,8 +150,9 @@ public class GameplaySettingsMenu : MonoBehaviour
         var mrt = menuCard.GetComponent<RectTransform>();
         mrt.anchorMin = mrt.anchorMax = new Vector2(0.5f, 0.5f);
         mrt.pivot = new Vector2(0.5f, 0.5f);
-        mrt.sizeDelta = new Vector2(820f, 340f);
-        mrt.anchoredPosition = new Vector2(0f, 40f);
+        // Center of screen — milky card matching the reference layout
+        mrt.sizeDelta = new Vector2(860f, 360f);
+        mrt.anchoredPosition = Vector2.zero;
 
         var mimg = menuCard.AddComponent<Image>();
         if (panelSheet != null)
@@ -218,7 +245,7 @@ public class GameplaySettingsMenu : MonoBehaviour
             lrt.anchorMax = new Vector2(0.95f, 0.28f);
             lrt.offsetMin = Vector2.zero;
             lrt.offsetMax = Vector2.zero;
-            label.color = Gold; // highlighted label color for focus
+            label.color = LabelDark; // dark labels like the reference card
             label.fontStyle = FontStyles.Bold;
             optionLabels.Add(label);
 
@@ -362,8 +389,8 @@ public class GameplaySettingsMenu : MonoBehaviour
         {
             var lab = optionLabels[i];
             if (lab == null) continue;
-            lab.color = Gold;
-            highlightSeq.Join(lab.DOColor(new Color(1f, 0.9f, 0.3f, 1f), 0.45f).SetLoops(6, LoopType.Yoyo));
+            lab.color = LabelDark;
+            highlightSeq.Join(lab.DOColor(Gold, 0.45f).SetLoops(6, LoopType.Yoyo));
         }
     }
 
@@ -390,7 +417,7 @@ public class GameplaySettingsMenu : MonoBehaviour
         {
             if (lab == null) continue;
             lab.DOKill();
-            lab.color = Gold;
+            lab.color = LabelDark;
         }
     }
 

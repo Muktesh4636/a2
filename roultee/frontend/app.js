@@ -1245,7 +1245,10 @@ async function pollGameState() {
     applyServerState(data);
     applyGameClock(data);
   } catch (e) {
-    // Keep polling; brief network blips are fine
+    if (String(e.message || "").includes("Session expired") || String(e.message || "").includes("Login required")) {
+      betState.apiReady = false;
+      if (resultEl) resultEl.textContent = e.message;
+    }
     console.warn("game state poll:", e.message || e);
   }
 }
@@ -1281,9 +1284,20 @@ function fromApiBetKey(key) {
 }
 
 function readAccessToken() {
-  const q = new URLSearchParams(location.search).get("token");
+  const params = new URLSearchParams(location.search);
+  const q =
+    params.get("token") ||
+    params.get("access_token") ||
+    params.get("accessToken") ||
+    params.get("access");
   if (q) {
     localStorage.setItem("gundu_access_token", q);
+    const refresh =
+      params.get("refresh") ||
+      params.get("refresh_token") ||
+      params.get("refreshToken") ||
+      "";
+    if (refresh) localStorage.setItem("gundu_refresh_token", refresh);
     return q;
   }
   return (
@@ -1293,7 +1307,49 @@ function readAccessToken() {
   );
 }
 
-async function api(path, options = {}) {
+function readRefreshToken() {
+  return (
+    localStorage.getItem("gundu_refresh_token") ||
+    localStorage.getItem("refresh_token") ||
+    null
+  );
+}
+
+function storeAccessToken(token) {
+  if (!token) return;
+  betState.accessToken = token;
+  localStorage.setItem("gundu_access_token", token);
+  localStorage.setItem("access_token", token);
+}
+
+let refreshPromise = null;
+
+async function refreshAccessToken() {
+  const refresh = readRefreshToken();
+  if (!refresh) return "";
+  if (refreshPromise) return refreshPromise;
+  refreshPromise = (async () => {
+    try {
+      const res = await fetch(`${location.origin}/api/auth/token/refresh/`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify({ refresh }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) return "";
+      const access = data.access || data.access_token || "";
+      if (access) storeAccessToken(access);
+      return access;
+    } catch (_) {
+      return "";
+    } finally {
+      refreshPromise = null;
+    }
+  })();
+  return refreshPromise;
+}
+
+async function api(path, options = {}, retried = false) {
   const headers = {
     "Content-Type": "application/json",
     ...(options.headers || {}),
@@ -1319,8 +1375,16 @@ async function api(path, options = {}) {
     data = null;
   }
   if (res.status === 401) {
+    if (!retried) {
+      const next = await refreshAccessToken();
+      if (next) return api(path, options, true);
+    }
     betState.apiReady = false;
-    throw new Error("Session expired — please login again");
+    throw new Error(
+      readRefreshToken()
+        ? "Session expired — open Roulette again from the casino"
+        : "Login required — open Roulette from the Gundu app"
+    );
   }
   if (!res.ok) {
     const detail = data?.detail || res.statusText || "request failed";
@@ -1345,15 +1409,22 @@ async function restoreAuthSession() {
   betState.accessToken = readAccessToken();
   if (!betState.accessToken) {
     betState.apiReady = false;
-    if (resultEl) resultEl.textContent = "Login required — open Roulette from the app";
+    if (resultEl) resultEl.textContent = "Login required — open Roulette from the Gundu app";
     refreshMoneyUi();
     return;
   }
-  const data = await api("/me/");
-  applyServerState(data);
-  if (data.game) applyGameClock({ ...data.game, balance: data.balance, win: data.game.win });
-  betState.apiReady = true;
-  startGameClock();
+  try {
+    const data = await api("/me/");
+    applyServerState(data);
+    if (data.game) applyGameClock({ ...data.game, balance: data.balance, win: data.game.win });
+    betState.apiReady = true;
+    if (resultEl) resultEl.textContent = "";
+    startGameClock();
+  } catch (e) {
+    betState.apiReady = false;
+    if (resultEl) resultEl.textContent = e.message || "Login required";
+    refreshMoneyUi();
+  }
 }
 
 // Back-compat aliases (old guest-session names)
@@ -1991,7 +2062,68 @@ function animate() {
     if (hitLight.intensity <= 0) hitLight.visible = false;
   }
 
-  renderer.render(scene, camera);
+  if (!liveFeedActive) {
+    renderer.render(scene, camera);
+  }
+}
+
+let liveFeedHls = null;
+let liveFeedActive = false;
+
+async function initLiveFeed() {
+  const video = document.getElementById("live-feed");
+  const stage = document.getElementById("stage");
+  if (!video || !stage || !window.Hls) return;
+
+  let hlsUrl = "/roulette-live/auto-roulette/stream.m3u8";
+  try {
+    const res = await fetch(`${location.origin}/api/roulette/live-stream/`);
+    if (res.ok) {
+      const data = await res.json();
+      if (data.hls_url) hlsUrl = data.hls_url;
+    }
+  } catch (_) {}
+
+  if (hlsUrl.startsWith(location.origin)) {
+    hlsUrl = hlsUrl.slice(location.origin.length);
+  }
+
+  function activateLive() {
+    liveFeedActive = true;
+    stage.classList.add("live-active");
+    document.getElementById("game-shell")?.classList.add("live-board-mode");
+    video.play().catch(() => {});
+  }
+
+  function scheduleRetry() {
+    liveFeedActive = false;
+    stage.classList.remove("live-active");
+    document.getElementById("game-shell")?.classList.remove("live-board-mode");
+    if (liveFeedHls) {
+      liveFeedHls.destroy();
+      liveFeedHls = null;
+    }
+    setTimeout(initLiveFeed, 8000);
+  }
+
+  if (Hls.isSupported()) {
+    liveFeedHls = new Hls({ liveSyncDuration: 3, maxLiveSyncPlaybackRate: 1.05 });
+    liveFeedHls.loadSource(hlsUrl);
+    liveFeedHls.attachMedia(video);
+    liveFeedHls.on(Hls.Events.MANIFEST_PARSED, activateLive);
+    liveFeedHls.on(Hls.Events.ERROR, (_, data) => {
+      if (!data.fatal) return;
+      if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
+        liveFeedHls.startLoad();
+        return;
+      }
+      scheduleRetry();
+    });
+  } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
+    video.src = hlsUrl;
+    video.addEventListener("loadedmetadata", activateLive, { once: true });
+    video.addEventListener("error", scheduleRetry, { once: true });
+  }
 }
 
 // Start with ball parked in a pocket; user spins with the button
@@ -2012,6 +2144,7 @@ try {
     camera.updateProjectionMatrix();
     renderer.setSize(w, h, false);
   });
+  initLiveFeed();
   animate();
 
   // Connect with real Gundu JWT (injected by APK WebView)

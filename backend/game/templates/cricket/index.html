@@ -314,6 +314,7 @@
 
   <script src="/sports/auth-wallet.js"></script>
   <script src="/sports/live-tv.js"></script>
+  <script src="/sports/betslip.js?v=4"></script>
   <script>
     const app = document.getElementById('app');
     const backBtn = document.getElementById('backBtn');
@@ -350,6 +351,21 @@
       });
       const upd = document.querySelector('.updated');
       if (upd && (d.last_sync || d.updated)) upd.textContent = 'Updated ' + esc(d.last_sync || d.updated);
+    }
+
+    function refreshMarketBetTags(d) {
+      if (!window.GunduBetslip) return;
+      (d.all_markets || []).forEach(m => {
+        const card = document.querySelector(`.market-card[data-market-id="${m.market_id}"]`);
+        if (!card) return;
+        const head = GunduBetslip.marketHeadHtml(m.market_name, m.market_id, m.outcomes || []);
+        const oldHead = card.querySelector('.market-head, h4');
+        if (oldHead) {
+          const wrap = document.createElement('div');
+          wrap.innerHTML = head;
+          oldHead.replaceWith(wrap.firstElementChild || wrap);
+        }
+      });
     }
 
     function playLiveHls(src, embedUrl) {
@@ -479,11 +495,19 @@
       return r.json();
     }
 
-    function oddButtons(outcomes, onPick) {
+    function oddButtons(outcomes, ctx) {
       const outs = outcomes || [];
+      ctx = ctx || {};
       if (!outs.length) return '<div class="meta">No odds</div>';
       return `<div class="odds-row">${outs.map((o, i) => `
-        <button class="odd-btn ${i % 2 === 0 ? 'blue' : 'pink'}" data-name="${esc(o.name || o.team || '')}" data-price="${esc(o.price_format || '-')}">
+        <button type="button" class="odd-btn ${i % 2 === 0 ? 'blue' : 'pink'}"
+          data-event-id="${esc(ctx.eventId || '')}"
+          data-event-name="${esc(ctx.eventName || '')}"
+          data-market-id="${esc(o.market_id || ctx.marketId || '')}"
+          data-market-name="${esc(ctx.marketName || '')}"
+          data-outcome-id="${esc(o.outcome_id || '')}"
+          data-name="${esc(o.name || o.team || '')}"
+          data-price="${esc(o.price_format || '-')}">
           <div class="name">${esc(o.name || o.team || '')}</div>
           <div class="price">${esc(o.price_format || '-')}</div>
         </button>`).join('')}</div>`;
@@ -621,8 +645,17 @@
         }
         if (fromPoll && isLiveTvPlaying()) {
           updateScoresOnly(d);
+          if (window.GunduBetslip) {
+            await GunduBetslip.loadOpenBets({ betsUrl: '/api/cricket/bets/', eventId: d.event_id });
+            refreshMarketBetTags(d);
+          }
           return;
         }
+        if (window.GunduBetslip) {
+          await GunduBetslip.loadOpenBets({ betsUrl: '/api/cricket/bets/', eventId: d.event_id });
+        }
+        app.dataset.betsUrl = '/api/cricket/bets/';
+        app.dataset.eventId = String(d.event_id || eventId);
         const markets = d.all_markets || [];
         const main = filterMarkets(markets, 'main');
         const over = filterMarkets(markets, 'over');
@@ -682,10 +715,18 @@
           <div id="markets">
             ${filtered.length ? filtered.map(m => {
               const sub = [m.period, m.market_type || m.market_name].filter(Boolean).join(' · ');
-              return `<article class="market-card">
-                <h4>${esc(m.market_name)}</h4>
+              const head = window.GunduBetslip
+                ? GunduBetslip.marketHeadHtml(m.market_name, m.market_id, m.outcomes || [])
+                : `<h4>${esc(m.market_name)}</h4>`;
+              return `<article class="market-card" data-market-id="${esc(m.market_id)}">
+                ${head}
                 <div class="sub">${esc(sub)}</div>
-                ${oddButtons(m.outcomes || [])}
+                ${oddButtons(m.outcomes || [], {
+                  eventId: d.event_id,
+                  eventName: d.match_name,
+                  marketId: m.market_id,
+                  marketName: m.market_name,
+                })}
               </article>`;
             }).join('') : '<div class="empty">No markets in this filter.</div>'}
           </div>`;
@@ -719,9 +760,15 @@
           filter = c.dataset.f;
           load().catch(e => toast(e.message));
         });
-        app.querySelectorAll('.odd-btn').forEach(btn => {
-          btn.onclick = () => toast(`Bet slip: ${btn.dataset.name} @ ${btn.dataset.price}`);
-        });
+        if (window.GunduBetslip) {
+          GunduBetslip.bindOddButtons(app, {
+            sport: 'cricket',
+            eventId: d.event_id,
+            eventName: d.match_name,
+            betUrl: '/api/cricket/bet/',
+            betsUrl: '/api/cricket/bets/',
+          });
+        }
 
         if (showLiveTv && relayHls) {
           const video = document.getElementById('liveTvVideo');
@@ -733,6 +780,7 @@
 
       try {
         await load();
+        window.addEventListener('gundu:bets-changed', () => load().catch(() => {}));
         const interval = isPre ? 30000 : 8000;
         pollTimer = setInterval(() => load({ fromPoll: true }).catch(() => {}), interval);
       } catch (err) {
@@ -747,7 +795,10 @@
       setQuery({ view: '', event_id: '' });
       renderList();
     };
-    document.getElementById('myBets').onclick = () => toast('My bets');
+    document.getElementById('myBets').onclick = () => {
+      if (window.GunduBetslip) GunduBetslip.showMyBets({ betsUrl: '/api/cricket/bets/' });
+      else toast('My bets');
+    };
     document.getElementById('plusBtn').onclick = () => toast('Open wallet in app');
 
     function boot() {

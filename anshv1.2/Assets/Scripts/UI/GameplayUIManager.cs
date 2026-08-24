@@ -130,6 +130,20 @@ public class GameplayUIManager : MonoBehaviour
         {
             betResetBtn.onClick.AddListener(OnResetButtonClicked);
         }
+
+        // Settings gear (red bar under numbers, right) → Bet History / Game Rules / Recent Results
+        var settings = GetComponent<GameplaySettingsMenu>();
+        if (settings == null) settings = gameObject.AddComponent<GameplaySettingsMenu>();
+        var bottom = transform.Find("Bottom") as RectTransform;
+        if (bottom == null)
+        {
+            foreach (Transform t in GetComponentsInChildren<Transform>(true))
+            {
+                if (t.name == "Bottom") { bottom = t as RectTransform; break; }
+            }
+        }
+        settings.bottomBar = bottom;
+        settings.Build();
     }
 
     private void OnDestroy()

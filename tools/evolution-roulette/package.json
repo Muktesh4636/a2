@@ -1,0 +1,7 @@
+{
+  "name": "evolution-roulette-relay",
+  "private": true,
+  "dependencies": {
+    "playwright": "1.49.1"
+  }
+}

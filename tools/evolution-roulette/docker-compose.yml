@@ -1,0 +1,27 @@
+# Evolution Auto Roulette live HLS relay → /roulette-live/stream.m3u8
+services:
+  relay:
+    build:
+      context: .
+      dockerfile: Dockerfile.relay
+    image: gundu_roulette_live_relay:local
+    container_name: gundu_roulette_live_relay
+    restart: unless-stopped
+    environment:
+      FOURABET_ACCESS_TOKEN: ${FOURABET_ACCESS_TOKEN}
+      GAME_URL: ${GAME_URL:-https://4rabet365.com/casino/slot/auto-roulette-13}
+      OUT_DIR: /hls/auto-roulette
+      DISPLAY: ":99"
+    shm_size: "1gb"
+    volumes:
+      - /root/evolution-roulette/hls-push:/hls
+
+  hls:
+    image: nginx:1.27-alpine
+    container_name: gundu_roulette_live_hls
+    restart: unless-stopped
+    ports:
+      - "8159:80"
+    volumes:
+      - /root/evolution-roulette/hls-push:/usr/share/nginx/html/hls:ro
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro

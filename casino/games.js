@@ -16,7 +16,7 @@ export const GAMES = [
     id: "gundu-ata",
     title: "Gundu Ata",
     image: "images/gundu-ata.png",
-    path: "/game/?v=36",
+    path: "/game/?v=37",
   },
   {
     id: "horse-racing",
@@ -31,8 +31,8 @@ export const GAMES = [
     path: "/trading/",
   },
   {
-    id: "auto-roulette",
-    title: "Auto Roulette",
+    id: "live-roulette",
+    title: "Live Roulette",
     image: "images/auto-roulette.png",
     path: "/roulette/",
   },
