@@ -313,17 +313,18 @@
   <div class="toast" id="toast"></div>
 
   <script src="/sports/auth-wallet.js"></script>
-  <script src="/sports/live-tv.js"></script>
-  <script src="/sports/betslip.js?v=4"></script>
+  <script src="/sports/live-tv.js?v=2"></script>
+  <script src="/sports/betslip.js?v=5"></script>
   <script>
     const app = document.getElementById('app');
     const backBtn = document.getElementById('backBtn');
     const toastEl = document.getElementById('toast');
     if (window.GunduSportsAuth) GunduSportsAuth.bootWallet('wallet');
-    let listTab = 'pre'; // live | pre
+    let listTab = 'live'; // live | pre
     let filter = 'all';
     let showScoreboard = true;
     let showLiveTv = false;
+    let liveTvUserDismissed = true;
     let liveTvHls = null;
     let liveTvPlayer = null;
     let pollTimer = null;
@@ -416,19 +417,27 @@
       const q = new URLSearchParams({ sport: 'cricket' });
       if (matchName) q.set('match_name', matchName);
       if (competition) q.set('competition', competition);
+      q.set('in_play', '0');
       return getJson(`/api/sports/live-tv/lookup/?${q}`);
     }
 
     function liveTvFromApi(d) {
       const tv = d && d.live_tv;
-      if (!tv || (!tv.embed_url && !tv.radhe_event_id)) return null;
+      if (!tv) return null;
+      const eid = tv.radhe_event_id || tv.event_id;
+      const relay = tv.relay_hls_url || (eid ? `/sports-live/${eid}/stream.m3u8` : '');
+      if (!relay && !tv.embed_url && !eid) return null;
       return {
         ok: true,
-        event_id: tv.radhe_event_id,
+        event_id: eid,
         channel_id: tv.channel_id,
         embed_url: tv.embed_url,
-        relay_hls_url: tv.relay_hls_url || (tv.radhe_event_id ? `/sports-live/${tv.radhe_event_id}/stream.m3u8` : ''),
+        relay_hls_url: relay,
       };
+    }
+
+    function hasLiveTvInfo(info) {
+      return !!(info && (info.relay_hls_url || info.embed_url || info.event_id || info.radhe_event_id));
     }
 
     function teamNamesFromDetail(d) {
@@ -532,18 +541,76 @@
       let streams;
       try { streams = await GunduLiveTv.fetchIndex(false); } catch { return events; }
       const filtered = streams.filter(s => s.sport === 'cricket');
+      const TV_MATCH_THRESHOLD = 0.32;
       return events.map(e => {
         if (hasLiveTv(e.live_tv)) return e;
         const teams = (e.scores || []).map(s => s.team).filter(Boolean);
         const matchName = e.match_name || (teams.length >= 2 ? `${teams[0]} vs ${teams[1]}` : '');
         let best = null, bestScore = 0;
         for (const s of filtered) {
-          const sc = GunduLiveTv.pairScore(matchName, s.name);
+          const sc = GunduLiveTv.scoreEventStream
+            ? GunduLiveTv.scoreEventStream(s, { matchName, competition: e.competition, teamNames: teams })
+            : GunduLiveTv.pairScore(matchName, s.name);
           if (sc > bestScore) { bestScore = sc; best = s; }
         }
-        if (best && bestScore >= 0.45) e.live_tv = { ...best, ok: true };
+        if (best && bestScore >= TV_MATCH_THRESHOLD) {
+          const tv = {
+            ok: true,
+            event_id: best.event_id,
+            radhe_event_id: best.event_id,
+            relay_hls_url: best.relay_hls_url,
+            embed_url: best.embed_url,
+          };
+          e.live_tv = tv;
+        }
         return e;
       });
+    }
+
+    function matchDetailQuery(eventId, tv, isPre) {
+      const q = { view: 'match', event_id: eventId, pre: isPre ? '1' : '0' };
+      if (tv && hasLiveTv(tv)) {
+        q.has_tv = '1';
+        const eid = tv.radhe_event_id || tv.event_id;
+        if (eid) q.radhe_event_id = String(eid);
+      }
+      return q;
+    }
+
+    let listFeaturedTvPlayer = null;
+
+    function stopListFeaturedTv() {
+      if (listFeaturedTvPlayer) { listFeaturedTvPlayer.destroy(); listFeaturedTvPlayer = null; }
+    }
+
+    function mountListFeaturedLiveTv(events) {
+      stopListFeaturedTv();
+      const featured = (events || []).find(e => hasLiveTv(e.live_tv));
+      const existing = document.getElementById('listFeaturedLiveTv');
+      if (existing) existing.remove();
+      if (!featured || listTab !== 'live') return;
+      const tv = featured.live_tv;
+      const pb = window.GunduLiveTv && GunduLiveTv.tvPlayback
+        ? GunduLiveTv.tvPlayback(tv)
+        : { mode: tv.embed_url ? 'embed' : 'none', embed: tv.embed_url || '' };
+      const panel = document.createElement('section');
+      panel.id = 'listFeaturedLiveTv';
+      panel.className = 'live-tv-panel';
+      const tabs = app.querySelector('.tabs');
+      if (tabs) tabs.insertAdjacentElement('afterend', panel);
+      else app.prepend(panel);
+      panel.innerHTML = `<div class="live-tv-head">📺 LIVE TV · ${esc(featured.match_name || 'Live match')}</div><div id="listFeaturedLiveTvBody"></div>`;
+      const body = document.getElementById('listFeaturedLiveTvBody');
+      if (window.GunduLiveTv && GunduLiveTv.mountPlayer && body) {
+        listFeaturedTvPlayer = GunduLiveTv.mountPlayer(body, tv, {
+          videoId: 'listFeaturedLiveTvVideo',
+          muteId: 'listFeaturedLiveTvMute',
+        });
+      } else if (pb.mode === 'embed' && body) {
+        body.innerHTML = `<iframe class="live-tv-frame" src="${esc(pb.embed)}" allow="autoplay; fullscreen" referrerpolicy="no-referrer-when-downgrade"></iframe>`;
+      } else if (body) {
+        body.innerHTML = `<div class="live-tv-msg">Stream starting soon…</div>`;
+      }
     }
 
     function setBottomNavVisible(show) {
@@ -553,6 +620,7 @@
     async function renderList() {
       setBottomNavVisible(true);
       backBtn.style.display = 'none';
+      stopListFeaturedTv();
       app.innerHTML = `
         <div class="tabs">
           <button class="${listTab === 'live' ? 'active' : ''}" data-tab="live"><span class="dot"></span>Live</button>
@@ -591,10 +659,15 @@
           </article>`;
         }).join('');
         app.querySelector('.loading').outerHTML = html;
+        // Live video disabled on cricket list — matches/odds only
+        stopListFeaturedTv();
+        const oldTv = document.getElementById('listFeaturedLiveTv');
+        if (oldTv) oldTv.remove();
         app.querySelectorAll('.match-card').forEach(card => {
           card.onclick = () => {
             const id = card.dataset.id;
-            setQuery({ view: 'match', event_id: id, pre: listTab === 'pre' ? '1' : '0' });
+            const ev = events.find(e => String(e.event_id) === String(id));
+            setQuery(matchDetailQuery(id, ev && ev.live_tv, listTab === 'pre'));
             renderMatch(id, listTab === 'pre');
           };
         });
@@ -615,17 +688,34 @@
       app.innerHTML = `<div class="loading">Loading markets…</div>`;
       if (pollTimer) clearInterval(pollTimer);
       stopLiveTv();
+      showLiveTv = false;
+      liveTvUserDismissed = true;
 
-      const radheEventId = radheEventIdFromQuery();
+      const p = qs();
+      const radheEventId = p.get('radhe_event_id') || p.get('radhe_id') || radheEventIdFromQuery();
       let liveTvInfo = null;
       let liveTvAvailable = false;
+      if (radheEventId && !isPre) {
+        liveTvInfo = liveTvFromApi({ live_tv: { radhe_event_id: radheEventId } });
+        liveTvAvailable = hasLiveTvInfo(liveTvInfo);
+      } else if (p.get('has_tv') === '1' && !isPre) {
+        // TV available but closed by default — user can open with 📺 button
+      }
 
       async function resolveLiveTv(d) {
-        if (liveTvInfo && liveTvInfo.ok) return liveTvInfo;
+        if (liveTvInfo && hasLiveTvInfo(liveTvInfo)) return liveTvInfo;
         const cached = liveTvFromApi(d);
         if (cached) return cached;
+        if (radheEventId) {
+          try {
+            const data = await getJson(`/api/sports/live-tv/lookup/?radhe_event_id=${encodeURIComponent(radheEventId)}`);
+            if (hasLiveTvInfo(data)) return { ...data, ok: true };
+          } catch (_) {}
+        }
         try {
-          return await loadLiveTv(d.match_name, d.competition, teamNamesFromDetail(d));
+          const hit = await loadLiveTv(d.match_name, d.competition, teamNamesFromDetail(d));
+          if (hasLiveTvInfo(hit)) return { ...hit, ok: true };
+          return { ok: false };
         } catch (_) {
           return { ok: false };
         }
@@ -635,13 +725,15 @@
         const url = isPre
           ? `/api/cricket/preevent-odds/?event_id=${eventId}`
           : `/api/cricket/live-odds/?event_id=${eventId}`;
-        const d = await getJson(url);
-        if (!isPre && !liveTvInfo) {
+        const prefetch = window.GunduLiveTv ? GunduLiveTv.fetchIndex(false).catch(() => null) : null;
+        const [d] = await Promise.all([getJson(url), prefetch]);
+        if (!isPre) {
           const tv = await resolveLiveTv(d);
-          liveTvInfo = tv && tv.ok ? tv : null;
-          liveTvAvailable = !!(liveTvInfo && (liveTvInfo.relay_hls_url || liveTvInfo.embed_url || liveTvInfo.event_id));
-        } else if (!isPre && liveTvInfo) {
-          liveTvAvailable = !!(liveTvInfo.ok && (liveTvInfo.relay_hls_url || liveTvInfo.embed_url || liveTvInfo.event_id));
+          liveTvInfo = hasLiveTvInfo(tv) ? tv : null;
+          liveTvAvailable = !!liveTvInfo;
+        } else {
+          liveTvInfo = null;
+          liveTvAvailable = false;
         }
         if (fromPoll && isLiveTvPlaying()) {
           updateScoresOnly(d);
@@ -683,26 +775,29 @@
             </div>
           </div>` : '';
 
-        const relayHls = liveTvInfo && (liveTvInfo.relay_hls_url || (liveTvInfo.event_id ? `/sports-live/${liveTvInfo.event_id}/stream.m3u8` : ''));
-        if (!liveTvAvailable) showLiveTv = false;
+        const tvPb = liveTvInfo && window.GunduLiveTv && GunduLiveTv.tvPlayback
+          ? GunduLiveTv.tvPlayback(liveTvInfo)
+          : { mode: liveTvInfo && liveTvInfo.embed_url ? 'embed' : 'none', embed: liveTvInfo && liveTvInfo.embed_url || '', relayHls: '' };
+        if (!liveTvAvailable) {
+          showLiveTv = false;
+        }
+        // Live video stays closed unless user taps 📺
         const tvBtnHtml = liveTvAvailable
           ? `<button class="icon-btn ${showLiveTv ? 'on' : ''}" id="tvBtn" title="Live TV">📺</button>`
           : '';
-        const liveTvHtml = (liveTvInfo && liveTvInfo.ok && showLiveTv) ? `
+        const liveTvHtml = (showLiveTv && hasLiveTvInfo(liveTvInfo)) ? `
           <div class="live-tv-panel" id="liveTvPanel">
-            ${relayHls ? (window.GunduLiveTv ? GunduLiveTv.videoMarkup() : '<video class="live-tv-video" id="liveTvVideo" playsinline muted autoplay></video>')
-              : liveTvInfo.embed_url ? `<iframe class="live-tv-frame" id="liveTvFrame" src="${esc(liveTvInfo.embed_url)}" allow="autoplay; fullscreen" referrerpolicy="no-referrer-when-downgrade"></iframe>`
-              : `<div class="live-tv-msg">Stream starting soon</div>`}
+            <div id="liveTvPanelBody"></div>
           </div>` : '';
 
         app.innerHTML = `
+          ${liveTvHtml}
           <div class="crumb">${esc(crumb)}</div>
           <h1 class="title">${esc(d.match_name || 'Match')}</h1>
           <div class="actions">
             ${tvBtnHtml}
             <button class="pill ${showScoreboard ? 'on' : ''}" id="scoreBtn">Scoreboard</button>
           </div>
-          ${liveTvHtml}
           ${scoreHtml}
           <div class="section-title">Markets & Odds</div>
           <div class="filters">
@@ -735,10 +830,11 @@
         if (tvBtn) {
           tvBtn.onclick = async () => {
             showLiveTv = !showLiveTv;
+            liveTvUserDismissed = !showLiveTv;
             if (showLiveTv && !liveTvInfo) {
               try {
                 liveTvInfo = await resolveLiveTv(d);
-                liveTvAvailable = !!(liveTvInfo && liveTvInfo.ok && (liveTvInfo.relay_hls_url || liveTvInfo.embed_url || liveTvInfo.event_id));
+                liveTvAvailable = hasLiveTvInfo(liveTvInfo);
                 if (!liveTvAvailable) throw new Error('No stream');
               } catch (e) {
                 toast(e.message || 'Could not load live TV');
@@ -770,10 +866,13 @@
           });
         }
 
-        if (showLiveTv && relayHls) {
-          const video = document.getElementById('liveTvVideo');
-          if (!video || video.dataset.liveSrc !== relayHls) {
-            setTimeout(() => playLiveHls(relayHls, liveTvInfo.embed_url), 0);
+        if (showLiveTv && hasLiveTvInfo(liveTvInfo)) {
+          const panelBody = document.getElementById('liveTvPanelBody');
+          if (panelBody && window.GunduLiveTv && GunduLiveTv.mountPlayer) {
+            stopLiveTv();
+            liveTvPlayer = GunduLiveTv.mountPlayer(panelBody, liveTvInfo);
+          } else if (panelBody && tvPb.mode === 'embed') {
+            panelBody.innerHTML = `<iframe class="live-tv-frame" id="liveTvFrame" src="${esc(tvPb.embed)}" allow="autoplay; fullscreen" referrerpolicy="no-referrer-when-downgrade"></iframe>`;
           }
         }
       }

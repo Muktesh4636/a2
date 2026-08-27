@@ -25,6 +25,9 @@ const OUT_DIR = process.env.OUT_DIR || '/hls';
 const POLL_SEC = Number(process.env.POLL_SEC || 30);
 const MAX_STREAMS = Number(process.env.MAX_STREAMS || 24);
 const NO_HLS_RETRY_SEC = Number(process.env.NO_HLS_RETRY_SEC || 15);
+/** Keep ~1 min of live buffer: 4s segments × 15 = 60s */
+const HLS_TIME = Number(process.env.HLS_TIME || 4);
+const HLS_LIST_SIZE = Number(process.env.HLS_LIST_SIZE || 15);
 
 const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
 
@@ -196,9 +199,9 @@ function runFfmpeg(source, playlist, signal, referer) {
       '-i', source,
       '-c', 'copy',
       '-f', 'hls',
-      '-hls_time', '4',
-      '-hls_list_size', '18',
-      '-hls_flags', 'append_list+omit_endlist+program_date_time+split_by_time+independent_segments',
+      '-hls_time', String(HLS_TIME),
+      '-hls_list_size', String(HLS_LIST_SIZE),
+      '-hls_flags', 'delete_segments+append_list+omit_endlist+program_date_time+split_by_time+independent_segments',
       playlist,
     ];
     const child = spawn('ffmpeg', args, { stdio: ['ignore', 'pipe', 'pipe'] });
@@ -245,6 +248,34 @@ async function relayWorker(ev, abortSignal) {
   }
 
   log(`stopped relay event=${eventId}`);
+  rmEventDir(eventId);
+}
+
+function rmEventDir(eventId) {
+  if (!eventId) return;
+  const outPath = path.join(OUT_DIR, String(eventId));
+  try {
+    fs.rmSync(outPath, { recursive: true, force: true });
+    log(`removed hls dir event=${eventId}`);
+  } catch (e) {
+    log(`remove failed event=${eventId}: ${e.message}`);
+  }
+}
+
+/** Delete folders for matches that are no longer in-play or relaying. */
+function pruneStaleDirs(keepIds) {
+  let entries;
+  try {
+    entries = fs.readdirSync(OUT_DIR, { withFileTypes: true });
+  } catch (_) {
+    return;
+  }
+  for (const ent of entries) {
+    if (!ent.isDirectory()) continue;
+    const id = ent.name;
+    if (keepIds.has(id)) continue;
+    rmEventDir(id);
+  }
 }
 
 function startWorker(ev) {
@@ -305,12 +336,15 @@ async function reconcile() {
     playlist: `/hls/${id}/stream.m3u8`,
   }));
   writeIndex(active);
-  log(`in_play=${events.length} relaying=${workers.size} started=${started}`);
+  // Drop leftover segment folders when a match ends (prevents disk fill-up).
+  const keepIds = new Set([...wantIds, ...workers.keys()]);
+  pruneStaleDirs(keepIds);
+  log(`in_play=${events.length} relaying=${workers.size} started=${started} hls_window=${HLS_TIME * HLS_LIST_SIZE}s`);
 }
 
 async function main() {
   fs.mkdirSync(OUT_DIR, { recursive: true });
-  log(`manager started relay_ip=${RELAY_IP} poll=${POLL_SEC}s max=${MAX_STREAMS}`);
+  log(`manager started relay_ip=${RELAY_IP} poll=${POLL_SEC}s max=${MAX_STREAMS} hls=${HLS_TIME}s×${HLS_LIST_SIZE}=${HLS_TIME * HLS_LIST_SIZE}s`);
   await reconcile();
   setInterval(reconcile, POLL_SEC * 1000);
 }

@@ -246,21 +246,81 @@
     }
   }
 
+  function aggregateBetsByOutcome(bets) {
+    const map = new Map();
+    for (const b of bets) {
+      const key = Number(b.outcome_id);
+      if (!map.has(key)) {
+        map.set(key, {
+          outcome_id: b.outcome_id,
+          outcome_name: b.outcome_name,
+          bets: [],
+          totalStake: 0,
+        });
+      }
+      const g = map.get(key);
+      g.bets.push(b);
+      g.totalStake += Number(b.stake) || 0;
+    }
+    return [...map.values()];
+  }
+
+  /** Two-sided markets: net stakes (Mumbai ₹400 − Chennai ₹100 → Mumbai ₹300). */
+  function netMarketPositions(aggregates) {
+    if (aggregates.length !== 2) return aggregates;
+    const [a, b] = aggregates;
+    const net = a.totalStake - b.totalStake;
+    if (net === 0) return [];
+    if (net > 0) {
+      return [{
+        ...a,
+        totalStake: net,
+        bets: [...a.bets, ...b.bets],
+        isNet: true,
+      }];
+    }
+    return [{
+      ...b,
+      totalStake: -net,
+      bets: [...a.bets, ...b.bets],
+      isNet: true,
+    }];
+  }
+
+  function groupCashOutSummary(bets, outcomes) {
+    let totalCo = 0;
+    let totalStake = 0;
+    let hasOdds = false;
+    for (const b of bets) {
+      const s = Number(b.stake) || 0;
+      totalStake += s;
+      const cur = currentOddsFor(outcomes, b.outcome_id);
+      if (cur) {
+        hasOdds = true;
+        totalCo += cashOutAmount(b.stake, b.odds, cur);
+      }
+    }
+    if (!hasOdds) return { totalCo: null, pnl: null };
+    return { totalCo, pnl: totalCo - totalStake };
+  }
+
   function marketBetsHtml(marketId, outcomes) {
     const bets = state.openBets.filter(b => Number(b.market_id) === Number(marketId) && b.status === 'PENDING');
     if (!bets.length) return '';
-    const tags = bets.map(b => {
-      const cur = currentOddsFor(outcomes, b.outcome_id);
-      const co = cur ? cashOutAmount(b.stake, b.odds, cur) : null;
-      const pnl = co != null ? cashOutPnl(b.stake, b.odds, cur) : null;
+    const groups = netMarketPositions(aggregateBetsByOutcome(bets));
+    if (!groups.length) return '';
+    const tags = groups.map(g => {
+      const { totalCo, pnl } = groupCashOutSummary(g.bets, outcomes);
       const pnlCls = pnl > 0 ? 'pos' : pnl < 0 ? 'neg' : '';
       const pnlTxt = pnl == null ? '' : (pnl >= 0 ? `+₹${pnl}` : `-₹${Math.abs(pnl)}`);
-      const busy = state.cashOutBusy === b.id;
-      return `<div class="market-bet-tag" data-bet-id="${esc(b.id)}">
-        <span class="bet-out" title="${esc(b.outcome_name)}">${esc(b.outcome_name)}</span>
-        <span class="bet-stake">₹${esc(b.stake)}</span>
+      const betIds = g.bets.map(b => b.id).join(',');
+      const busy = g.bets.some(b => state.cashOutBusy === b.id);
+      const stakeLabel = g.isNet ? `₹${g.totalStake} net` : `₹${g.totalStake}`;
+      return `<div class="market-bet-tag" data-bet-ids="${esc(betIds)}">
+        <span class="bet-out" title="${esc(g.outcome_name)}">${esc(g.outcome_name)}</span>
+        <span class="bet-stake">${stakeLabel}</span>
         ${pnlTxt ? `<span class="bet-pnl ${pnlCls}">${pnlTxt}</span>` : ''}
-        ${co != null ? `<button type="button" class="bet-cashout-btn" data-bet-id="${esc(b.id)}" data-amount="${co}" ${busy ? 'disabled' : ''}>Cancel · ₹${co}</button>` : ''}
+        ${totalCo != null ? `<button type="button" class="bet-cashout-btn" data-bet-ids="${esc(betIds)}" data-amount="${totalCo}" ${busy ? 'disabled' : ''}>Cancel · ₹${totalCo}</button>` : ''}
       </div>`;
     }).join('');
     return `<div class="market-bet-tags">${tags}</div>`;
@@ -272,14 +332,43 @@
     return `<div class="market-head"><h4>${esc(title)}</h4>${tags}</div>`;
   }
 
+  async function cashOutBets(betIds, opts) {
+    opts = opts || {};
+    const ids = (betIds || []).filter(id => id != null && id !== '');
+    if (!ids.length) return null;
+    const amount = Number(opts.amount || 0);
+    const label = amount > 0
+      ? `Cancel ${ids.length > 1 ? ids.length + ' bets' : 'bet'} for ₹${amount}?`
+      : `Cancel ${ids.length > 1 ? ids.length + ' bets' : 'this bet'}?`;
+    if (!global.confirm(label)) return null;
+    let total = 0;
+    let last = null;
+    for (const betId of ids) {
+      last = await cashOutBet(betId, { ...opts, skipConfirm: true, quiet: true });
+      if (!last) break;
+      total += Number(last.cash_out_amount || 0);
+    }
+    if (last) {
+      toast(`Cashed out · ₹${total || amount}`);
+      if (global.GunduSportsAuth && GunduSportsAuth.loadWalletBalance) {
+        GunduSportsAuth.loadWalletBalance('wallet');
+      }
+      await loadOpenBets({ betsUrl: opts.betsUrl, eventId: opts.eventId });
+      notifyBetsChanged();
+    }
+    return last;
+  }
+
   async function cashOutBet(betId, opts) {
     opts = opts || {};
     const auth = token();
     if (!auth) { toast('Login required'); return null; }
     if (state.cashOutBusy) return null;
     const amount = Number(opts.amount || 0);
-    const label = amount > 0 ? `Cancel bet for ₹${amount}?` : 'Cancel this bet?';
-    if (!global.confirm(label)) return null;
+    if (!opts.skipConfirm) {
+      const label = amount > 0 ? `Cancel bet for ₹${amount}?` : 'Cancel this bet?';
+      if (!global.confirm(label)) return null;
+    }
     state.cashOutBusy = betId;
     try {
       const r = await fetch(cashOutUrl(opts.betsUrl, betId), {
@@ -293,12 +382,14 @@
       });
       const data = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(data.error || data.detail || `Cash out failed (${r.status})`);
-      toast(`Cashed out · ₹${data.cash_out_amount}`);
-      if (global.GunduSportsAuth && GunduSportsAuth.loadWalletBalance) {
-        GunduSportsAuth.loadWalletBalance('wallet');
+      if (!opts.quiet) {
+        toast(`Cashed out · ₹${data.cash_out_amount}`);
+        if (global.GunduSportsAuth && GunduSportsAuth.loadWalletBalance) {
+          GunduSportsAuth.loadWalletBalance('wallet');
+        }
+        await loadOpenBets({ betsUrl: opts.betsUrl, eventId: opts.eventId });
+        notifyBetsChanged();
       }
-      await loadOpenBets({ betsUrl: opts.betsUrl, eventId: opts.eventId });
-      notifyBetsChanged();
       return data;
     } catch (e) {
       toast(e.message || 'Could not cash out');
@@ -505,13 +596,16 @@
       if (cashBtn) {
         ev.preventDefault();
         ev.stopPropagation();
-        const betId = Number(cashBtn.dataset.betId);
         const scope = cashBtn.closest('[data-bets-url]') || document.body;
-        cashOutBet(betId, {
+        const idsRaw = cashBtn.dataset.betIds || cashBtn.dataset.betId || '';
+        const betIds = idsRaw.split(',').map(s => Number(s.trim())).filter(n => Number.isFinite(n) && n > 0);
+        const opts = {
           amount: Number(cashBtn.dataset.amount || 0),
           betsUrl: scope.dataset.betsUrl || state.betsUrl,
           eventId: scope.dataset.eventId,
-        });
+        };
+        if (betIds.length > 1) cashOutBets(betIds, opts);
+        else if (betIds.length === 1) cashOutBet(betIds[0], opts);
         return;
       }
       const btn = ev.target.closest('.odd-btn');
@@ -525,6 +619,6 @@
   installClickHandler();
   global.GunduBetslip = {
     open, close, placeBet, showMyBets, bindOddButtons, toast, pickFromButton,
-    loadOpenBets, marketBetsHtml, marketHeadHtml, cashOutBet, cashOutAmount, cashOutPnl,
+    loadOpenBets, marketBetsHtml, marketHeadHtml, cashOutBet, cashOutBets, cashOutAmount, cashOutPnl,
   };
 })(window);

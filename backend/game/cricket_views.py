@@ -1807,7 +1807,7 @@ def _event_card_payload(match: dict) -> dict:
     }
     try:
         from game.radhexchange_stream import live_tv_for_match
-        tv = live_tv_for_match(match, sport="cricket", in_play_only=True)
+        tv = live_tv_for_match(match, sport="cricket", in_play_only=False)
         if tv:
             payload["live_tv"] = tv
     except Exception:
@@ -1865,7 +1865,7 @@ def _match_odds_detail_payload(match: dict, *, poll_interval: int, last_sync=Non
     }
     try:
         from game.radhexchange_stream import live_tv_for_match
-        tv = live_tv_for_match(match, sport="cricket", in_play_only=True)
+        tv = live_tv_for_match(match, sport="cricket", in_play_only=False)
         if tv:
             payload["live_tv"] = tv
     except Exception:

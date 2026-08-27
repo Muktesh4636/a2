@@ -28,7 +28,7 @@ from game.sports_betting import cash_out_sports_bet, my_sports_bets, place_sport
 def _attach_live_tv(match: dict, sport: str) -> dict:
     try:
         from game.radhexchange_stream import live_tv_for_match
-        tv = live_tv_for_match(match, sport=sport, in_play_only=True)
+        tv = live_tv_for_match(match, sport=sport, in_play_only=False)
         if tv:
             out = dict(match)
             out["live_tv"] = tv

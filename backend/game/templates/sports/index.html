@@ -216,6 +216,31 @@
       animation: spin .7s linear infinite;
     }
     @keyframes spin { to { transform: rotate(360deg); } }
+
+    .featured-live-tv {
+      margin-bottom: 14px; border-radius: 16px; overflow: hidden;
+      border: 1px solid var(--card-border);
+      box-shadow: 0 8px 24px rgba(0,0,0,.35);
+      background: #000;
+    }
+    .featured-live-tv .live-tv-head {
+      display: flex; align-items: center; gap: 8px;
+      padding: 8px 12px; background: #1a9e9e; color: #fff;
+      font-size: 12px; font-weight: 800; letter-spacing: .04em;
+    }
+    .featured-live-tv .live-tv-body { position: relative; background: #000; line-height: 0; }
+    .featured-live-tv .live-tv-video {
+      width: 100%; aspect-ratio: 16 / 9; display: block;
+      background: #000; object-fit: cover;
+    }
+    .featured-live-tv .live-tv-frame {
+      width: 100%; aspect-ratio: 16 / 9; border: 0; display: block; background: #0a1628;
+    }
+    .featured-live-tv .live-tv-mute {
+      position: absolute; right: 10px; bottom: 10px; z-index: 2;
+      width: 42px; height: 42px; border: 0; border-radius: 50%;
+      background: rgba(0,0,0,.55); color: #fff; font-size: 20px; cursor: pointer;
+    }
   </style>
 </head>
 <body>
@@ -239,8 +264,9 @@
 
   <div class="toast" id="toast"></div>
 
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.15/dist/hls.min.js"></script>
   <script src="/sports/auth-wallet.js"></script>
-  <script src="/sports/live-tv.js"></script>
+  <script src="/sports/live-tv.js?v=2"></script>
   <script>
     const feedEl = document.getElementById('feed');
     const toastEl = document.getElementById('toast');
@@ -251,7 +277,7 @@
     // Show logged-in user's wallet (JWT from WebView / query — same as roulette)
     if (window.GunduSportsAuth) GunduSportsAuth.bootWallet('wallet');
 
-    const CACHE_VER = 'sports_v3';
+    const CACHE_VER = 'sports_v4';
     const CACHE_TTL_MS = 3 * 60 * 1000;      // treat as fresh for 3 min
     const CACHE_MAX_AGE_MS = 30 * 60 * 1000; // still usable offline-ish for 30 min
     let allEvents = [];       // full normalized list for current sport/mode
@@ -320,6 +346,8 @@
         marketLabel: e.marketLabel,
         odds: (e.odds || []).slice(0, 3),
         href: e.href,
+        hasTv: e.hasTv,
+        liveTv: e.liveTv,
       }));
       return writeStore(cacheKey(sportKey, modeKey), {
         events: slim,
@@ -381,9 +409,38 @@
     function hasLiveTv(tv) {
       return !!(tv && (tv.relay_hls_url || tv.embed_url || tv.radhe_event_id || tv.event_id));
     }
+    function liveTvPayload(tv) {
+      if (!hasLiveTv(tv)) return null;
+      const eid = tv.radhe_event_id || tv.event_id;
+      return {
+        event_id: eid,
+        embed_url: tv.embed_url || null,
+        relay_hls_url: tv.relay_hls_url || (eid ? `/sports-live/${eid}/stream.m3u8` : ''),
+      };
+    }
+    function matchDetailHref(sportKey, id, tv) {
+      const payload = liveTvPayload(tv);
+      const q = new URLSearchParams();
+      if (sportKey === 'cricket') {
+        q.set('view', 'match');
+        q.set('event_id', String(id));
+        q.set('pre', '0');
+      } else {
+        q.set('sport', sportKey);
+        q.set('event_id', String(id));
+      }
+      if (payload) {
+        q.set('has_tv', '1');
+        if (payload.event_id) q.set('radhe_event_id', String(payload.event_id));
+      }
+      const base = sportKey === 'cricket' ? '/cricket/' : '/sports/match/';
+      return `${base}?${q.toString()}`;
+    }
     function sortLiveTvFirst(events) {
       return [...events].sort((a, b) => Number(!!b.hasTv) - Number(!!a.hasTv));
     }
+    const TV_MATCH_THRESHOLD = 0.32;
+
     async function enrichEventsLiveTv(events, sportKey) {
       if (!window.GunduLiveTv) return events;
       let streams;
@@ -391,13 +448,20 @@
       const filtered = streams.filter(s => s.sport === sportKey);
       return events.map(ev => {
         if (ev.hasTv) return ev;
-        const matchName = (ev.teams || []).map(t => t.name).filter(Boolean).join(' vs ');
+        const teamNames = (ev.teams || []).map(t => t.name).filter(Boolean);
+        const matchName = teamNames.join(' vs ');
         let best = null, bestScore = 0;
         for (const s of filtered) {
-          const sc = GunduLiveTv.pairScore(matchName, s.name);
+          const sc = GunduLiveTv.scoreEventStream
+            ? GunduLiveTv.scoreEventStream(s, { matchName, league: ev.league, teamNames })
+            : GunduLiveTv.pairScore(matchName, s.name);
           if (sc > bestScore) { bestScore = sc; best = s; }
         }
-        if (best && bestScore >= 0.45) ev.hasTv = true;
+        if (best && bestScore >= TV_MATCH_THRESHOLD) {
+          ev.hasTv = true;
+          ev.liveTv = liveTvPayload(best);
+          ev.href = matchDetailHref(sportKey, ev.id, best);
+        }
         return ev;
       });
     }
@@ -462,8 +526,9 @@
           ],
           marketLabel: 'Winner (Match)',
           odds: (raw.match_odds || []).map(o => ({ label: o.team, price: o.price_format })),
-          href: `/cricket/?view=match&event_id=${raw.event_id}&pre=0`,
+          href: matchDetailHref('cricket', raw.event_id, raw.live_tv),
           hasTv: hasLiveTv(raw.live_tv),
+          liveTv: liveTvPayload(raw.live_tv),
         };
       }
       const [a, b] = splitTeams(raw.match);
@@ -498,10 +563,9 @@
         ],
         marketLabel,
         odds,
-        href: sportKey === 'cricket'
-          ? `/cricket/?view=match&event_id=${raw.id}&pre=0`
-          : `/sports/match/?sport=${sportKey}&event_id=${raw.id}`,
+        href: matchDetailHref(sportKey, raw.id, raw.live_tv),
         hasTv: hasLiveTv(raw.live_tv),
+        liveTv: liveTvPayload(raw.live_tv),
       };
     }
 
@@ -545,12 +609,25 @@
       </article>`;
     }
 
+    function rehydrateEventLinks(events, sportKey) {
+      return (events || []).map(e => ({
+        ...e,
+        href: (e.href && String(e.href).startsWith('/'))
+          ? e.href
+          : matchDetailHref(sportKey, e.id, e.liveTv),
+      }));
+    }
+
     function bindCard(card) {
       card.addEventListener('click', (ev) => {
         if (ev.target.closest('.odd')) return;
-        const href = card.dataset.href || '';
+        let href = card.dataset.href || '';
+        if (!href.startsWith('/')) {
+          const id = card.dataset.id;
+          if (id) href = matchDetailHref(sport, id, null);
+        }
         if (href.startsWith('/')) location.href = href;
-        else toast(`${sport} match detail coming soon`);
+        else toast(`${sport} match detail unavailable`);
       });
       card.querySelectorAll('.odd').forEach(btn => {
         btn.addEventListener('click', (ev) => {
@@ -573,8 +650,57 @@
       setFeedStatus(`Showing all ${allEvents.length} matches`);
     }
 
+    let featuredTvPlayer = null;
+
+    function stopFeaturedTv() {
+      if (featuredTvPlayer) { featuredTvPlayer.destroy(); featuredTvPlayer = null; }
+    }
+
+    async function mountFeaturedLiveTv(events) {
+      stopFeaturedTv();
+      let featured = (events || []).find(e => e.hasTv && e.liveTv);
+      if (!featured && window.GunduLiveTv) {
+        try {
+          const streams = await GunduLiveTv.fetchIndex(false);
+          const s = (streams || []).find(x => x.sport === sport);
+          if (s) {
+            featured = { hasTv: true, liveTv: liveTvPayload(s), league: s.name, teams: [] };
+          }
+        } catch (_) {}
+      }
+      let panel = document.getElementById('featuredLiveTv');
+      if (!featured) {
+        if (panel) panel.remove();
+        return;
+      }
+      const tv = featured.liveTv;
+      const label = (featured.teams || []).map(t => t.name).filter(Boolean).join(' vs ') || featured.league || 'Live match';
+      if (!panel) {
+        panel = document.createElement('section');
+        panel.id = 'featuredLiveTv';
+        panel.className = 'featured-live-tv';
+        feedEl.insertBefore(panel, feedEl.firstChild);
+      }
+      panel.innerHTML = `
+        <div class="live-tv-head">📺 LIVE TV · ${esc(label)}</div>
+        <div id="featuredLiveTvBody"></div>`;
+      const body = document.getElementById('featuredLiveTvBody');
+      if (body && window.GunduLiveTv && GunduLiveTv.mountPlayer) {
+        featuredTvPlayer = GunduLiveTv.mountPlayer(body, tv, {
+          videoId: 'featuredLiveTvVideo',
+          muteId: 'featuredLiveTvMute',
+          emptyMsg: 'Stream starting soon…',
+        });
+      } else if (body && tv.embed_url) {
+        body.innerHTML = `<iframe class="live-tv-frame" src="${esc(tv.embed_url)}" allow="autoplay; fullscreen" referrerpolicy="no-referrer-when-downgrade"></iframe>`;
+      } else if (body) {
+        body.innerHTML = `<div class="feed-status">Stream starting soon…</div>`;
+      }
+    }
+
     function paintAllMatches() {
       if (!allEvents.length) {
+        stopFeaturedTv();
         feedEl.innerHTML = `<div class="empty">No ${mode} ${sport} matches right now.</div>`;
         return;
       }
@@ -582,6 +708,10 @@
         <div id="cards">${allEvents.map(cardHtml).join('')}</div>
         <div class="feed-status" id="feedStatus"></div>`;
       feedEl.querySelectorAll('.card').forEach(bindCard);
+      // Live video disabled on sports lobby — matches/odds only
+      stopFeaturedTv();
+      const oldTv = document.getElementById('featuredLiveTv');
+      if (oldTv) oldTv.remove();
       updateFeedStatus();
     }
 
@@ -590,7 +720,7 @@
     }
 
     function paintFeed(events) {
-      allEvents = events || [];
+      allEvents = rehydrateEventLinks(events || [], sport);
       paintAllMatches();
       prefetchLogos(allEvents, sport, Math.min(12, allEvents.length));
       prefetchTopMatchDetails(allEvents, sport, 2);
@@ -707,6 +837,7 @@
       document.querySelectorAll('.sport-tab').forEach(b => b.classList.toggle('active', b.dataset.sport === sport));
 
       applyCachedCounts();
+      if (window.GunduLiveTv) GunduLiveTv.fetchIndex(false).catch(() => {});
       loadFeed({ soft: false }).then(() => {
         if (typeof requestIdleCallback === 'function') {
           requestIdleCallback(() => prefetchAllSports(), { timeout: 1500 });

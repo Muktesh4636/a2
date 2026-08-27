@@ -99,6 +99,7 @@
       if (sport) q.set('sport', sport);
       if (matchName) q.set('match_name', matchName);
       if (competition) q.set('competition', competition);
+      q.set('in_play', '0');
       const r = await fetch(`/api/sports/live-tv/lookup/?${q}`, { headers: { Accept: 'application/json' } });
       if (r.ok) {
         const data = await r.json();
@@ -116,11 +117,89 @@
       const sc = scoreStream(s, matchName, competition, teamNames);
       if (sc > bestScore) { bestScore = sc; best = s; }
     }
-    if (!best || bestScore < 0.45) return { ok: false, error: 'not_found' };
+    if (!best || bestScore < 0.32) return { ok: false, error: 'not_found' };
     return { ...best, ok: true, match_score: bestScore, radhe_name: best.name };
   }
 
-  global.GunduLiveTv = { lookup, fetchIndex, pairScore };
+  /** Prefer embed iframe when available — HLS relay is often unavailable upstream. */
+  function tvPlayback(tv) {
+    tv = tv || {};
+    const eid = tv.radhe_event_id || tv.event_id;
+    const relayHls = tv.relay_hls_url || (eid ? `/sports-live/${eid}/stream.m3u8` : '');
+    const embed = tv.embed_url || '';
+    if (embed) return { mode: 'embed', embed, relayHls };
+    if (relayHls) return { mode: 'hls', embed: '', relayHls };
+    return { mode: 'none', embed: '', relayHls: '' };
+  }
+
+  function embedFrameHtml(url) {
+    if (!url) return '';
+    const esc = (s) => String(s)
+      .replace(/&/g, '&amp;')
+      .replace(/"/g, '&quot;')
+      .replace(/</g, '&lt;');
+    return `<iframe class="live-tv-frame" src="${esc(url)}" allow="autoplay; fullscreen" referrerpolicy="no-referrer-when-downgrade"></iframe>`;
+  }
+
+  /** Mount embed or HLS player; falls back to embed on fatal HLS errors. */
+  function mountPlayer(container, tv, opts) {
+    opts = opts || {};
+    if (!container) return { destroy: () => {} };
+    const pb = tvPlayback(tv);
+    const videoId = opts.videoId || 'liveTvVideo';
+    const muteId = opts.muteId || 'liveTvMute';
+    const emptyMsg = opts.emptyMsg || 'Stream starting soon…';
+    let player = null;
+
+    function destroy() {
+      if (player && player.destroy) player.destroy();
+      player = null;
+    }
+
+    if (pb.mode === 'embed') {
+      container.innerHTML = embedFrameHtml(pb.embed);
+      return { destroy };
+    }
+    if (pb.mode === 'hls') {
+      let markup = global.GunduLiveTv.videoMarkup();
+      markup = markup.replace(/id="liveTvVideo"/g, `id="${videoId}"`);
+      markup = markup.replace(/id="liveTvMute"/g, `id="${muteId}"`);
+      container.innerHTML = markup;
+      const video = document.getElementById(videoId);
+      player = global.GunduLiveTv.createPlayer(video, pb.relayHls, {
+        onFatal: () => {
+          destroy();
+          if (pb.embed) {
+            container.innerHTML = embedFrameHtml(pb.embed);
+          } else {
+            container.innerHTML = `<div class="live-tv-msg">${emptyMsg}</div>`;
+          }
+        },
+      });
+      const btn = document.getElementById(muteId);
+      if (btn && video) {
+        btn.onclick = (e) => {
+          e.stopPropagation();
+          video.muted = !video.muted;
+          btn.textContent = video.muted ? '🔇' : '🔊';
+        };
+      }
+      return { destroy: () => { destroy(); container.innerHTML = ''; } };
+    }
+    container.innerHTML = `<div class="live-tv-msg">${emptyMsg}</div>`;
+    return { destroy: () => { container.innerHTML = ''; } };
+  }
+
+  global.GunduLiveTv = { lookup, fetchIndex, pairScore, scoreStream, tvPlayback, embedFrameHtml, mountPlayer };
+
+  /** Best match score between a platform event and a relay stream (0–1). */
+  global.GunduLiveTv.scoreEventStream = function (stream, opts) {
+    opts = opts || {};
+    const matchName = opts.matchName || opts.match_name || '';
+    const competition = opts.competition || opts.league || '';
+    const teamNames = opts.teamNames || opts.team_names || [];
+    return scoreStream(stream, matchName, competition, teamNames);
+  };
 
   global.GunduLiveTv.hlsConfig = function () {
     return {
@@ -212,13 +291,21 @@
         global.GunduLiveTv.wireSpeaker(video);
         video.play().catch(() => {});
       });
+      let netFails = 0;
       hls.on(Hls.Events.ERROR, (_, data) => {
         if (!data.fatal) return;
         if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
+          netFails += 1;
+          if (netFails >= 3 && opts.onFatal) {
+            destroy();
+            opts.onFatal(data);
+            return;
+          }
           hls.startLoad();
         } else if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
           hls.recoverMediaError();
         } else if (opts.onFatal) {
+          destroy();
           opts.onFatal(data);
         }
       });
