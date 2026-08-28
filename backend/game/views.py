@@ -23,7 +23,15 @@ from .serializers import (
     RoundPredictionSerializer, CreatePredictionSerializer, UserSoundSettingSerializer,
     MegaSpinProbabilitySerializer, DailyRewardProbabilitySerializer
 )
-from .utils import get_game_setting, get_all_game_settings, calculate_current_timer, get_redis_client
+from .utils import (
+    get_game_setting,
+    get_all_game_settings,
+    calculate_current_timer,
+    get_redis_client,
+    resolve_round_for_betting,
+    is_betting_window_open,
+    warm_betting_hot_keys,
+)
 
 # Redis connection with tiered failover
 redis_client = get_redis_client()
@@ -775,71 +783,43 @@ def place_bet(request):
                 return None
         return str(x)
 
-    # 1. Get current round state (Prefer Redis)
+    # 1. Resolve live round (Redis + DB — same path as /api/time/)
     round_id = None
     status_val = "WAITING"
+    timer_val = 0
+    current_redis_balance = None
+
     if redis_client:
         try:
-            # Single network round-trip for hot keys
             pipe = redis_client.pipeline()
-            pipe.get('current_round_id')
-            pipe.get('current_status')
-            pipe.get('current_end_time')
             pipe.get(balance_key)
-            round_id_raw, status_raw, end_time_raw, current_redis_balance = pipe.execute()
-            # Fallback to engine state if legacy hot keys are missing (game_engine_v3 publishes current_game_state)
-            if (not round_id_raw) or (not status_raw):
-                try:
-                    state_json = redis_client.get('current_game_state')
-                    if state_json:
-                        state = json.loads(state_json)
-                        round_id_raw = state.get('round_id') or round_id_raw
-                        status_raw = state.get('status') or status_raw
-                        if not end_time_raw:
-                            try:
-                                round_end = int(state.get('ROUND_END_TIME') or state.get('round_end_time') or 0)
-                                timer = int(state.get('timer') or 0)
-                                end_time_raw = str(int(timezone.now().timestamp()) + max(0, round_end - timer))
-                            except Exception:
-                                pass
-                except Exception:
-                    pass
-
-            if round_id_raw and status_raw:
-                round_id = _rstr(round_id_raw)
-                status_val = _rstr(status_raw)
-                # Engine can publish lowercase; legacy key is uppercase
-                status_val = (status_val or "WAITING").upper()
-                end_time = int(end_time_raw or 0)
-                
-                now_ts = int(timezone.now().timestamp())
-                
-                # Check if betting is closed
-                if status_val != "BETTING":
-                    logger.warning(f"Bet placement rejected for user {user_id}: Round {round_id} status is {status_val}")
-                    return Response({'error': 'Betting is closed for this round'}, status=status.HTTP_400_BAD_REQUEST)
-                
-                # Safety check: if end_time is in the past, engine might be lagging
-                if end_time > 0 and now_ts > end_time:
-                    logger.warning(f"Bet placement rejected for user {user_id}: Round {round_id} betting period expired ({now_ts} > {end_time})")
-                    return Response({'error': 'Betting period has expired'}, status=status.HTTP_400_BAD_REQUEST)
-            else:
-                # Strict Redis-only mode: do not hit DB in hot path.
-                return Response(
-                    {'error': 'Game state is syncing. Please retry in a moment.'},
-                    status=status.HTTP_503_SERVICE_UNAVAILABLE
-                )
+            (current_redis_balance,) = pipe.execute()
         except Exception as e:
-            logger.error(f"Redis error fetching round for user {user_id}: {e}")
-            return Response(
-                {'error': 'Betting service temporarily unavailable. Please retry.'},
-                status=status.HTTP_503_SERVICE_UNAVAILABLE
-            )
-    else:
+            logger.error(f"Redis error fetching balance for user {user_id}: {e}")
+
+    try:
+        round_id, status_val, timer_val = resolve_round_for_betting(redis_client)
+    except Exception as e:
+        logger.error(f"Round resolve failed for user {user_id}: {e}")
         return Response(
             {'error': 'Betting service temporarily unavailable. Please retry.'},
-            status=status.HTTP_503_SERVICE_UNAVAILABLE
+            status=status.HTTP_503_SERVICE_UNAVAILABLE,
         )
+
+    if not round_id:
+        return Response(
+            {'error': 'Game state is syncing. Please retry in a moment.'},
+            status=status.HTTP_503_SERVICE_UNAVAILABLE,
+        )
+
+    if not is_betting_window_open(status_val, timer_val):
+        logger.warning(
+            f"Bet placement rejected for user {user_id}: "
+            f"round {round_id} status={status_val} timer={timer_val}"
+        )
+        return Response({'error': 'Betting is closed for this round'}, status=status.HTTP_400_BAD_REQUEST)
+
+    warm_betting_hot_keys(redis_client, round_id, status_val, timer_val)
 
     # 3. Redis-First Atomic Placement (Lua Script)
     if redis_client:
@@ -2583,7 +2563,7 @@ def recent_round_results(request):
     try:
         count = int(request.query_params.get('count', 3))
         # Limit count to reasonable range
-        count = max(1, min(count, 50))
+        count = max(1, min(count, 100))
         
         logger.info(f"Public recent {count} round results API access")
         

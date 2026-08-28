@@ -135,8 +135,33 @@ class GameWebViewActivity : ComponentActivity() {
         }
     }
 
+    private fun stopWebAudio() {
+        try {
+            webView.evaluateJavascript(
+                """
+                (function(){
+                  try{ if(window.stopGameAudio) window.stopGameAudio(); }catch(e){}
+                  try{
+                    if(typeof WEBAudio!=='undefined' && WEBAudio && WEBAudio.audioContext){
+                      try{ WEBAudio.audioContext.suspend(); }catch(e1){}
+                      try{ WEBAudio.audioContext.close(); }catch(e2){}
+                    }
+                  }catch(e3){}
+                  try{
+                    var a=document.querySelectorAll('audio');
+                    for(var i=0;i<a.length;i++){ try{ a[i].pause(); a[i].src=''; }catch(e4){} }
+                  }catch(e5){}
+                })();
+                """.trimIndent(),
+                null
+            )
+        } catch (_: Exception) {
+        }
+    }
+
     private fun handleBack() {
         val current = webView.url.orEmpty()
+        if (current.contains("/game")) stopWebAudio()
         // Casino lobby → app home.
         if (isLobbyUrl(current)) {
             finishToHome()
@@ -164,6 +189,7 @@ class GameWebViewActivity : ComponentActivity() {
     }
 
     private fun finishToHome() {
+        stopWebAudio()
         val intent = Intent(this, MainActivity::class.java).apply {
             putExtra("redirect", "home")
             addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
@@ -248,7 +274,19 @@ class GameWebViewActivity : ComponentActivity() {
         else -> "/${id.trim().trim('/')}/"
     }
 
+    override fun onPause() {
+        stopWebAudio()
+        try { webView.onPause() } catch (_: Exception) {}
+        super.onPause()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        try { webView.onResume() } catch (_: Exception) {}
+    }
+
     override fun onDestroy() {
+        stopWebAudio()
         try {
             webView.stopLoading()
             (webView.parent as? ViewGroup)?.removeView(webView)

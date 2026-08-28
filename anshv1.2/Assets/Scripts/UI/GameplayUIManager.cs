@@ -362,9 +362,14 @@ public class GameplayUIManager : MonoBehaviour
                 return;
             }
 
-            gameController.PlaceBet(number, currentAmountValue, (success) =>
+            gameController.PlaceBet(number, currentAmountValue, (success, err) =>
             {
-                if (!success) return;
+                if (!success)
+                {
+                    if (!string.IsNullOrEmpty(err))
+                        ShowPopup("BET FAILED", err);
+                    return;
+                }
 
                 // Animate ephemeral coin and then apply to persistent coin or create persistent coin if first bet
                 AnimateAndApplyBet(

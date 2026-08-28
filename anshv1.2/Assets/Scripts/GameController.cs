@@ -63,6 +63,10 @@ public class GameController : MonoBehaviour
             diceBox.diceRoller.OnPlaybackComplete += HandleDicePlaybackComplete;
 
         SubscribeEvents();
+
+        // Recover if casino token was applied before we subscribed to OnLoginSuccess.
+        if (!string.IsNullOrEmpty(PlayerPrefs.GetString("accessToken", string.Empty)))
+            HandleLoginSuccess();
     }
 
     private void OnDestroy()
@@ -289,21 +293,21 @@ public class GameController : MonoBehaviour
 
     #region Bet Management
 
-    public void PlaceBet(int diceNo, float amount, Action<bool> onResult)
+    public void PlaceBet(int diceNo, float amount, Action<bool, string> onResult)
     {
         float walletAmount = GameManager.Instance.WalletAmount;
 
         if (amount > walletAmount)
         {
-            onResult?.Invoke(false);
+            onResult?.Invoke(false, "Insufficient balance");
             return;
         }
 
         apiClient.PlaceBet(diceNo, amount, (ok, betResp, err) =>
         {
-            if (!ok) { onResult?.Invoke(false); return; }
+            if (!ok) { onResult?.Invoke(false, err); return; }
             GameManager.Instance.RefreshWallet();
-            onResult?.Invoke(true);
+            onResult?.Invoke(true, null);
         });
     }
 

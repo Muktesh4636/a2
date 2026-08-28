@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Sports white theme — pick one</title>
+  <style>
+    :root { --ink: #111827; --muted: #6b7280; --line: #e5e7eb; --bg: #f3f4f6; }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; font-family: "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: var(--bg); color: var(--ink); padding: 24px 16px 48px;
+    }
+    h1 { margin: 0 0 8px; font-size: 24px; }
+    .sub { color: var(--muted); margin: 0 0 24px; font-size: 14px; line-height: 1.5; max-width: 720px; }
+    .grid {
+      display: grid; gap: 20px;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      max-width: 980px;
+    }
+    .card {
+      background: #fff; border: 1px solid var(--line); border-radius: 16px;
+      overflow: hidden; display: flex; flex-direction: column;
+    }
+    .card img { width: 100%; aspect-ratio: 9 / 16; object-fit: cover; background: #fff; display: block; }
+    .meta { padding: 14px 16px 16px; }
+    .meta h2 { margin: 0 0 6px; font-size: 16px; }
+    .meta p { margin: 0 0 12px; color: var(--muted); font-size: 13px; line-height: 1.45; }
+    .meta code { font-size: 12px; background: #f3f4f6; padding: 2px 6px; border-radius: 6px; }
+    button {
+      width: 100%; border: 0; border-radius: 10px; padding: 11px 14px;
+      font-weight: 700; font-size: 14px; cursor: pointer;
+      background: #111827; color: #fff;
+    }
+    button:hover { filter: brightness(1.08); }
+    button.picked { background: #0b8f4e; }
+    .links { margin-top: 28px; font-size: 14px; }
+    .links a { color: #0b8f4e; font-weight: 600; }
+    #choice {
+      margin-top: 18px; padding: 12px 14px; border-radius: 10px;
+      background: #ecfdf5; border: 1px solid #a7f3d0; color: #065f46;
+      font-weight: 700; display: none; max-width: 980px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Sports white theme options</h1>
+  <p class="sub">
+    Current live sports page uses a black theme. Pick one white theme below.
+    Tell me <strong>A</strong>, <strong>B</strong>, or <strong>C</strong> and I’ll apply it to
+    <code>/sports/</code> and <code>/cricket/</code>.
+  </p>
+
+  <div class="grid">
+    <article class="card" data-opt="A">
+      <img src="./sports-theme-white-a.png" alt="Option A — white + emerald" />
+      <div class="meta">
+        <h2>A — White + Emerald</h2>
+        <p>Bright white cards, emerald live tabs/badges, soft gray chrome. Fresh sportsbook feel.</p>
+        <button type="button" onclick="pick('A')">Select A</button>
+      </div>
+    </article>
+
+    <article class="card" data-opt="B">
+      <img src="./sports-theme-white-b.png" alt="Option B — white + navy" />
+      <div class="meta">
+        <h2>B — White + Navy</h2>
+        <p>Soft off-white, navy active tabs, red LIVE pill. Clean premium bookmaker look.</p>
+        <button type="button" onclick="pick('B')">Select B</button>
+      </div>
+    </article>
+
+    <article class="card" data-opt="C">
+      <img src="./sports-theme-white-c.png" alt="Option C — white + gold" />
+      <div class="meta">
+        <h2>C — White + Brand Gold</h2>
+        <p>Keeps your gold accents from the dark theme, on a white base. Closest brand match.</p>
+        <button type="button" onclick="pick('C')">Select C</button>
+      </div>
+    </article>
+  </div>
+
+  <div id="choice"></div>
+
+  <p class="links">
+    Live preview of white layout (Option C styling):
+    <a href="./preview-white.html">Open white theme preview</a>
+    · Current dark live site:
+    <a href="https://gunduata.tech/sports/" target="_blank" rel="noopener">gunduata.tech/sports</a>
+  </p>
+
+  <script>
+    function pick(opt) {
+      document.querySelectorAll('button').forEach(b => {
+        b.classList.toggle('picked', b.textContent.includes(opt) && b.textContent.startsWith('Select'));
+        if (b.textContent.startsWith('Select')) {
+          b.textContent = b.textContent.includes(opt) ? 'Selected ' + opt : 'Select ' + b.textContent.slice(-1);
+          if (!b.textContent.startsWith('Selected') && !b.textContent.startsWith('Select')) {
+            /* no-op */
+          }
+        }
+      });
+      document.querySelectorAll('button').forEach(b => {
+        const letter = b.closest('.card').dataset.opt;
+        b.textContent = letter === opt ? 'Selected ' + letter : 'Select ' + letter;
+        b.classList.toggle('picked', letter === opt);
+      });
+      const el = document.getElementById('choice');
+      el.style.display = 'block';
+      el.textContent = 'You selected Option ' + opt + ' — reply in chat with "' + opt + '" to apply it.';
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#ffffff" />
+  <title>LIVE — Sports (White preview)</title>
+  <style>
+    /* Preview = Option C (White + Brand Gold). Swap :root to try A/B. */
+    :root {
+      /* Option C — White + Gold (default preview) */
+      --bg: #ffffff;
+      --bg-grad: #f7f7f5;
+      --card: #ffffff;
+      --card-border: #ebe6d8;
+      --gold: #c9a227;
+      --gold-soft: #b8921f;
+      --muted: #6b7280;
+      --text: #111827;
+      --live: #c9a227;
+      --pill: #f5f5f4;
+      --tab-border: #e5e7eb;
+      --tab-text: #374151;
+      --odd-bg: rgba(201, 162, 39, 0.06);
+      --avatar-bg: #f3f4f6;
+      --score: #111827;
+      --safe-top: env(safe-area-inset-top, 0px);
+    }
+    /* Uncomment for Option A */
+    /*
+    :root {
+      --bg: #ffffff; --bg-grad: #f4f6f8; --card: #ffffff; --card-border: #e5e7eb;
+      --gold: #0b8f4e; --gold-soft: #097a42; --muted: #6b7280; --text: #111827;
+      --live: #0b8f4e; --pill: #f3f4f6; --tab-border: #d1d5db; --tab-text: #374151;
+      --odd-bg: rgba(11,143,78,.06); --avatar-bg: #eef2f0; --score: #111827;
+    }
+    */
+    /* Uncomment for Option B */
+    /*
+    :root {
+      --bg: #f7f8fa; --bg-grad: #f7f8fa; --card: #ffffff; --card-border: #e2e8f0;
+      --gold: #0b1f3a; --gold-soft: #0b1f3a; --muted: #64748b; --text: #0f172a;
+      --live: #dc2626; --pill: #ffffff; --tab-border: #cbd5e1; --tab-text: #334155;
+      --odd-bg: rgba(11,31,58,.04); --avatar-bg: #eef2ff; --score: #0f172a;
+    }
+    */
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0; min-height: 100%; min-height: 100dvh;
+      background: radial-gradient(1000px 500px at 20% -10%, var(--bg-grad) 0%, var(--bg) 50%);
+      color: var(--text);
+      font-family: "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+    body { padding-bottom: calc(20px + env(safe-area-inset-bottom, 0px)); }
+    .sticky-head {
+      position: sticky; top: 0; z-index: 30;
+      background: rgba(255,255,255,.92); backdrop-filter: blur(10px);
+      border-bottom: 1px solid var(--card-border);
+      padding-top: var(--safe-top);
+    }
+    .sticky-inner { max-width: 520px; margin: 0 auto; padding: 8px 14px 10px; }
+    .top { display: flex; align-items: center; justify-content: space-between; }
+    .live-title {
+      font-family: Georgia, "Times New Roman", serif;
+      color: var(--gold); font-size: 28px; font-weight: 700; margin: 0; line-height: 1;
+    }
+    .wallet {
+      display: flex; align-items: center; gap: 8px;
+      background: var(--pill); border: 1px solid var(--card-border);
+      border-radius: 22px; padding: 8px 12px; font-weight: 700; font-size: 13px;
+    }
+    .wallet .dot {
+      width: 18px; height: 18px; border-radius: 50%;
+      background: linear-gradient(145deg, #f0d57a, var(--gold));
+      color: #111; display: grid; place-items: center; font-size: 11px; font-weight: 800;
+    }
+    .wrap { max-width: 520px; margin: 0 auto; padding: 12px 14px 24px; }
+    .sport-tabs { display: flex; gap: 8px; overflow-x: auto; padding: 2px 0 10px; }
+    .sport-tab {
+      flex: 0 0 auto; display: flex; align-items: center; gap: 8px;
+      border: 1px solid var(--tab-border); background: #fff; color: var(--tab-text);
+      border-radius: 999px; padding: 10px 14px; font-size: 13px; font-weight: 700;
+    }
+    .sport-tab.active { background: var(--gold); color: #111; border-color: var(--gold); }
+    .count-chip {
+      margin-left: 4px; background: rgba(0,0,0,.08); border-radius: 999px;
+      padding: 2px 7px; font-size: 11px;
+    }
+    .card {
+      background: var(--card); border: 1px solid var(--card-border);
+      border-radius: 16px; padding: 14px; margin-bottom: 12px;
+      box-shadow: 0 6px 18px rgba(17,24,39,.05);
+    }
+    .card-head {
+      display: flex; align-items: center; gap: 8px; margin-bottom: 12px;
+      color: var(--muted); font-size: 12px; font-weight: 600; flex-wrap: wrap;
+    }
+    .live-pill {
+      color: var(--live); font-weight: 800; letter-spacing: .04em;
+      display: inline-flex; align-items: center; gap: 6px;
+    }
+    .live-pill::before {
+      content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--live);
+    }
+    .league { flex: 1; }
+    .team-row {
+      display: flex; align-items: center; gap: 10px;
+      padding: 6px 0; font-size: 15px; font-weight: 700;
+    }
+    .avatar {
+      width: 32px; height: 32px; border-radius: 50%;
+      background: var(--avatar-bg); display: grid; place-items: center;
+      font-size: 11px; color: var(--gold); font-weight: 800; border: 1px solid var(--card-border);
+    }
+    .team-name { flex: 1; }
+    .score { font-size: 18px; min-width: 48px; text-align: right; color: var(--score); }
+    .market-label { color: var(--muted); font-size: 12px; font-weight: 600; margin: 8px 0; }
+    .odds { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .odd {
+      border: 1px solid rgba(201,162,39,.45); background: var(--odd-bg);
+      color: var(--text); border-radius: 10px; padding: 10px 8px;
+      text-align: center; font-weight: 700; font-size: 13px;
+    }
+    .odd span { display: block; color: var(--gold); font-size: 15px; margin-top: 2px; }
+    .banner {
+      background: #111827; color: #fff; border-radius: 12px; padding: 10px 12px;
+      font-size: 12px; margin-bottom: 14px; line-height: 1.4;
+    }
+    .banner a { color: #f0d57a; }
+  </style>
+</head>
+<body>
+  <div class="sticky-head">
+    <div class="sticky-inner">
+      <header class="top">
+        <h1 class="live-title">LIVE</h1>
+        <div class="wallet"><span class="dot">₹</span><span>12,450.00</span></div>
+      </header>
+      <div class="sport-tabs">
+        <button class="sport-tab active" type="button">🏏 Cricket<span class="count-chip">5</span></button>
+        <button class="sport-tab" type="button">⚽ Football<span class="count-chip">0</span></button>
+        <button class="sport-tab" type="button">🎾 Tennis<span class="count-chip">16</span></button>
+      </div>
+    </div>
+  </div>
+
+  <main class="wrap">
+    <div class="banner">
+      White theme preview (Option C — White + Brand Gold).
+      Pick A / B / C on the <a href="./index.html">options page</a>, then tell me which to ship.
+    </div>
+
+    <article class="card">
+      <div class="card-head">
+        <span class="live-pill">LIVE</span>
+        <span class="league">T20 · India Tour</span>
+        <span>1st Inn ›</span>
+      </div>
+      <div class="team-row"><div class="avatar">SL</div><div class="team-name">Sri Lanka</div><div class="score">186-7</div></div>
+      <div class="team-row"><div class="avatar">IN</div><div class="team-name">India</div><div class="score">92-2</div></div>
+      <div class="market-label">Winner (Match)</div>
+      <div class="odds">
+        <button class="odd" type="button">Sri Lanka<span>2.85</span></button>
+        <button class="odd" type="button">India<span>1.42</span></button>
+      </div>
+    </article>
+
+    <article class="card">
+      <div class="card-head">
+        <span class="live-pill">LIVE</span>
+        <span class="league">Domestic T20</span>
+        <span>2nd Inn ›</span>
+      </div>
+      <div class="team-row"><div class="avatar">CS</div><div class="team-name">Chennai Strikers</div><div class="score">145-6</div></div>
+      <div class="team-row"><div class="avatar">MK</div><div class="team-name">Mumbai Kings</div><div class="score">86-2</div></div>
+      <div class="market-label">Winner (Match)</div>
+      <div class="odds">
+        <button class="odd" type="button">Chennai<span>4.70</span></button>
+        <button class="odd" type="button">Mumbai<span>1.14</span></button>
+      </div>
+    </article>
+  </main>
+</body>
+</html>

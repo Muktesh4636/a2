@@ -250,6 +250,51 @@ def get_current_round_state(redis_client):
     return round_obj, timer, status, round_data
 
 
+def resolve_round_for_betting(redis_client):
+    """
+    Resolve the live round for bet placement using the same Redis + DB path as /api/time/.
+    Returns (round_id, status_upper, timer) or (None, '', 0) when unknown.
+    """
+    round_obj, timer, status, round_data = get_current_round_state(redis_client)
+    round_id = None
+    if round_obj:
+        round_id = round_obj.round_id
+    elif isinstance(round_data, dict):
+        round_id = round_data.get('round_id')
+
+    status_upper = (status or 'WAITING').upper()
+    try:
+        timer_val = int(timer or 0)
+    except (TypeError, ValueError):
+        timer_val = 0
+    return round_id, status_upper, timer_val
+
+
+def is_betting_window_open(status_upper, timer):
+    """True when bets are allowed for the resolved round snapshot."""
+    betting_close = int(get_game_setting('BETTING_CLOSE_TIME', 30))
+    if status_upper != 'BETTING':
+        return False
+    return timer <= betting_close
+
+
+def warm_betting_hot_keys(redis_client, round_id, status_upper, timer):
+    """Best-effort: repopulate legacy hot keys when engine/redis is out of sync."""
+    if not redis_client or not round_id:
+        return
+    try:
+        betting_close = int(get_game_setting('BETTING_CLOSE_TIME', 30))
+        now_ts = int(timezone.now().timestamp())
+        end_time_epoch = now_ts + max(0, betting_close - int(timer or 0))
+        pipe = redis_client.pipeline()
+        pipe.set('current_round_id', str(round_id), ex=120)
+        pipe.set('current_status', str(status_upper or 'WAITING'), ex=120)
+        pipe.set('current_end_time', str(end_time_epoch), ex=120)
+        pipe.execute()
+    except Exception:
+        pass
+
+
 def generate_random_dice_values():
     """Generate six random dice values and determine the winning number."""
     dice_values = [random.randint(1, 6) for _ in range(6)]

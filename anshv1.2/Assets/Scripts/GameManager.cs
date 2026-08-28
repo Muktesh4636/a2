@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections;
 using UnityEngine;
 using static GameApiClient;
@@ -169,17 +169,53 @@ public class GameManager : MonoBehaviour
         // If Start() not yet executed, defer initialization until Start completes.
         if (!started)
         {
-            onInitializationCompelete += () =>
-            {
-                PlayerPrefs.SetString("accessToken", data.accessToken);
-                PlayerPrefs.SetString("refreshToken", data.refreshToken);
-                PlayerPrefs.Save();
-                UIManager.Instance.AutoLoginIfPossible();
-            };
+            onInitializationCompelete += () => ApplyTokenData(data);
             return;
         }
 
+        ApplyTokenData(data);
     }
+
+    private void ApplyTokenData(TokenData data)
+    {
+        if (data == null || string.IsNullOrEmpty(data.accessToken))
+            return;
+
+        var existingAccess = PlayerPrefs.GetString("accessToken", string.Empty);
+        var existingRefresh = PlayerPrefs.GetString("refreshToken", string.Empty);
+        var incomingRefresh = data.refreshToken ?? string.Empty;
+        bool unchanged = existingAccess == data.accessToken && existingRefresh == incomingRefresh;
+
+        PlayerPrefs.SetString("accessToken", data.accessToken);
+        PlayerPrefs.SetString("refreshToken", incomingRefresh);
+        PlayerPrefs.Save();
+
+        // Always sync session into ApiClient — bets/wallet fail if this is skipped.
+        apiClient?.SetAccessAndRefreshToken(data.accessToken, incomingRefresh);
+        EnsureGameRunning();
+
+        if (!unchanged)
+            UIManager.Instance?.AutoLoginIfPossible();
+    }
+
+    /// <summary>Alias for index.html SendMessage (plural form).</summary>
+    public void SetAccessAndRefreshTokens(string json) => SetAccessAndRefreshToken(json);
+
+    /// <summary>WebGL fallback when only access token is passed.</summary>
+    public void SetToken(string access)
+    {
+        if (string.IsNullOrEmpty(access)) return;
+        var refresh = PlayerPrefs.HasKey("refreshToken") ? PlayerPrefs.GetString("refreshToken") : "";
+        ApplyTokenData(new TokenData { accessToken = access, refreshToken = refresh });
+    }
+
+    public void EnsureGameRunning()
+    {
+        apiClient?.GetComponent<RoundManager>()?.StartRound();
+    }
+
+    public void SetBaseUrl(string url) => apiClient?.SetBaseUrl(url);
+    public void SetApiUrl(string url) => apiClient?.SetApiUrl(url);
 
     // Called from Kotlin with {"username":"...","password":"..."},
     public void SetLoginCredential(string json)

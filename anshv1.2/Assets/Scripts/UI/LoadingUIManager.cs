@@ -1,7 +1,6 @@
 using System.Collections;
 using TMPro;
 using UnityEngine;
-using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 
 public class LoadingUIManager : MonoBehaviour
@@ -10,6 +9,7 @@ public class LoadingUIManager : MonoBehaviour
     public TextMeshProUGUI loadingStatusText;
 
     private float loadingTime = 0;
+    private Coroutine loadingRoutine;
 
     private void Start()
     {
@@ -23,8 +23,10 @@ public class LoadingUIManager : MonoBehaviour
         AudioManager.Instance?.SetMuted(true);
         loadingSlider.value = 0;
         loadingStatusText.text = "Loading...";
-        loadingTime = GameManager.Instance.loadingTime;
-        StartCoroutine(LoadingCoroutine());
+        loadingTime = Mathf.Max(1f, GameManager.Instance.loadingTime);
+        if (loadingRoutine != null)
+            StopCoroutine(loadingRoutine);
+        loadingRoutine = StartCoroutine(LoadingCoroutine());
     }
 
     private IEnumerator LoadingCoroutine()
@@ -39,14 +41,12 @@ public class LoadingUIManager : MonoBehaviour
                 loadingSlider.value = 0f;
                 loadingStatusText.text = "Waiting for connection.....0%";
 
-                // Poll for connection every 0.5s without advancing elapsed
                 while (Application.internetReachability == NetworkReachability.NotReachable)
                 {
                     yield return new WaitForSecondsRealtime(0.5f);
                 }
 
-                SceneManager.LoadSceneAsync(SceneManager.GetActiveScene().buildIndex);
-                // When connection returns resume loop (do not reset elapsed)
+                loadingStatusText.text = "Loading...";
             }
 
             elapsed += Time.deltaTime;
@@ -64,6 +64,7 @@ public class LoadingUIManager : MonoBehaviour
         }
 
         UpdateLoadingProgress(1f);
+        loadingRoutine = null;
     }
 
     private void UpdateLoadingProgress(float progress)

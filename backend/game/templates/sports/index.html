@@ -9,6 +9,16 @@
   <script>
     (function () {
       try {
+        var t = localStorage.getItem('gundu_sports_theme');
+        if (t === 'light') {
+          document.documentElement.setAttribute('data-theme', 'light');
+          document.documentElement.classList.add('theme-light');
+        } else {
+          document.documentElement.setAttribute('data-theme', 'dark');
+          document.documentElement.classList.add('theme-dark');
+        }
+      } catch (e) {}
+      try {
         var ua = navigator.userAgent || '';
         var bridge = window.AndroidBridge;
         var inApp = /GunduAtaApp/i.test(ua) || !!(bridge && typeof bridge.isSystemBarsInsetApplied === 'function');
@@ -24,7 +34,9 @@
   <style>
     :root {
       --bg: #0b0f14;
+      --bg-mid: #1a2433;
       --card: #141a22;
+      --card-top: #171e28;
       --card-border: #243041;
       --gold: #d4af37;
       --gold-soft: #c9a227;
@@ -32,7 +44,52 @@
       --text: #f3f5f7;
       --live: #d4af37;
       --pill: #1a222d;
+      --tab-border: #3a4556;
+      --tab-text: #cfd6e0;
+      --clock: #d7dee8;
+      --avatar-bg: #243041;
+      --avatar-border: #314055;
+      --avatar-img-bg: #0f141c;
+      --odd-border: rgba(212,175,55,.55);
+      --odd-bg: rgba(212,175,55,.06);
+      --odd-price: #d4af37;
+      --toast-bg: #1e2632;
+      --toast-border: #3a4556;
+      --head-border: rgba(36, 48, 65, 0.9);
+      --head-shadow: 0 8px 20px rgba(0,0,0,.28);
+      --card-shadow: 0 8px 24px rgba(0,0,0,.25);
+      --error: #ef9a9a;
       --safe-top: env(safe-area-inset-top, 0px);
+    }
+    /* Option A — White + Emerald (odds keep black-theme gold boxes) */
+    html[data-theme="light"] {
+      --bg: #ffffff;
+      --bg-mid: #f4f6f8;
+      --card: #ffffff;
+      --card-top: #ffffff;
+      --card-border: #e5e7eb;
+      --gold: #0b8f4e;
+      --gold-soft: #097a42;
+      --muted: #6b7280;
+      --text: #111827;
+      --live: #0b8f4e;
+      --pill: #f3f4f6;
+      --tab-border: #d1d5db;
+      --tab-text: #374151;
+      --clock: #4b5563;
+      --avatar-bg: #eef2f0;
+      --avatar-border: #d1d5db;
+      --avatar-img-bg: #f9fafb;
+      /* Same odds styling as black theme */
+      --odd-border: rgba(212,175,55,.55);
+      --odd-bg: rgba(212,175,55,.06);
+      --odd-price: #d4af37;
+      --toast-bg: #ffffff;
+      --toast-border: #e5e7eb;
+      --head-border: #e5e7eb;
+      --head-shadow: 0 4px 14px rgba(17,24,39,.06);
+      --card-shadow: 0 6px 18px rgba(17,24,39,.05);
+      --error: #b91c1c;
     }
     * { box-sizing: border-box; }
     html {
@@ -41,7 +98,7 @@
     }
     html, body {
       margin: 0; min-height: 100%; min-height: 100dvh;
-      background: radial-gradient(1200px 600px at 20% -10%, #1a2433 0%, var(--bg) 45%);
+      background: radial-gradient(1200px 600px at 20% -10%, var(--bg-mid) 0%, var(--bg) 45%);
       color: var(--text);
       font-family: "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     }
@@ -53,8 +110,12 @@
       top: 0;
       z-index: 30;
       background: var(--bg);
-      border-bottom: 1px solid rgba(36, 48, 65, 0.9);
-      box-shadow: 0 8px 20px rgba(0,0,0,.28);
+      border-bottom: 1px solid var(--head-border);
+      box-shadow: var(--head-shadow);
+    }
+    html[data-theme="light"] .sticky-head {
+      background: rgba(255,255,255,.94);
+      backdrop-filter: blur(10px);
     }
     /* Browser/notch only — APK WebView already pads below the status bar */
     body:not(.android-system-bars):not(.in-app) .sticky-head {
@@ -74,6 +135,14 @@
     .top {
       display: flex; align-items: center; justify-content: space-between;
       padding: 0 0 4px;
+      gap: 8px;
+    }
+    .top-right { display: flex; align-items: center; gap: 8px; }
+    .theme-toggle {
+      width: 38px; height: 38px; border-radius: 50%;
+      border: 1px solid var(--card-border); background: var(--pill);
+      color: var(--text); font-size: 16px; cursor: pointer;
+      display: grid; place-items: center; flex: 0 0 auto;
     }
     .live-title {
       font-family: Georgia, "Times New Roman", serif;
@@ -88,8 +157,11 @@
     }
     .wallet .dot {
       width: 18px; height: 18px; border-radius: 50%;
-      background: linear-gradient(145deg, #f0d57a, var(--gold));
+      background: linear-gradient(145deg, #86efac, var(--gold));
       color: #111; display: grid; place-items: center; font-size: 11px; font-weight: 800;
+    }
+    html[data-theme="dark"] .wallet .dot {
+      background: linear-gradient(145deg, #f0d57a, var(--gold));
     }
 
     .wrap { max-width: 520px; margin: 0 auto; padding: 12px 14px 24px; }
@@ -102,20 +174,25 @@
     .sport-tabs::-webkit-scrollbar { display: none; }
     .sport-tab {
       flex: 0 0 auto; display: flex; align-items: center; gap: 8px;
-      border: 1px solid #3a4556; background: transparent; color: #cfd6e0;
+      border: 1px solid var(--tab-border); background: transparent; color: var(--tab-text);
       border-radius: 999px; padding: 10px 14px; font-size: 13px; font-weight: 700;
       cursor: pointer; white-space: nowrap;
     }
+    html[data-theme="light"] .sport-tab { background: #fff; }
     .sport-tab.active {
       background: var(--gold); color: #111; border-color: var(--gold);
+    }
+    /* Must beat html[data-theme=light] .sport-tab { background:#fff } or label vanishes (white on white) */
+    html[data-theme="light"] .sport-tab.active {
+      background: var(--gold); color: #fff; border-color: var(--gold);
     }
     .sport-tab .ico { font-size: 15px; line-height: 1; }
 
     .card {
-      background: linear-gradient(180deg, #171e28 0%, var(--card) 100%);
+      background: linear-gradient(180deg, var(--card-top) 0%, var(--card) 100%);
       border: 1px solid var(--card-border);
       border-radius: 16px; padding: 14px; margin-bottom: 12px;
-      box-shadow: 0 8px 24px rgba(0,0,0,.25);
+      box-shadow: var(--card-shadow);
     }
     .card.clickable { cursor: pointer; }
     .card-head {
@@ -129,29 +206,31 @@
     }
     .live-pill::before {
       content: ""; width: 7px; height: 7px; border-radius: 50%;
-      background: var(--live); box-shadow: 0 0 0 0 rgba(212,175,55,.6);
+      background: var(--live); box-shadow: 0 0 0 0 rgba(11,143,78,.55);
       animation: pulse 1.4s infinite;
     }
+    html[data-theme="dark"] .live-pill::before {
+      box-shadow: 0 0 0 0 rgba(212,175,55,.55);
+    }
     @keyframes pulse {
-      0% { box-shadow: 0 0 0 0 rgba(212,175,55,.55); }
-      70% { box-shadow: 0 0 0 8px rgba(212,175,55,0); }
-      100% { box-shadow: 0 0 0 0 rgba(212,175,55,0); }
+      0% { box-shadow: 0 0 0 0 rgba(11,143,78,.55); }
+      70% { box-shadow: 0 0 0 8px rgba(11,143,78,0); }
+      100% { box-shadow: 0 0 0 0 rgba(11,143,78,0); }
     }
     .tv-pill {
       display: inline-flex; align-items: center; gap: 4px;
       flex: 0 0 auto;
       padding: 2px 8px; border-radius: 999px;
       font-size: 10px; font-weight: 800; letter-spacing: .03em;
+      color: #0e7490; background: rgba(14, 116, 144, 0.12);
+      border: 1px solid rgba(14, 116, 144, 0.28);
+    }
+    html[data-theme="dark"] .tv-pill {
       color: #4dd0e1; background: rgba(26, 158, 158, 0.2);
       border: 1px solid rgba(77, 208, 225, 0.35);
-      animation: tv-glow 1.6s ease-in-out infinite;
-    }
-    @keyframes tv-glow {
-      0%, 100% { box-shadow: 0 0 0 0 rgba(77, 208, 225, 0.35); }
-      50% { box-shadow: 0 0 8px 2px rgba(77, 208, 225, 0.2); }
     }
     .league { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .clock { color: #d7dee8; }
+    .clock { color: var(--clock); }
 
     .team-row {
       display: flex; align-items: center; gap: 10px;
@@ -159,13 +238,13 @@
     }
     .avatar {
       width: 32px; height: 32px; border-radius: 50%;
-      background: #243041; display: grid; place-items: center;
+      background: var(--avatar-bg); display: grid; place-items: center;
       font-size: 11px; color: var(--gold); font-weight: 800; flex: 0 0 auto;
-      overflow: hidden; border: 1px solid #314055;
+      overflow: hidden; border: 1px solid var(--avatar-border);
     }
     .avatar img {
       width: 100%; height: 100%; object-fit: contain; display: block;
-      background: #0f141c;
+      background: var(--avatar-img-bg);
     }
     .team-name { flex: 1; min-width: 0; }
     .team-name small { display: block; color: var(--muted); font-weight: 500; font-size: 11px; }
@@ -181,29 +260,33 @@
     .odds.two { grid-template-columns: 1fr 1fr; }
     .odds.three { grid-template-columns: 1fr 1fr 1fr; }
     .odd {
-      border: 1px solid rgba(212,175,55,.55);
-      background: rgba(212,175,55,.06);
+      border: 1px solid var(--odd-border);
+      background: var(--odd-bg);
       color: var(--text); border-radius: 10px;
       padding: 10px 8px; text-align: center; font-weight: 700; font-size: 13px;
       cursor: pointer;
     }
-    .odd span { display: block; color: var(--gold); font-size: 15px; margin-top: 2px; }
+    .odd span { display: block; color: var(--odd-price); font-size: 15px; margin-top: 2px; }
 
     .empty, .loading, .error {
       text-align: center; color: var(--muted); padding: 48px 16px; font-size: 14px;
     }
-    .error { color: #ef9a9a; }
+    .error { color: var(--error); }
     .count-chip {
       margin-left: 6px; background: rgba(0,0,0,.15); border-radius: 999px;
       padding: 2px 7px; font-size: 11px;
     }
     .sport-tab.active .count-chip { background: rgba(0,0,0,.18); color: #111; }
+    html[data-theme="light"] .sport-tab.active .count-chip {
+      background: rgba(255,255,255,.22); color: #fff;
+    }
 
     .toast {
       position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%);
-      background: #1e2632; border: 1px solid #3a4556; padding: 10px 14px;
+      background: var(--toast-bg); border: 1px solid var(--toast-border); padding: 10px 14px;
       border-radius: 10px; font-size: 13px; display: none; z-index: 40;
-      max-width: 90%;
+      max-width: 90%; color: var(--text);
+      box-shadow: var(--card-shadow);
     }
     .feed-status {
       text-align: center; color: var(--muted); font-size: 12px;
@@ -211,7 +294,7 @@
     }
     .feed-status .spinner {
       display: inline-block; width: 14px; height: 14px; margin-right: 8px;
-      border: 2px solid #3a4556; border-top-color: var(--gold);
+      border: 2px solid var(--tab-border); border-top-color: var(--gold);
       border-radius: 50%; vertical-align: -2px;
       animation: spin .7s linear infinite;
     }
@@ -220,7 +303,7 @@
     .featured-live-tv {
       margin-bottom: 14px; border-radius: 16px; overflow: hidden;
       border: 1px solid var(--card-border);
-      box-shadow: 0 8px 24px rgba(0,0,0,.35);
+      box-shadow: var(--card-shadow);
       background: #000;
     }
     .featured-live-tv .live-tv-head {
@@ -248,7 +331,10 @@
     <div class="sticky-inner">
       <header class="top">
         <h1 class="live-title">LIVE</h1>
-        <div class="wallet"><span class="dot">₹</span><span id="wallet">—</span></div>
+        <div class="top-right">
+          <button type="button" class="theme-toggle" data-theme-toggle aria-label="Toggle theme">☀️</button>
+          <div class="wallet"><span class="dot">₹</span><span id="wallet">—</span></div>
+        </div>
       </header>
       <div class="sport-tabs" id="sportTabs">
         <button class="sport-tab active" data-sport="cricket"><span class="ico">🏏</span>Cricket<span class="count-chip" id="cCricket">0</span></button>
@@ -265,6 +351,7 @@
   <div class="toast" id="toast"></div>
 
   <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.15/dist/hls.min.js"></script>
+  <script src="/sports/theme.js?v=1"></script>
   <script src="/sports/auth-wallet.js"></script>
   <script src="/sports/live-tv.js?v=2"></script>
   <script>

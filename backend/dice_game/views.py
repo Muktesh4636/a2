@@ -358,6 +358,40 @@ def serve_react_app(request, path=''):
         if os.path.exists(index_path):
             with open(index_path, 'r', encoding='utf-8') as f:
                 content = f.read()
+            # After /login?next=... redirect with JWT so casino/games see the session.
+            if 'login' in (request.path or '') or request.GET.get('next'):
+                redirect_snippet = """
+<script>
+(function () {
+  var next = new URLSearchParams(location.search).get('next');
+  if (!next) return;
+  function token() {
+    return localStorage.getItem('access_token')
+      || localStorage.getItem('gundu_access_token')
+      || localStorage.getItem('accessToken')
+      || '';
+  }
+  function go() {
+    var t = token();
+    if (!t) return;
+    try {
+      var u = new URL(next, location.origin);
+      u.searchParams.set('token', t);
+      var r = localStorage.getItem('refresh_token') || localStorage.getItem('gundu_refresh_token') || '';
+      if (r) u.searchParams.set('refresh', r);
+      location.replace(u.pathname + u.search);
+    } catch (e) {}
+  }
+  window.addEventListener('storage', go);
+  var n = 0;
+  var timer = setInterval(function () {
+    go();
+    if (++n > 120) clearInterval(timer);
+  }, 500);
+})();
+</script>"""
+                if '</body>' in content:
+                    content = content.replace('</body>', redirect_snippet + '</body>', 1)
             return HttpResponse(content, content_type='text/html')
         return HttpResponse("React app index.html not found", status=404)
     except Exception as e:

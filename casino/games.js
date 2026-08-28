@@ -16,7 +16,7 @@ export const GAMES = [
     id: "gundu-ata",
     title: "Gundu Ata",
     image: "images/gundu-ata.png",
-    path: "/game/?v=37",
+    path: "/game/?v=44",
   },
   {
     id: "horse-racing",

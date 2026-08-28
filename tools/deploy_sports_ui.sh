@@ -23,6 +23,7 @@ bash "$ROOT/tools/deploy_backend.sh" \
 echo "=== 2) LB static copies (what nginx actually serves) ==="
 $SSH root@$LB "mkdir -p $REMOTE/sports/match $REMOTE/cricket"
 $SCP "$T/sports/index.html" "root@$LB:$REMOTE/sports/index.html"
+$SCP "$T/sports/theme.js" "root@$LB:$REMOTE/sports/theme.js"
 $SCP "$T/sports/live-tv.js" "root@$LB:$REMOTE/sports/live-tv.js"
 $SCP "$T/sports/betslip.js" "root@$LB:$REMOTE/sports/betslip.js"
 $SCP "$T/sports/_auth_wallet.js" "root@$LB:$REMOTE/sports/auth-wallet.js"

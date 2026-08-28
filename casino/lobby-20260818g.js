@@ -3,6 +3,10 @@
  * Banners → Continue Playing → Popular → Category rails
  */
 import { GAMES } from "./games.js?v=20260824liveroulette";
+import {
+  readGunduAccessToken,
+  withAuthUrl,
+} from "./gundu-auth.js";
 
 const LONG_PRESS_MS = 420;
 const MOVE_CANCEL_PX = 10;
@@ -185,49 +189,32 @@ const CATEGORIES = [
 const byId = new Map(GAMES.map((g) => [g.id, g]));
 
 function readAccessToken() {
-  const params = new URLSearchParams(location.search);
-  const q =
-    params.get("token") ||
-    params.get("access_token") ||
-    params.get("accessToken") ||
-    params.get("access");
-  if (q) {
-    try {
-      localStorage.setItem("gundu_access_token", q);
-    } catch (_) {}
-    return q;
-  }
-  try {
-    return (
-      localStorage.getItem("gundu_access_token") ||
-      localStorage.getItem("access_token") ||
-      ""
-    );
-  } catch (_) {
-    return "";
-  }
+  return readGunduAccessToken();
 }
 
 function withToken(path) {
-  const token = readAccessToken();
-  const url = new URL(path, location.origin);
-  if (token) url.searchParams.set("token", token);
-  // Pass refresh through when present so in-WebView location navigations stay authed.
+  return withAuthUrl(path);
+}
+
+function homeUrlWithToken() {
+  const url = withToken("/");
+  return url.pathname + url.search;
+}
+
+/** Casino back always goes home — never through games the user opened earlier. */
+function leaveCasino() {
+  stopPreview();
   try {
-    const params = new URLSearchParams(location.search);
-    const refresh =
-      params.get("refresh") ||
-      localStorage.getItem("gundu_refresh_token") ||
-      localStorage.getItem("refresh_token") ||
-      "";
-    if (refresh) {
-      url.searchParams.set("refresh", refresh);
-      try {
-        localStorage.setItem("gundu_refresh_token", refresh);
-      } catch (_) {}
+    if (window.AndroidBridge && typeof window.AndroidBridge.goHome === "function") {
+      window.AndroidBridge.goHome();
+      return;
+    }
+    if (window.AndroidBridge && typeof window.AndroidBridge.goBack === "function") {
+      window.AndroidBridge.goBack();
+      return;
     }
   } catch (_) {}
-  return url;
+  location.replace(homeUrlWithToken());
 }
 
 function playGame(game) {
@@ -1051,16 +1038,15 @@ document.addEventListener("click", (e) => {
   animateRailTo(rail, rail.scrollLeft + Math.max(280, rail.clientWidth * 0.92), 480);
 });
 
-document.getElementById("backBtn").addEventListener("click", () => {
-  stopPreview();
+document.getElementById("backBtn").addEventListener("click", leaveCasino);
+
+(function wireCasinoBrowserBack() {
+  if (window.AndroidBridge) return;
   try {
-    if (window.AndroidBridge && typeof window.AndroidBridge.goBack === "function") {
-      window.AndroidBridge.goBack();
-      return;
-    }
+    history.pushState({ casinoLobby: true }, "", location.href);
+    window.addEventListener("popstate", () => leaveCasino());
   } catch (_) {}
-  if (history.length > 1) history.back();
-});
+})();
 
 document.addEventListener("click", (e) => {
   if (!e.target.closest(".card") && !e.target.closest(".banner-slide")) {
@@ -1086,6 +1072,14 @@ try {
 
 readAccessToken();
 syncTopPlayBtn();
+window.addEventListener("storage", () => {
+  readAccessToken();
+  syncTopPlayBtn();
+});
+window.addEventListener("kokoroko-auth", () => {
+  readAccessToken();
+  syncTopPlayBtn();
+});
 function syncDesktopClass() {
   const w = Math.max(window.innerWidth || 0, document.documentElement.clientWidth || 0);
   const desktop = w >= 768;

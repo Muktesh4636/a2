@@ -11,6 +11,10 @@
     /* APK WebView already pads below the status bar — avoid a second top gap */
     (function () {
       try {
+        var t = localStorage.getItem('gundu_sports_theme');
+        document.documentElement.setAttribute('data-theme', t === 'light' ? 'light' : 'dark');
+      } catch (e) {}
+      try {
         var ua = navigator.userAgent || '';
         var bridge = window.AndroidBridge;
         var inApp = /GunduAtaApp/i.test(ua) || !!(bridge && typeof bridge.isSystemBarsInsetApplied === 'function');
@@ -35,7 +39,22 @@
       --muted: #9aa3af;
       --border: #3a4556;
       --on-odd: #0a0a0a;
+      --text: #ffffff;
       --safe-top: env(safe-area-inset-top, 0px);
+    }
+    html[data-theme="light"] {
+      --bg: #ffffff;
+      --card: #ffffff;
+      --elevated: #f3f4f6;
+      --gold: #0b8f4e;
+      --gold-bright: #10b981;
+      /* Odds boxes keep black-theme colours */
+      --blue: #76c7ed;
+      --pink: #e57373;
+      --muted: #6b7280;
+      --border: #e5e7eb;
+      --on-odd: #0a0a0a;
+      --text: #111827;
     }
     * { box-sizing: border-box; }
     html {
@@ -47,7 +66,7 @@
       min-height: 100%;
       min-height: 100dvh;
       background: var(--bg);
-      color: #fff;
+      color: var(--text);
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     }
     body { padding-bottom: 76px; padding-bottom: calc(76px + env(safe-area-inset-bottom, 0px)); }
@@ -66,6 +85,10 @@
       background: var(--bg);
       border-bottom: 1px solid rgba(58, 69, 86, 0.45);
     }
+    html[data-theme="light"] .top {
+      border-bottom-color: var(--border);
+      box-shadow: 0 4px 14px rgba(17,24,39,.05);
+    }
     /* Browser/notch only — APK WebView already pads below the status bar */
     body:not(.android-system-bars):not(.in-app) .top {
       padding-top: max(6px, var(--safe-top));
@@ -82,12 +105,19 @@
       display: grid; place-items: center;
       font-size: 12px; color: #111; font-weight: 800;
     }
+    html[data-theme="light"] .brand-icon { color: #fff; }
     .brand { color: var(--gold); font-weight: 800; letter-spacing: .06em; font-size: 18px; }
     .spacer { flex: 1; }
+    .theme-toggle {
+      width: 34px; height: 34px; border-radius: 50%;
+      border: 1px solid var(--border); background: var(--elevated);
+      color: var(--text); font-size: 15px; cursor: pointer;
+      display: grid; place-items: center; margin-right: 4px;
+    }
     .my-bets { color: var(--gold-bright); font-size: 13px; font-weight: 600; margin-right: 6px; }
     .wallet {
       background: var(--elevated);
-      border: 1px solid #2a3340;
+      border: 1px solid var(--border);
       border-radius: 20px;
       padding: 6px 10px;
       font-size: 13px;
@@ -99,11 +129,12 @@
       display: grid; place-items: center; font-weight: 800; font-size: 18px;
       margin-left: 8px;
     }
+    html[data-theme="light"] .plus { color: #fff; }
 
     .wrap { padding: 0 14px 20px; max-width: 480px; margin: 0 auto; }
     .tabs {
       display: flex; gap: 0; margin: 4px 0 14px;
-      border-bottom: 1px solid #2a3340;
+      border-bottom: 1px solid var(--border);
     }
     .tabs button {
       flex: 1; background: none; border: 0; color: var(--muted);
@@ -115,6 +146,7 @@
       display: inline-block; width: 8px; height: 8px; border-radius: 50%;
       background: #2e7d32; margin-right: 6px; vertical-align: middle;
     }
+    html[data-theme="light"] .dot { background: #0b8f4e; }
 
     .match-card, .market-card, .score-card {
       background: var(--card);
@@ -247,7 +279,7 @@
       color: var(--muted); border-radius: 8px; padding: 6px 10px;
       font-size: 11px; font-weight: 600; cursor: pointer;
     }
-    .chip.active { border-color: var(--blue); background: var(--elevated); color: #fff; }
+    .chip.active { border-color: var(--blue); background: var(--elevated); color: var(--text); }
     .updated { color: var(--muted); font-size: 10px; margin: 6px 0 10px; }
     .market-card { padding: 11px !important; }
     .market-card h4 { margin: 0 0 2px; font-size: 13px; font-weight: 700; }
@@ -257,6 +289,7 @@
       text-align: center; color: var(--muted); padding: 40px 16px; font-size: 14px;
     }
     .error { color: #ef9a9a; }
+    html[data-theme="light"] .error { color: #b91c1c; }
     .back {
       background: none; border: 0; color: var(--gold); font-size: 20px;
       cursor: pointer; padding: 0 4px 0 0; line-height: 1;
@@ -267,6 +300,10 @@
       height: 64px; background: #12161d; border-top: 1px solid #2a3340;
       display: flex; align-items: center; justify-content: space-around;
       max-width: 480px; margin: 0 auto;
+    }
+    html[data-theme="light"] .nav {
+      background: #ffffff; border-top-color: var(--border);
+      box-shadow: 0 -4px 14px rgba(17,24,39,.06);
     }
     .nav a {
       color: var(--gold); font-size: 10px; font-weight: 700;
@@ -280,11 +317,14 @@
       display: grid; place-items: center; font-size: 18px;
       margin-top: -18px; box-shadow: 0 4px 12px rgba(212,175,55,.35);
     }
+    html[data-theme="light"] .nav .mid {
+      color: #fff; box-shadow: 0 4px 12px rgba(11,143,78,.35);
+    }
     .toast {
       position: fixed; left: 50%; bottom: 80px; transform: translateX(-50%);
-      background: #222; border: 1px solid #444; padding: 10px 14px;
+      background: var(--elevated); border: 1px solid var(--border); padding: 10px 14px;
       border-radius: 10px; font-size: 13px; display: none; z-index: 50;
-      max-width: 90%;
+      max-width: 90%; color: var(--text);
     }
   </style>
 </head>
@@ -294,6 +334,7 @@
     <div class="brand-icon">🏏</div>
     <div class="brand">CRICKET</div>
     <div class="spacer"></div>
+    <button type="button" class="theme-toggle" data-theme-toggle aria-label="Toggle theme">☀️</button>
     <div class="my-bets" id="myBets">My bets</div>
     <div class="wallet" id="wallet">₹ —</div>
     <div class="plus" id="plusBtn" title="Add funds">+</div>
@@ -312,6 +353,7 @@
   </nav>
   <div class="toast" id="toast"></div>
 
+  <script src="/sports/theme.js?v=1"></script>
   <script src="/sports/auth-wallet.js"></script>
   <script src="/sports/live-tv.js?v=2"></script>
   <script src="/sports/betslip.js?v=5"></script>
@@ -785,19 +827,19 @@
         const tvBtnHtml = liveTvAvailable
           ? `<button class="icon-btn ${showLiveTv ? 'on' : ''}" id="tvBtn" title="Live TV">📺</button>`
           : '';
-        const liveTvHtml = (showLiveTv && hasLiveTvInfo(liveTvInfo)) ? `
-          <div class="live-tv-panel" id="liveTvPanel">
+        const liveTvHtml = `
+          <div class="live-tv-panel" id="liveTvPanel" style="${showLiveTv && hasLiveTvInfo(liveTvInfo) ? '' : 'display:none'}">
             <div id="liveTvPanelBody"></div>
-          </div>` : '';
+          </div>`;
 
         app.innerHTML = `
-          ${liveTvHtml}
           <div class="crumb">${esc(crumb)}</div>
           <h1 class="title">${esc(d.match_name || 'Match')}</h1>
           <div class="actions">
             ${tvBtnHtml}
             <button class="pill ${showScoreboard ? 'on' : ''}" id="scoreBtn">Scoreboard</button>
           </div>
+          ${liveTvHtml}
           ${scoreHtml}
           <div class="section-title">Markets & Odds</div>
           <div class="filters">
@@ -831,7 +873,7 @@
           tvBtn.onclick = async () => {
             showLiveTv = !showLiveTv;
             liveTvUserDismissed = !showLiveTv;
-            if (showLiveTv && !liveTvInfo) {
+            if (showLiveTv && !hasLiveTvInfo(liveTvInfo)) {
               try {
                 liveTvInfo = await resolveLiveTv(d);
                 liveTvAvailable = hasLiveTvInfo(liveTvInfo);
@@ -839,10 +881,32 @@
               } catch (e) {
                 toast(e.message || 'Could not load live TV');
                 showLiveTv = false;
+                liveTvUserDismissed = true;
                 return;
               }
             }
-            await load();
+            const panel = document.getElementById('liveTvPanel');
+            const panelBody = document.getElementById('liveTvPanelBody');
+            tvBtn.classList.toggle('on', showLiveTv);
+            if (!panel) return;
+            if (!showLiveTv) {
+              stopLiveTv();
+              if (panelBody) panelBody.innerHTML = '';
+              panel.style.display = 'none';
+              return;
+            }
+            panel.style.display = '';
+            if (panelBody && window.GunduLiveTv && GunduLiveTv.mountPlayer) {
+              stopLiveTv();
+              liveTvPlayer = GunduLiveTv.mountPlayer(panelBody, liveTvInfo);
+            } else if (panelBody) {
+              const pb = GunduLiveTv && GunduLiveTv.tvPlayback
+                ? GunduLiveTv.tvPlayback(liveTvInfo)
+                : { mode: liveTvInfo.embed_url ? 'embed' : 'none', embed: liveTvInfo.embed_url || '' };
+              if (pb.mode === 'embed') {
+                panelBody.innerHTML = `<iframe class="live-tv-frame" id="liveTvFrame" src="${esc(pb.embed)}" allow="autoplay; fullscreen" referrerpolicy="no-referrer-when-downgrade"></iframe>`;
+              }
+            }
           };
         }
         document.getElementById('scoreBtn').onclick = () => {

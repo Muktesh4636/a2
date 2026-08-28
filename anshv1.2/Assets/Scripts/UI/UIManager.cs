@@ -70,19 +70,20 @@ public class UIManager : MonoBehaviour
 
     public void AutoLoginIfPossible()
     {
-        if (PlayerPrefs.HasKey("username") && PlayerPrefs.HasKey("password"))
+        // Prefer JWT from casino/APK over stale saved username/password.
+        if (PlayerPrefs.HasKey("accessToken") && !string.IsNullOrEmpty(PlayerPrefs.GetString("accessToken")))
+        {
+            string accessToken = PlayerPrefs.GetString("accessToken");
+            string refreshToken = PlayerPrefs.GetString("refreshToken", string.Empty);
+            GameManager.Instance.ApiClient.SetAccessAndRefreshToken(accessToken, refreshToken);
+            ShowPanel(UIPanelType.Loading);
+        }
+        else if (PlayerPrefs.HasKey("username") && PlayerPrefs.HasKey("password"))
         {
             string username = PlayerPrefs.GetString("username");
             string password = PlayerPrefs.GetString("password");
 
             loginUIManager.LoginUser(username, password);
-        }
-        else if(PlayerPrefs.HasKey("accessToken") && PlayerPrefs.HasKey("refreshToken"))
-        {
-            string accessToken = PlayerPrefs.GetString("accessToken");
-            string refreshToken = PlayerPrefs.GetString("refreshToken");
-            GameManager.Instance.ApiClient.SetAccessAndRefreshToken(accessToken, refreshToken);
-            ShowPanel(UIPanelType.Loading);
         }
         else
         {

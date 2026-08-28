@@ -303,6 +303,25 @@ public class GameApiClient : MonoBehaviour
         [JsonProperty("dice_6")]      public int    dice6;
         [JsonProperty("dice_result")] public string diceResult;
         [JsonProperty("timestamp")]   public string timestamp;
+
+        public int[] AllDice => new[] { dice1, dice2, dice3, dice4, dice5, dice6 };
+    }
+
+    /// <summary>One entry from GET /api/game/recent-round-results/?count=N</summary>
+    [Serializable]
+    public class RecentRoundResultEntry
+    {
+        [JsonProperty("round_id")]    public string round_id;
+        [JsonProperty("dice_1")]      public int    dice_1;
+        [JsonProperty("dice_2")]      public int    dice_2;
+        [JsonProperty("dice_3")]      public int    dice_3;
+        [JsonProperty("dice_4")]      public int    dice_4;
+        [JsonProperty("dice_5")]      public int    dice_5;
+        [JsonProperty("dice_6")]      public int    dice_6;
+        [JsonProperty("dice_result")] public string dice_result;
+        [JsonProperty("timestamp")]   public string timestamp;
+
+        public int[] AllDice => new[] { dice_1, dice_2, dice_3, dice_4, dice_5, dice_6 };
     }
 
     [Serializable]
@@ -1067,6 +1086,37 @@ public class GameApiClient : MonoBehaviour
         }
     }
 
+    private IEnumerator GetRecentRoundResultsCoroutine(int count, Action<bool, List<RecentRoundResultEntry>, string> callback = null)
+    {
+        count = Mathf.Clamp(count, 1, 100);
+        using (var req = UnityWebRequest.Get($"{baseUrl}/api/game/recent-round-results/?count={count}"))
+        {
+            req.SetRequestHeader("Content-Type", "application/json");
+            AddAuthHeader(req);
+            yield return req.SendWebRequest();
+
+            if (HandleAuthErrors(req, () => StartCoroutine(GetRecentRoundResultsCoroutine(count, callback)))) yield break;
+
+#if UNITY_2020_1_OR_NEWER
+            if (req.result == UnityWebRequest.Result.ConnectionError ||
+                req.result == UnityWebRequest.Result.ProtocolError)
+#else
+            if (req.isNetworkError || req.isHttpError)
+#endif
+            {
+                callback?.Invoke(false, null, $"Error: {req.error}\nResponse: {req.downloadHandler.text}");
+                yield break;
+            }
+
+            try
+            {
+                var list = JsonConvert.DeserializeObject<List<RecentRoundResultEntry>>(req.downloadHandler.text);
+                callback?.Invoke(true, list ?? new List<RecentRoundResultEntry>(), null);
+            }
+            catch (Exception ex) { callback?.Invoke(false, null, ex.Message); }
+        }
+    }
+
     private IEnumerator GetLastRoundResultsCoroutine(Action<bool, LastRoundResult, string> callback = null)
     {
         using (var req = UnityWebRequest.Get($"{baseUrl}/api/game/last-round-results/"))
@@ -1447,6 +1497,9 @@ public class GameApiClient : MonoBehaviour
     public void GetLastRoundResult(Action<bool, LastRoundResult, string> callback = null) =>
         StartCoroutine(GetLastRoundResultsCoroutine(callback));
 
+    public void GetRecentRoundResults(int count, Action<bool, List<RecentRoundResultEntry>, string> callback = null) =>
+        StartCoroutine(GetRecentRoundResultsCoroutine(count, callback));
+
     public void GetWallet(Action<bool, WalletResponse, string> callback = null) =>
         StartCoroutine(GetWalletCoroutine(callback));
 
@@ -1482,6 +1535,24 @@ public class GameApiClient : MonoBehaviour
 
     public void GetSoundSettings(Action<bool, SoundSettings, string> callback = null) =>
         StartCoroutine(GetSoundSettingsCoroutine(callback));
+
+    public void SetBaseUrl(string url)
+    {
+        if (string.IsNullOrWhiteSpace(url)) return;
+        baseUrl = url.Trim().TrimEnd('/');
+        timeApiUrl = $"{baseUrl}/api/time/";
+    }
+
+    public void SetApiUrl(string url)
+    {
+        if (string.IsNullOrWhiteSpace(url)) return;
+        var trimmed = url.Trim().TrimEnd('/');
+        if (trimmed.EndsWith("/api", StringComparison.OrdinalIgnoreCase))
+            baseUrl = trimmed[..^4].TrimEnd('/');
+        else
+            baseUrl = trimmed;
+        timeApiUrl = $"{baseUrl}/api/time/";
+    }
 
     public void SetAccessAndRefreshToken(string access, string refresh)
     {

@@ -1,5 +1,6 @@
+using System.Collections;
 using System.Collections.Generic;
-using System.Text;
+using System.Linq;
 using DG.Tweening;
 using TMPro;
 using UnityEngine;
@@ -18,10 +19,14 @@ public class GameplaySettingsMenu : MonoBehaviour
 
     private GameObject overlayRoot;
     private GameObject menuCard;
-    private GameObject panelRoot;
-    private Image panelIcon;
-    private TextMeshProUGUI panelTitle;
-    private TextMeshProUGUI panelBody;
+    private GameObject betHistoryRoot;
+    private RectTransform betHistoryContent;
+    private TextMeshProUGUI betHistoryStatus;
+    private GameObject gameRulesRoot;
+    private TextMeshProUGUI gameRulesBody;
+    private GameObject recentResultsRoot;
+    private RectTransform recentResultsContent;
+    private TextMeshProUGUI recentResultsStatus;
     private bool menuOpen;
     private bool built;
 
@@ -35,6 +40,7 @@ public class GameplaySettingsMenu : MonoBehaviour
     private readonly List<Image> optionGlows = new List<Image>();
     private readonly List<TextMeshProUGUI> optionLabels = new List<TextMeshProUGUI>();
     private Sequence highlightSeq;
+    private Coroutine recentResultsBuildRoutine;
 
     private static readonly Color Gold = new Color(0.78f, 0.62f, 0.18f, 1f);
     private static readonly Color MilkWhite = new Color(1f, 1f, 1f, 0.82f);
@@ -42,6 +48,10 @@ public class GameplaySettingsMenu : MonoBehaviour
     private static readonly Color Divider = new Color(0.75f, 0.70f, 0.55f, 0.45f);
     // Soft dim so the game behind doesn't dominate; icons stay the focus
     private static readonly Color BackdropDim = new Color(0.02f, 0.05f, 0.04f, 0.55f);
+    private static readonly Color ResultsSheet = new Color(0.94f, 0.88f, 0.74f, 0.93f);
+    private static readonly Color DiceTile = new Color(0.98f, 0.96f, 0.91f, 1f);
+    private static readonly Color DiceTileBorder = new Color(0.72f, 0.58f, 0.22f, 0.35f);
+    private const int RecentResultsCount = 100;
 
     private const string RulesText =
         "GUNDU ATA — GAME RULES\n\n" +
@@ -265,75 +275,171 @@ public class GameplaySettingsMenu : MonoBehaviour
             }
         }
 
-        // Detail panel — same milky white sheet style
-        panelRoot = CreateUi("SettingsDetailPanel", overlayRoot.transform);
-        var prt = panelRoot.GetComponent<RectTransform>();
-        prt.anchorMin = prt.anchorMax = new Vector2(0.5f, 0.5f);
-        prt.pivot = new Vector2(0.5f, 0.5f);
-        prt.sizeDelta = new Vector2(620f, 680f);
-        var pbg = panelRoot.AddComponent<Image>();
-        if (panelSheet != null)
-        {
-            pbg.sprite = panelSheet;
-            pbg.type = Image.Type.Sliced;
-            pbg.pixelsPerUnitMultiplier = 1.2f;
-            pbg.color = new Color(1f, 1f, 1f, 0.95f);
-        }
-        else pbg.color = MilkWhite;
-        pbg.raycastTarget = true;
-        var pblock = panelRoot.AddComponent<Button>();
-        pblock.targetGraphic = pbg;
-        pblock.transition = Selectable.Transition.None;
+        // Detail panels — large centered sheets (~65% of screen height)
+        var betShell = CreateDetailSheetShell(
+            "BetHistorySheet", iconBet, "BET HISTORY", "Current Round", CloseBetHistory);
+        betHistoryRoot = betShell.Root;
+        betHistoryContent = betShell.ScrollContent;
+        betHistoryStatus = betShell.StatusText;
 
-        var close = CreateUi("CloseBtn", panelRoot.transform);
+        var rulesShell = CreateDetailSheetShell(
+            "GameRulesSheet", iconRules, "GAME RULES", "How to Play", CloseGameRules);
+        gameRulesRoot = rulesShell.Root;
+        gameRulesBody = CreateText(rulesShell.ScrollContent, RulesText, 26, TextAlignmentOptions.TopLeft);
+        var rulesBodyRt = gameRulesBody.rectTransform;
+        rulesBodyRt.anchorMin = new Vector2(0f, 1f);
+        rulesBodyRt.anchorMax = new Vector2(1f, 1f);
+        rulesBodyRt.pivot = new Vector2(0.5f, 1f);
+        rulesBodyRt.offsetMin = new Vector2(8f, rulesBodyRt.offsetMin.y);
+        rulesBodyRt.offsetMax = new Vector2(-8f, rulesBodyRt.offsetMax.y);
+        rulesBodyRt.sizeDelta = new Vector2(0f, 0f);
+        gameRulesBody.color = LabelDark;
+        gameRulesBody.enableWordWrapping = true;
+        gameRulesBody.overflowMode = TextOverflowModes.Overflow;
+        var rulesBodyCsf = gameRulesBody.gameObject.AddComponent<ContentSizeFitter>();
+        rulesBodyCsf.horizontalFit = ContentSizeFitter.FitMode.Unconstrained;
+        rulesBodyCsf.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+
+        CreateRecentResultsFullScreen();
+    }
+
+    private struct DetailSheetShell
+    {
+        public GameObject Root;
+        public RectTransform ScrollContent;
+        public TextMeshProUGUI StatusText;
+    }
+
+    private DetailSheetShell CreateDetailSheetShell(
+        string name,
+        Sprite headerIcon,
+        string title,
+        string subtitle,
+        UnityEngine.Events.UnityAction onClose)
+    {
+        var shell = new DetailSheetShell();
+        shell.Root = CreateUi(name, overlayRoot.transform);
+        Stretch(shell.Root.GetComponent<RectTransform>());
+        shell.Root.SetActive(false);
+
+        var card = CreateUi("SheetCard", shell.Root.transform);
+        var cardRt = card.GetComponent<RectTransform>();
+        // ~88% width, ~66% height — at least half the playable area
+        cardRt.anchorMin = new Vector2(0.06f, 0.17f);
+        cardRt.anchorMax = new Vector2(0.94f, 0.83f);
+        cardRt.offsetMin = Vector2.zero;
+        cardRt.offsetMax = Vector2.zero;
+        cardRt.pivot = new Vector2(0.5f, 0.5f);
+
+        var sheet = card.AddComponent<Image>();
+        sheet.color = ResultsSheet;
+        sheet.raycastTarget = true;
+        var block = card.AddComponent<Button>();
+        block.targetGraphic = sheet;
+        block.transition = Selectable.Transition.None;
+
+        var iconGo = CreateUi("HeaderIcon", card.transform);
+        var iconRt = iconGo.GetComponent<RectTransform>();
+        iconRt.anchorMin = iconRt.anchorMax = new Vector2(0f, 1f);
+        iconRt.pivot = new Vector2(0f, 1f);
+        iconRt.sizeDelta = new Vector2(100f, 100f);
+        iconRt.anchoredPosition = new Vector2(20f, -16f);
+        var iconImg = iconGo.AddComponent<Image>();
+        iconImg.preserveAspect = true;
+        iconImg.raycastTarget = false;
+        if (headerIcon != null) { iconImg.sprite = headerIcon; iconImg.color = Color.white; }
+
+        var titleText = CreateText(card.transform, title, 38, TextAlignmentOptions.Center);
+        var titleRt = titleText.rectTransform;
+        titleRt.anchorMin = new Vector2(0.08f, 1f);
+        titleRt.anchorMax = new Vector2(0.92f, 1f);
+        titleRt.pivot = new Vector2(0.5f, 1f);
+        titleRt.sizeDelta = new Vector2(0f, 48f);
+        titleRt.anchoredPosition = new Vector2(0f, -24f);
+        titleText.color = Gold;
+        titleText.fontStyle = FontStyles.Bold;
+
+        var subtitleText = CreateText(card.transform, subtitle, 26, TextAlignmentOptions.Center);
+        var subRt = subtitleText.rectTransform;
+        subRt.anchorMin = new Vector2(0.08f, 1f);
+        subRt.anchorMax = new Vector2(0.92f, 1f);
+        subRt.pivot = new Vector2(0.5f, 1f);
+        subRt.sizeDelta = new Vector2(0f, 34f);
+        subRt.anchoredPosition = new Vector2(0f, -78f);
+        subtitleText.color = new Color(0.45f, 0.32f, 0.18f, 1f);
+
+        var close = CreateUi("CloseBtn", card.transform);
         var clrt = close.GetComponent<RectTransform>();
         clrt.anchorMin = clrt.anchorMax = new Vector2(1f, 1f);
         clrt.pivot = new Vector2(1f, 1f);
         clrt.sizeDelta = new Vector2(64f, 64f);
-        clrt.anchoredPosition = new Vector2(-14f, -14f);
-        var cimg = close.AddComponent<Image>();
-        cimg.color = new Color(0.75f, 0.55f, 0.15f, 1f);
-        var cbtn = close.AddComponent<Button>();
-        cbtn.targetGraphic = cimg;
-        cbtn.onClick.AddListener(() =>
-        {
-            if (panelRoot != null) panelRoot.SetActive(false);
-            if (menuCard != null) menuCard.SetActive(true);
-            menuOpen = true;
-        });
-        var cx = CreateText(close.transform, "✕", 30, TextAlignmentOptions.Center);
+        clrt.anchoredPosition = new Vector2(-12f, -12f);
+        close.AddComponent<Image>().color = new Color(0.75f, 0.55f, 0.15f, 1f);
+        close.AddComponent<Button>().onClick.AddListener(onClose);
+        var cx = CreateText(close.transform, "✕", 28, TextAlignmentOptions.Center);
         Stretch(cx.rectTransform);
         cx.color = Color.white;
 
-        var iconHolder = CreateUi("PanelIcon", panelRoot.transform);
-        var phrt = iconHolder.GetComponent<RectTransform>();
-        phrt.anchorMin = phrt.anchorMax = new Vector2(0.5f, 1f);
-        phrt.pivot = new Vector2(0.5f, 1f);
-        phrt.sizeDelta = new Vector2(140f, 140f);
-        phrt.anchoredPosition = new Vector2(0f, -28f);
-        panelIcon = iconHolder.AddComponent<Image>();
-        panelIcon.preserveAspect = true;
-        panelIcon.color = Color.white;
+        var scrollGo = CreateUi("Scroll", card.transform);
+        var scrollRt = scrollGo.GetComponent<RectTransform>();
+        scrollRt.anchorMin = Vector2.zero;
+        scrollRt.anchorMax = Vector2.one;
+        scrollRt.offsetMin = new Vector2(20f, 20f);
+        scrollRt.offsetMax = new Vector2(-20f, -120f);
 
-        panelTitle = CreateText(panelRoot.transform, "Title", 38, TextAlignmentOptions.Center);
-        var trt = panelTitle.rectTransform;
-        trt.anchorMin = new Vector2(0f, 1f);
-        trt.anchorMax = new Vector2(1f, 1f);
-        trt.pivot = new Vector2(0.5f, 1f);
-        trt.sizeDelta = new Vector2(-40f, 50f);
-        trt.anchoredPosition = new Vector2(0f, -180f);
-        panelTitle.color = Gold;
-        panelTitle.fontStyle = FontStyles.Bold;
+        scrollGo.AddComponent<Image>().color = new Color(1f, 1f, 1f, 0.08f);
+        var scroll = scrollGo.AddComponent<ScrollRect>();
+        scroll.horizontal = false;
+        scroll.vertical = true;
+        scroll.movementType = ScrollRect.MovementType.Clamped;
+        scroll.scrollSensitivity = 24f;
 
-        panelBody = CreateText(panelRoot.transform, "", 28, TextAlignmentOptions.TopLeft);
-        var brt = panelBody.rectTransform;
-        brt.anchorMin = new Vector2(0f, 0f);
-        brt.anchorMax = new Vector2(1f, 1f);
-        brt.offsetMin = new Vector2(40f, 36f);
-        brt.offsetMax = new Vector2(-40f, -250f);
-        panelBody.color = LabelDark;
-        panelBody.enableWordWrapping = true;
-        panelBody.overflowMode = TextOverflowModes.Overflow;
+        var viewport = CreateUi("Viewport", scrollGo.transform);
+        var vpRt = viewport.GetComponent<RectTransform>();
+        Stretch(vpRt);
+        viewport.AddComponent<Image>().color = new Color(1f, 1f, 1f, 0.01f);
+        viewport.AddComponent<Mask>().showMaskGraphic = false;
+
+        shell.ScrollContent = CreateUi("Content", viewport.transform).GetComponent<RectTransform>();
+        Stretch(shell.ScrollContent);
+        shell.ScrollContent.pivot = new Vector2(0.5f, 1f);
+        shell.ScrollContent.anchorMin = new Vector2(0f, 1f);
+        shell.ScrollContent.anchorMax = new Vector2(1f, 1f);
+        shell.ScrollContent.offsetMin = new Vector2(0f, shell.ScrollContent.offsetMin.y);
+        shell.ScrollContent.offsetMax = new Vector2(0f, shell.ScrollContent.offsetMax.y);
+
+        var vlg = shell.ScrollContent.gameObject.AddComponent<VerticalLayoutGroup>();
+        vlg.spacing = 0f;
+        vlg.padding = new RectOffset(4, 4, 2, 2);
+        vlg.childAlignment = TextAnchor.UpperCenter;
+        vlg.childControlWidth = true;
+        vlg.childControlHeight = true;
+        vlg.childForceExpandWidth = true;
+        vlg.childForceExpandHeight = false;
+
+        shell.ScrollContent.gameObject.AddComponent<ContentSizeFitter>().verticalFit =
+            ContentSizeFitter.FitMode.PreferredSize;
+
+        scroll.viewport = vpRt;
+        scroll.content = shell.ScrollContent;
+
+        shell.StatusText = CreateText(card.transform, "Loading…", 26, TextAlignmentOptions.Center);
+        var stRt = shell.StatusText.rectTransform;
+        stRt.anchorMin = new Vector2(0.1f, 0.5f);
+        stRt.anchorMax = new Vector2(0.9f, 0.5f);
+        stRt.sizeDelta = new Vector2(0f, 56f);
+        shell.StatusText.color = LabelDark;
+
+        return shell;
+    }
+
+    private void CreateRecentResultsFullScreen()
+    {
+        var shell = CreateDetailSheetShell(
+            "RecentResultsSheet", iconResults, "RECENT RESULTS", "Last 100 Rounds", CloseRecentResults);
+        recentResultsRoot = shell.Root;
+        recentResultsContent = shell.ScrollContent;
+        recentResultsStatus = shell.StatusText;
     }
 
     private void ToggleMenu()
@@ -343,7 +449,7 @@ public class GameplaySettingsMenu : MonoBehaviour
         if (menuOpen)
         {
             if (menuCard != null) menuCard.SetActive(true);
-            if (panelRoot != null) panelRoot.SetActive(false);
+            HideAllFullScreens();
             PlayOptionsHighlight();
         }
         else
@@ -424,37 +530,81 @@ public class GameplaySettingsMenu : MonoBehaviour
     private void OpenPanel(int index)
     {
         if (menuCard != null) menuCard.SetActive(false);
-        if (panelRoot != null) panelRoot.SetActive(true);
+        HideAllFullScreens();
         if (overlayRoot != null) overlayRoot.SetActive(true);
         menuOpen = true;
 
         switch (index)
         {
             case 0:
-                panelTitle.text = "Bet History";
-                SetPanelIcon(iconBet);
-                panelBody.text = "Loading…";
-                LoadBetHistory();
+                OpenBetHistoryFullScreen();
                 break;
             case 1:
-                panelTitle.text = "Game Rules";
-                SetPanelIcon(iconRules);
-                panelBody.text = RulesText;
+                OpenGameRulesFullScreen();
                 break;
             default:
-                panelTitle.text = "Recent Results";
-                SetPanelIcon(iconResults);
-                panelBody.text = "Loading…";
-                LoadRecentResults();
+                OpenRecentResultsFullScreen();
                 break;
         }
     }
 
-    private void SetPanelIcon(Sprite spr)
+    private void HideAllFullScreens()
     {
-        if (panelIcon == null) return;
-        panelIcon.sprite = spr;
-        panelIcon.color = spr != null ? Color.white : Gold;
+        if (betHistoryRoot != null) betHistoryRoot.SetActive(false);
+        if (gameRulesRoot != null) gameRulesRoot.SetActive(false);
+        if (recentResultsRoot != null) recentResultsRoot.SetActive(false);
+    }
+
+    private void OpenBetHistoryFullScreen()
+    {
+        if (betHistoryRoot != null) betHistoryRoot.SetActive(true);
+        ClearBetHistoryRows();
+        if (betHistoryStatus != null)
+        {
+            betHistoryStatus.gameObject.SetActive(true);
+            betHistoryStatus.text = "Loading…";
+        }
+        LoadBetHistory();
+    }
+
+    private void OpenGameRulesFullScreen()
+    {
+        if (gameRulesRoot != null) gameRulesRoot.SetActive(true);
+    }
+
+    private void CloseBetHistory()
+    {
+        if (betHistoryRoot != null) betHistoryRoot.SetActive(false);
+        if (menuCard != null) menuCard.SetActive(true);
+        menuOpen = true;
+    }
+
+    private void CloseGameRules()
+    {
+        if (gameRulesRoot != null) gameRulesRoot.SetActive(false);
+        if (menuCard != null) menuCard.SetActive(true);
+        menuOpen = true;
+    }
+
+    private void OpenRecentResultsFullScreen()
+    {
+        if (recentResultsRoot != null) recentResultsRoot.SetActive(true);
+        if (overlayRoot != null) overlayRoot.SetActive(true);
+        menuOpen = true;
+        ClearRecentResultsRows();
+        if (recentResultsStatus != null)
+        {
+            recentResultsStatus.gameObject.SetActive(true);
+            recentResultsStatus.text = "Loading…";
+        }
+        LoadRecentResults();
+    }
+
+    private void CloseRecentResults()
+    {
+        if (recentResultsRoot != null) recentResultsRoot.SetActive(false);
+        if (menuCard != null) menuCard.SetActive(true);
+        menuOpen = true;
     }
 
     private void LoadBetHistory()
@@ -462,34 +612,92 @@ public class GameplaySettingsMenu : MonoBehaviour
         var api = GameManager.Instance?.ApiClient;
         if (api == null)
         {
-            panelBody.text = "Not signed in.\nSign in to view bet history.";
+            if (betHistoryStatus != null)
+                betHistoryStatus.text = "Not signed in.\nSign in to view bet history.";
             return;
         }
 
         api.GetBetAmountSummary((ok, list, err) =>
         {
+            ClearBetHistoryRows();
             if (!ok)
             {
-                panelBody.text = "Could not load bets.\n" + (err ?? "");
+                if (betHistoryStatus != null)
+                {
+                    betHistoryStatus.gameObject.SetActive(true);
+                    betHistoryStatus.text = "Could not load bets.\n" + (err ?? "");
+                }
                 return;
             }
 
-            var sb = new StringBuilder();
-            sb.AppendLine("Current round bets");
-            sb.AppendLine("─────────────────");
             bool any = false;
             if (list != null)
             {
+                int rowIndex = 0;
                 foreach (var b in list)
                 {
                     if (b == null || b.amount <= 0) continue;
                     any = true;
-                    sb.AppendLine($"●  Number {b.number}   ·  ₹{b.amount}");
+                    BuildBetHistoryRow(b.number, b.amount, rowIndex++);
                 }
             }
-            if (!any) sb.AppendLine("No open bets this round.");
-            panelBody.text = sb.ToString();
+
+            if (!any)
+            {
+                if (betHistoryStatus != null)
+                {
+                    betHistoryStatus.gameObject.SetActive(true);
+                    betHistoryStatus.text = "No open bets this round.";
+                }
+                return;
+            }
+
+            if (betHistoryStatus != null)
+                betHistoryStatus.gameObject.SetActive(false);
+
+            if (betHistoryContent != null)
+                LayoutRebuilder.ForceRebuildLayoutImmediate(betHistoryContent);
         });
+    }
+
+    private void ClearBetHistoryRows()
+    {
+        if (betHistoryContent == null) return;
+        for (int i = betHistoryContent.childCount - 1; i >= 0; i--)
+            Destroy(betHistoryContent.GetChild(i).gameObject);
+    }
+
+    private void BuildBetHistoryRow(int number, float amount, int index)
+    {
+        if (betHistoryContent == null) return;
+
+        var block = CreateUi($"BetBlock_{index}", betHistoryContent);
+        var blockLe = block.AddComponent<LayoutElement>();
+        blockLe.minHeight = 66f;
+        blockLe.preferredHeight = 66f;
+
+        var row = CreateUi("Row", block.transform);
+        var rowLe = row.AddComponent<LayoutElement>();
+        rowLe.minHeight = 58f;
+        rowLe.preferredHeight = 58f;
+        var rowLayout = row.AddComponent<HorizontalLayoutGroup>();
+        rowLayout.padding = new RectOffset(12, 12, 8, 8);
+        rowLayout.childAlignment = TextAnchor.MiddleLeft;
+        rowLayout.childControlWidth = true;
+        rowLayout.childForceExpandWidth = true;
+
+        var label = CreateText(row.transform, $"●  Number {number}   ·  ₹{amount:0}", 26, TextAlignmentOptions.MidlineLeft);
+        label.color = LabelDark;
+        label.fontStyle = FontStyles.Bold;
+        var labelLe = label.gameObject.AddComponent<LayoutElement>();
+        labelLe.flexibleWidth = 1f;
+
+        var div = CreateUi("Divider", block.transform);
+        div.GetComponent<RectTransform>().sizeDelta = new Vector2(0f, 2f);
+        var divLe = div.AddComponent<LayoutElement>();
+        divLe.minHeight = 2f;
+        divLe.preferredHeight = 2f;
+        div.AddComponent<Image>().color = Divider;
     }
 
     private void LoadRecentResults()
@@ -497,57 +705,154 @@ public class GameplaySettingsMenu : MonoBehaviour
         var api = GameManager.Instance?.ApiClient;
         if (api == null)
         {
-            panelBody.text = "API unavailable.";
+            if (recentResultsStatus != null)
+                recentResultsStatus.text = "API unavailable.";
             return;
         }
 
-        api.GetLastRoundResult((ok, r, err) =>
+        api.GetRecentRoundResults(RecentResultsCount, (ok, list, err) =>
         {
-            var sb = new StringBuilder();
-            if (ok && r != null)
+            ClearRecentResultsRows();
+            if (!ok || list == null || list.Count == 0)
             {
-                sb.AppendLine("Last round");
-                sb.AppendLine("─────────────────");
-                if (!string.IsNullOrEmpty(r.round_id))
-                    sb.AppendLine($"Round: {r.round_id}");
-                sb.AppendLine($"Dice: {r.dice1}, {r.dice2}, {r.dice3}, {r.dice4}, {r.dice5}, {r.dice6}");
-                if (!string.IsNullOrEmpty(r.diceResult))
-                    sb.AppendLine($"Result: {r.diceResult}");
-                sb.AppendLine();
-            }
-            else
-            {
-                sb.AppendLine("Last round unavailable.");
-                if (!string.IsNullOrEmpty(err)) sb.AppendLine(err);
-                sb.AppendLine();
+                if (recentResultsStatus != null)
+                {
+                    recentResultsStatus.gameObject.SetActive(true);
+                    recentResultsStatus.text = string.IsNullOrEmpty(err)
+                        ? "No recent results."
+                        : "Could not load results.\n" + err;
+                }
+                return;
             }
 
-            api.GetWinningFrequency((okF, freq, errF) =>
-            {
-                if (okF && freq != null)
-                {
-                    sb.AppendLine("Winning frequency");
-                    sb.AppendLine("─────────────────");
-                    AppendFrequency(sb, freq);
-                }
-                panelBody.text = sb.ToString();
-            });
+            if (recentResultsStatus != null)
+                recentResultsStatus.gameObject.SetActive(false);
+
+            if (recentResultsBuildRoutine != null)
+                StopCoroutine(recentResultsBuildRoutine);
+            recentResultsBuildRoutine = StartCoroutine(BuildRecentResultsRowsRoutine(list));
         });
     }
 
-    private static void AppendFrequency(StringBuilder sb, GameApiClient.WinningFrequenceResponse freq)
+    private IEnumerator BuildRecentResultsRowsRoutine(List<GameApiClient.RecentRoundResultEntry> list)
     {
-        if (freq?.WinningNumbers == null || freq.WinningNumbers.Count == 0)
+        var vlg = recentResultsContent != null ? recentResultsContent.GetComponent<VerticalLayoutGroup>() : null;
+        var csf = recentResultsContent != null ? recentResultsContent.GetComponent<ContentSizeFitter>() : null;
+        if (vlg != null) vlg.enabled = false;
+        if (csf != null) csf.enabled = false;
+
+        const int rowsPerFrame = 6;
+        for (int i = 0; i < list.Count; i++)
         {
-            sb.AppendLine("No frequency data.");
-            return;
+            BuildRecentResultRow(list[i], i);
+            if ((i + 1) % rowsPerFrame == 0)
+                yield return null;
         }
 
-        foreach (var w in freq.WinningNumbers)
+        if (vlg != null) vlg.enabled = true;
+        if (csf != null) csf.enabled = true;
+        if (recentResultsContent != null)
+            LayoutRebuilder.ForceRebuildLayoutImmediate(recentResultsContent);
+
+        recentResultsBuildRoutine = null;
+    }
+
+    private void ClearRecentResultsRows()
+    {
+        if (recentResultsBuildRoutine != null)
         {
-            if (w == null) continue;
-            sb.AppendLine($"#{w.Number}  ×{w.Frequency}  (×{w.PayoutMultiplier:0.##})");
+            StopCoroutine(recentResultsBuildRoutine);
+            recentResultsBuildRoutine = null;
         }
+
+        if (recentResultsContent == null) return;
+        for (int i = recentResultsContent.childCount - 1; i >= 0; i--)
+            Destroy(recentResultsContent.GetChild(i).gameObject);
+    }
+
+    private static string FormatRoundShortId(string roundId)
+    {
+        if (string.IsNullOrEmpty(roundId)) return "#----";
+        var digits = new string(roundId.Where(char.IsDigit).ToArray());
+        if (string.IsNullOrEmpty(digits)) return "#----";
+        if (digits.Length >= 4) return "#" + digits.Substring(digits.Length - 4);
+        return "#" + digits.PadLeft(4, '0');
+    }
+
+    private void BuildRecentResultRow(GameApiClient.RecentRoundResultEntry entry, int index)
+    {
+        if (recentResultsContent == null || entry == null) return;
+
+        var block = CreateUi($"ResultBlock_{index}", recentResultsContent);
+        var blockLe = block.AddComponent<LayoutElement>();
+        blockLe.minHeight = 66f;
+        blockLe.preferredHeight = 66f;
+
+        var blockVlg = block.AddComponent<VerticalLayoutGroup>();
+        blockVlg.spacing = 0f;
+        blockVlg.padding = new RectOffset(0, 0, 0, 0);
+        blockVlg.childControlWidth = true;
+        blockVlg.childControlHeight = true;
+        blockVlg.childForceExpandWidth = true;
+        blockVlg.childForceExpandHeight = false;
+
+        var row = CreateUi("Row", block.transform);
+        var rowRt = row.GetComponent<RectTransform>();
+        rowRt.sizeDelta = new Vector2(0f, 60f);
+        var rowLe = row.AddComponent<LayoutElement>();
+        rowLe.minHeight = 60f;
+        rowLe.preferredHeight = 60f;
+
+        var rowLayout = row.AddComponent<HorizontalLayoutGroup>();
+        rowLayout.spacing = 8f;
+        rowLayout.padding = new RectOffset(4, 4, 4, 4);
+        rowLayout.childAlignment = TextAnchor.MiddleLeft;
+        rowLayout.childControlWidth = false;
+        rowLayout.childControlHeight = true;
+        rowLayout.childForceExpandWidth = false;
+        rowLayout.childForceExpandHeight = true;
+
+        var idLabel = CreateText(row.transform, FormatRoundShortId(entry.round_id), 26, TextAlignmentOptions.MidlineLeft);
+        idLabel.color = new Color(0.42f, 0.30f, 0.16f, 1f);
+        idLabel.fontStyle = FontStyles.Bold;
+        idLabel.rectTransform.sizeDelta = new Vector2(98f, 54f);
+        var idLe = idLabel.gameObject.AddComponent<LayoutElement>();
+        idLe.minWidth = 98f;
+        idLe.preferredWidth = 98f;
+
+        var diceValues = entry.AllDice;
+        for (int d = 0; d < 6; d++)
+        {
+            int value = d < diceValues.Length ? diceValues[d] : 0;
+            if (value < 1 || value > 6) value = 1;
+
+            var tile = CreateUi($"Dice_{d}", row.transform);
+            tile.GetComponent<RectTransform>().sizeDelta = new Vector2(50f, 50f);
+            var tileLe = tile.AddComponent<LayoutElement>();
+            tileLe.minWidth = 50f;
+            tileLe.preferredWidth = 50f;
+            tileLe.minHeight = 50f;
+            tileLe.preferredHeight = 50f;
+
+            var tileImg = tile.AddComponent<Image>();
+            tileImg.color = DiceTile;
+
+            var outline = tile.AddComponent<Outline>();
+            outline.effectColor = DiceTileBorder;
+            outline.effectDistance = new Vector2(1.5f, -1.5f);
+
+            var num = CreateText(tile.transform, value.ToString(), 22, TextAlignmentOptions.Center);
+            Stretch(num.rectTransform);
+            num.color = LabelDark;
+            num.fontStyle = FontStyles.Bold;
+        }
+
+        var div = CreateUi("Divider", block.transform);
+        div.GetComponent<RectTransform>().sizeDelta = new Vector2(0f, 2f);
+        var divLe = div.AddComponent<LayoutElement>();
+        divLe.minHeight = 2f;
+        divLe.preferredHeight = 2f;
+        div.AddComponent<Image>().color = Divider;
     }
 
     public void CloseAll()
@@ -556,7 +861,7 @@ public class GameplaySettingsMenu : MonoBehaviour
         StopOptionsHighlight();
         if (overlayRoot != null) overlayRoot.SetActive(false);
         if (menuCard != null) menuCard.SetActive(false);
-        if (panelRoot != null) panelRoot.SetActive(false);
+        HideAllFullScreens();
     }
 
     private static GameObject CreateUi(string name, Transform parent)
