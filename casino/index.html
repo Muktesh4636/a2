@@ -28,33 +28,13 @@
         var desktop = w >= 768;
         document.documentElement.classList.toggle("is-desktop", desktop);
         document.documentElement.classList.toggle("is-wide", w >= 1200);
-        document.documentElement.dataset.lobby = "d8-20260828desktop-a";
+        document.documentElement.dataset.lobby = "d8-20260824liveroulette";
       })();
     </script>
-    <link rel="stylesheet" href="./lobby-20260818g.css?v=20260828desktopA" />
+    <link rel="stylesheet" href="./lobby-20260818g.css?v=20260828theme2" />
   </head>
   <body>
     <div class="app">
-      <aside class="desktop-sidebar" aria-label="Desktop navigation">
-        <a class="sidebar-brand" href="/casino/">
-          GUNDU <em>ATA</em>
-        </a>
-        <nav class="sidebar-nav" id="sidebarNav" aria-label="Game categories"></nav>
-        <div class="sidebar-refer">
-          <div class="sidebar-refer-art" aria-hidden="true">🎁</div>
-          <div class="sidebar-refer-copy">
-            <strong>Refer &amp; Earn</strong>
-            <span>Invite friends. Get rewards.</span>
-          </div>
-          <a class="sidebar-refer-btn" href="/profile" id="referInviteBtn">Invite Now</a>
-        </div>
-        <div class="sidebar-foot">
-          <a href="/support" title="Support">Support</a>
-          <a href="/promotions" title="Promotions">Promos</a>
-          <a href="/vip" title="VIP Club">VIP</a>
-        </div>
-      </aside>
-
       <header class="topbar">
         <button type="button" class="icon-btn back" id="backBtn" aria-label="Back">
           <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
@@ -79,22 +59,7 @@
           <span>Gundu <em>Casino</em></span>
         </a>
         <nav class="top-nav" id="desktopNavList" aria-label="Game categories"></nav>
-        <div class="desktop-header-actions" id="desktopHeaderActions">
-          <div class="wallet-chip" id="walletChip" hidden>
-            <span class="wallet-coin" aria-hidden="true">₹</span>
-            <span class="wallet-amount" id="walletAmount">0.00</span>
-          </div>
-          <a class="deposit-btn" id="depositBtn" href="/deposit">+ Deposit</a>
-          <button type="button" class="theme-toggle desktop-theme" data-theme-toggle aria-label="Toggle theme">☀️</button>
-          <a class="user-chip" id="userChip" href="/login">
-            <span class="user-avatar" id="userAvatar" aria-hidden="true">G</span>
-            <span class="user-meta">
-              <strong id="userName">Guest</strong>
-              <em id="userSub">Login</em>
-            </span>
-          </a>
-        </div>
-        <button type="button" class="theme-toggle mobile-theme" data-theme-toggle aria-label="Toggle theme">☀️</button>
+        <button type="button" class="theme-toggle" data-theme-toggle aria-label="Toggle theme">☀️</button>
         <a class="play-chip" id="topPlayBtn" href="/login">Login</a>
       </header>
 
@@ -118,7 +83,7 @@
           <div class="section-head">
             <h2>Continue Playing</h2>
             <div class="section-head-right">
-              <button type="button" class="view-all" data-rail="continueRail">See All</button>
+              <button type="button" class="view-all" data-rail="continueRail">View All</button>
               <div class="rail-nav" data-rail="continueRail"></div>
             </div>
           </div>
@@ -153,7 +118,7 @@
         </section>
       </main>
     </div>
-    <script src="./theme.js?v=1"></script>
-    <script type="module" src="./lobby-20260818g.js?v=20260828desktopA"></script>
+    <script src="./theme.js?v=2"></script>
+    <script type="module" src="./lobby-20260818g.js?v=20260828theme2"></script>
   </body>
 </html>

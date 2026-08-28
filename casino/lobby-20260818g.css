@@ -663,10 +663,7 @@ html.android-system-bars .app {
 .play-chip,
 .banner-arrow,
 .view-all,
-.section-head-right .view-all,
-.desktop-sidebar,
-.desktop-header-actions,
-.desktop-theme {
+.section-head-right .view-all {
   display: none;
 }
 
@@ -674,314 +671,139 @@ html.android-system-bars .app {
   display: none;
 }
 
-/* Option A — desktop-only shell (left sidebar). Mobile unchanged above. */
 @media (min-width: 768px) {
   html,
   body {
-    height: 100%;
-    overflow: hidden;
+    height: auto;
+    overflow-x: hidden;
+    overflow-y: auto;
   }
 
   .app {
-    --sidebar-w: 248px;
-    --desk-top-h: 72px;
-    display: grid;
-    grid-template-columns: var(--sidebar-w) 1fr;
-    grid-template-rows: var(--desk-top-h) 1fr;
     width: 100%;
     max-width: none;
     min-height: 100dvh;
-    height: 100dvh;
+    height: auto;
     margin: 0;
-    padding: 0;
-    overflow: hidden;
-    background: var(--bg);
-  }
-
-  .desktop-sidebar {
-    grid-column: 1;
-    grid-row: 1 / -1;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    padding: 22px 16px 18px;
-    background:
-      radial-gradient(120% 70% at 0% 0%, rgba(255, 122, 24, 0.18), transparent 55%),
-      linear-gradient(180deg, #121212 0%, #0a0a0a 100%);
-    border-right: 1px solid rgba(255, 122, 24, 0.18);
-    overflow: auto;
-    z-index: 30;
-  }
-
-  .sidebar-brand {
-    display: block;
-    margin: 2px 8px 18px;
-    color: var(--accent);
-    text-decoration: none;
-    font-size: 26px;
-    font-weight: 900;
-    font-style: italic;
-    letter-spacing: 0.5px;
-    line-height: 1.1;
-  }
-
-  .sidebar-brand em {
-    font-style: italic;
-    color: var(--accent-2);
-  }
-
-  .sidebar-nav {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    flex: 1;
-    min-height: 0;
-  }
-
-  .sidebar-nav button {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    width: 100%;
-    padding: 12px 14px;
-    border-radius: 12px;
-    color: rgba(255, 255, 255, 0.72);
-    font-weight: 700;
-    font-size: 15px;
-    text-align: left;
-    transition: background 0.15s ease, color 0.15s ease;
-  }
-
-  .sidebar-nav button svg {
-    width: 20px;
-    height: 20px;
-    flex: 0 0 auto;
-    opacity: 0.9;
-  }
-
-  .sidebar-nav button:hover {
-    color: #fff;
-    background: rgba(255, 255, 255, 0.06);
-  }
-
-  .sidebar-nav button.is-on {
-    color: #1a0c00;
-    background: linear-gradient(180deg, var(--btn-hi) 0%, var(--accent) 55%, var(--accent-deep) 100%);
-    box-shadow: 0 8px 18px rgba(255, 122, 24, 0.28);
-  }
-
-  .sidebar-nav button.is-on svg {
-    opacity: 1;
-  }
-
-  .sidebar-refer {
-    margin-top: 12px;
-    padding: 14px;
-    border-radius: 16px;
-    background:
-      linear-gradient(145deg, rgba(255, 122, 24, 0.22), rgba(255, 122, 24, 0.05)),
-      #161616;
-    border: 1px solid rgba(255, 122, 24, 0.28);
-  }
-
-  .sidebar-refer-art {
-    font-size: 28px;
-    line-height: 1;
-    margin-bottom: 8px;
-  }
-
-  .sidebar-refer-copy {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    margin-bottom: 12px;
-  }
-
-  .sidebar-refer-copy strong {
-    font-size: 14px;
-    font-weight: 800;
-    color: #fff;
-  }
-
-  .sidebar-refer-copy span {
-    font-size: 12px;
-    color: rgba(255, 255, 255, 0.62);
-  }
-
-  .sidebar-refer-btn {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 100%;
-    height: 38px;
-    border-radius: 10px;
-    background: linear-gradient(180deg, var(--btn-hi), var(--accent));
-    color: var(--on-accent);
-    font-weight: 800;
-    font-size: 13px;
-    text-decoration: none;
-  }
-
-  .sidebar-foot {
-    display: flex;
-    justify-content: space-between;
-    gap: 8px;
-    padding: 10px 4px 0;
-  }
-
-  .sidebar-foot a {
-    color: rgba(255, 255, 255, 0.45);
-    font-size: 11px;
-    font-weight: 600;
-    text-decoration: none;
-  }
-
-  .sidebar-foot a:hover {
-    color: var(--accent);
+    padding: 112px 48px 72px;
+    overflow: visible;
   }
 
   .mobile-title,
-  .topbar-spacer,
-  .brand,
-  .top-nav,
-  .play-chip,
-  .mobile-theme,
-  .icon-btn.back {
-    display: none !important;
+  .topbar-spacer {
+    display: none;
   }
 
   .topbar {
-    grid-column: 2;
-    grid-row: 1;
-    position: relative;
-    z-index: 20;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 200;
     display: flex;
     align-items: center;
-    justify-content: flex-end;
-    gap: 14px;
+    gap: 28px;
     flex: none;
-    height: var(--desk-top-h);
+    height: 96px;
     margin: 0;
-    padding: 0 28px;
-    background: rgba(8, 8, 8, 0.92);
-    border-bottom: 1px solid rgba(255, 122, 24, 0.16);
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
+    padding: 0 48px;
+    background: var(--topbar-bg);
+    border-bottom: 1px solid var(--topbar-border);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
   }
 
-  .desktop-header-actions {
-    display: flex;
-    align-items: center;
-    gap: 12px;
+  .theme-toggle {
+    width: 44px;
+    height: 44px;
+    font-size: 18px;
+    margin-right: 8px;
   }
 
-  .wallet-chip {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    height: 42px;
-    padding: 0 14px;
-    border-radius: 999px;
-    background: #171717;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    color: #fff;
-    font-weight: 700;
-    font-size: 15px;
+  .icon-btn {
+    width: 48px;
+    height: 48px;
+    flex: 0 0 auto;
   }
 
-  .wallet-coin {
-    display: grid;
-    place-items: center;
-    width: 22px;
-    height: 22px;
-    border-radius: 50%;
-    background: linear-gradient(180deg, #ffd36a, #f0a000);
-    color: #4a2a00;
-    font-size: 12px;
-    font-weight: 900;
-  }
-
-  .deposit-btn {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    height: 42px;
-    padding: 0 18px;
-    border-radius: 999px;
-    background: linear-gradient(180deg, var(--btn-hi) 0%, var(--accent) 55%, var(--accent-deep) 100%);
-    color: var(--on-accent);
-    font-weight: 800;
-    font-size: 14px;
-    text-decoration: none;
-    box-shadow: 0 8px 18px rgba(255, 122, 24, 0.28);
-  }
-
-  .desktop-theme {
-    display: grid;
-    width: 42px;
-    height: 42px;
-    font-size: 17px;
-  }
-
-  .user-chip {
+  .brand {
     display: inline-flex;
     align-items: center;
     gap: 10px;
-    min-height: 42px;
-    padding: 4px 12px 4px 4px;
-    border-radius: 999px;
-    background: #171717;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    color: #fff;
+    flex: 0 0 auto;
+    color: var(--brand-text);
+    text-decoration: none;
+    font-size: 28px;
+    font-weight: 800;
+    letter-spacing: 0.4px;
+    white-space: nowrap;
+  }
+
+  .brand-flame {
+    color: var(--accent);
+    width: 30px;
+    height: 30px;
+  }
+
+  .brand em {
+    font-style: normal;
+    color: var(--brand-em);
+  }
+
+  .top-nav {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: 1;
+    gap: 6px;
+    min-width: 0;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .top-nav button {
+    padding: 14px 18px;
+    border-radius: 8px;
+    color: var(--nav-text);
+    font-weight: 700;
+    font-size: 18px;
+    white-space: nowrap;
+  }
+
+  .top-nav button:hover {
+    color: var(--nav-hover);
+  }
+
+  .top-nav button.is-on {
+    color: var(--accent);
+    box-shadow: inset 0 -3px 0 var(--accent);
+    border-radius: 0;
+    background: transparent;
+  }
+
+  .play-chip {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    min-width: 140px;
+    height: 52px;
+    padding: 0 24px;
+    border-radius: 12px;
+    background: linear-gradient(180deg, var(--btn-hi) 0%, var(--accent) 55%, var(--accent-deep) 100%);
+    color: var(--on-accent);
+    font-weight: 800;
+    font-size: 17px;
     text-decoration: none;
   }
 
-  .user-avatar {
-    display: grid;
-    place-items: center;
-    width: 34px;
-    height: 34px;
-    border-radius: 50%;
-    background: linear-gradient(180deg, var(--accent-2), var(--accent-deep));
-    color: #1a0c00;
-    font-size: 13px;
-    font-weight: 900;
-  }
-
-  .user-meta {
-    display: flex;
-    flex-direction: column;
-    line-height: 1.15;
-    min-width: 0;
-  }
-
-  .user-meta strong {
-    font-size: 13px;
-    font-weight: 800;
-  }
-
-  .user-meta em {
-    font-style: normal;
-    font-size: 11px;
-    color: rgba(255, 255, 255, 0.55);
-  }
-
   .lobby {
-    grid-column: 2;
-    grid-row: 2;
-    gap: 32px;
+    gap: 40px;
     width: 100%;
-    height: 100%;
-    overflow-x: hidden;
-    overflow-y: auto;
-    padding: 24px 28px 48px;
-    background:
-      radial-gradient(80% 40% at 70% -10%, rgba(255, 122, 24, 0.12), transparent 50%),
-      var(--bg);
   }
 
   .lobby-section {
-    scroll-margin-top: 16px;
+    scroll-margin-top: 112px;
   }
 
   .banners {
@@ -995,8 +817,8 @@ html.android-system-bars .app {
     position: absolute;
     top: 50%;
     z-index: 3;
-    width: 48px;
-    height: 48px;
+    width: 56px;
+    height: 56px;
     border-radius: 50%;
     color: #fff;
     background: var(--arrow-bg);
@@ -1005,11 +827,11 @@ html.android-system-bars .app {
   }
 
   .banner-arrow.prev {
-    left: 16px;
+    left: 20px;
   }
 
   .banner-arrow.next {
-    right: 16px;
+    right: 20px;
   }
 
   .banner-arrow:hover {
@@ -1020,111 +842,68 @@ html.android-system-bars .app {
   .banner-slide {
     aspect-ratio: auto;
     width: 100%;
-    height: min(320px, 36vh);
-    min-height: 220px;
+    height: min(340px, 34vh);
+    min-height: 240px;
     border-radius: 18px;
     border: 0;
   }
 
   .banner-slide img {
-    filter: brightness(0.58) saturate(1.08);
+    filter: brightness(0.62);
   }
 
   .banner-slide .banner-copy {
     justify-content: center;
     align-items: flex-start;
-    padding: 40px 88px;
-    background: linear-gradient(90deg, rgba(0, 0, 0, 0.86) 0%, rgba(0, 0, 0, 0.42) 55%, transparent 100%);
+    padding: 48px 100px;
+    background: linear-gradient(90deg, rgba(0, 0, 0, 0.84) 0%, rgba(0, 0, 0, 0.4) 52%, transparent 100%);
   }
 
   .banner-slide .banner-tag {
-    font-size: 13px;
-    padding: 6px 12px;
-    margin-bottom: 12px;
+    font-size: 14px;
+    padding: 6px 14px;
+    margin-bottom: 14px;
   }
 
   .banner-slide h3 {
-    font-size: clamp(34px, 3.8vw, 58px);
+    font-size: clamp(32px, 3.6vw, 56px);
     font-weight: 900;
-    letter-spacing: 0.6px;
+    letter-spacing: 0.5px;
     text-transform: uppercase;
-    text-shadow: 0 4px 18px rgba(0, 0, 0, 0.45);
   }
 
   .banner-slide p {
-    font-size: 15px;
+    font-size: 16px;
     margin-top: 8px;
-    max-width: 520px;
+    max-width: 560px;
   }
 
   .banner-slide .banner-play {
-    min-width: 150px;
-    height: 46px;
-    font-size: 15px;
+    min-width: 160px;
+    height: 48px;
+    font-size: 16px;
     margin-top: 16px;
-  }
-
-  .banner-mult {
-    position: absolute;
-    right: 72px;
-    top: 50%;
-    transform: translateY(-50%);
-    z-index: 2;
-    display: flex;
-    flex-direction: column;
-    align-items: flex-end;
-    gap: 8px;
-    pointer-events: none;
-  }
-
-  .banner-mult .mult-big {
-    font-size: clamp(40px, 5vw, 64px);
-    font-weight: 900;
-    color: var(--accent);
-    line-height: 1;
-    text-shadow: 0 0 24px rgba(255, 122, 24, 0.45);
-  }
-
-  .banner-mult .mult-list {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    align-items: flex-end;
-  }
-
-  .banner-mult .mult-list span {
-    font-size: 12px;
-    font-weight: 700;
-    color: rgba(255, 255, 255, 0.7);
-  }
-
-  .banner-mult .mult-list span.win {
-    color: #3ddc84;
-  }
-
-  .banner-mult .mult-list span.hot {
-    color: var(--accent);
   }
 
   .banner-dots {
     position: absolute;
     left: 0;
     right: 0;
-    bottom: 18px;
+    bottom: 22px;
     justify-content: center;
     z-index: 3;
     margin: 0;
   }
 
   .section-head {
-    margin-bottom: 14px;
+    margin-bottom: 16px;
   }
 
   .section-head h2 {
-    color: #fff;
-    font-size: 18px;
+    color: var(--section-head-desktop);
+    font-size: 20px;
     font-weight: 800;
-    letter-spacing: 0.2px;
+    letter-spacing: 0.3px;
   }
 
   .section-head-right {
@@ -1136,15 +915,15 @@ html.android-system-bars .app {
   .view-all {
     display: inline-flex;
     align-items: center;
-    color: var(--accent);
-    font-size: 14px;
+    color: var(--view-all);
+    font-size: 16px;
     font-weight: 700;
     background: none;
     cursor: pointer;
   }
 
   .view-all:hover {
-    color: var(--accent-2);
+    color: var(--accent);
   }
 
   #popularSection,
@@ -1181,7 +960,7 @@ html.android-system-bars .app {
     flex-basis: auto;
     aspect-ratio: 3 / 4;
     scroll-snap-align: start;
-    border-radius: 14px;
+    border-radius: 12px;
     border-width: 0;
     box-shadow: 0 8px 18px rgba(0, 0, 0, 0.35);
   }
@@ -1210,81 +989,21 @@ html.android-system-bars .app {
       0 0 0 2px var(--accent),
       0 16px 32px rgba(0, 0, 0, 0.2);
   }
-
-  html[data-theme="light"] .desktop-sidebar {
-    background:
-      radial-gradient(120% 70% at 0% 0%, rgba(212, 175, 55, 0.16), transparent 55%),
-      linear-gradient(180deg, #ffffff 0%, #f3f5f7 100%);
-    border-right-color: rgba(30, 58, 95, 0.12);
-  }
-
-  html[data-theme="light"] .sidebar-brand,
-  html[data-theme="light"] .sidebar-brand em {
-    color: #1e3a5f;
-  }
-
-  html[data-theme="light"] .sidebar-nav button {
-    color: #4b5563;
-  }
-
-  html[data-theme="light"] .sidebar-nav button:hover {
-    color: #1e3a5f;
-    background: rgba(30, 58, 95, 0.06);
-  }
-
-  html[data-theme="light"] .sidebar-refer {
-    background: #fff;
-    border-color: rgba(30, 58, 95, 0.14);
-  }
-
-  html[data-theme="light"] .sidebar-refer-copy strong {
-    color: #1e3a5f;
-  }
-
-  html[data-theme="light"] .sidebar-foot a {
-    color: #9ca3af;
-  }
-
-  html[data-theme="light"] .topbar {
-    background: rgba(255, 255, 255, 0.94);
-    border-bottom-color: #e5e7eb;
-  }
-
-  html[data-theme="light"] .wallet-chip,
-  html[data-theme="light"] .user-chip {
-    background: #fff;
-    border-color: #e5e7eb;
-    color: #111827;
-  }
-
-  html[data-theme="light"] .user-meta em {
-    color: #6b7280;
-  }
-
-  html[data-theme="light"] .lobby {
-    background:
-      radial-gradient(80% 40% at 70% -10%, rgba(212, 175, 55, 0.1), transparent 50%),
-      var(--bg);
-  }
-
-  html[data-theme="light"] .section-head h2 {
-    color: #1e3a5f;
-  }
 }
 
 @media (min-width: 1400px) {
-  .app {
-    --sidebar-w: 268px;
-  }
-
   .rail {
     grid-auto-columns: calc((100% - 96px) / 7);
   }
 }
 
 @media (min-width: 1900px) {
-  .lobby {
-    padding: 28px 40px 64px;
+  .app {
+    padding: 120px 64px 88px;
+  }
+
+  .topbar {
+    padding: 0 64px;
   }
 
   .rail {
