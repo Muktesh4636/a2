@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Casino white theme — pick one</title>
+  <style>
+    :root { --ink: #111827; --muted: #6b7280; --line: #e5e7eb; --bg: #f3f4f6; }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; font-family: "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: var(--bg); color: var(--ink); padding: 24px 16px 48px;
+    }
+    h1 { margin: 0 0 8px; font-size: 24px; }
+    .sub { color: var(--muted); margin: 0 0 24px; font-size: 14px; line-height: 1.5; max-width: 720px; }
+    .grid {
+      display: grid; gap: 20px;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      max-width: 980px;
+    }
+    .card {
+      background: #fff; border: 1px solid var(--line); border-radius: 16px;
+      overflow: hidden; display: flex; flex-direction: column;
+    }
+    .card img { width: 100%; aspect-ratio: 9 / 16; object-fit: cover; background: #fff; display: block; }
+    .meta { padding: 14px 16px 16px; }
+    .meta h2 { margin: 0 0 6px; font-size: 16px; }
+    .meta p { margin: 0 0 12px; color: var(--muted); font-size: 13px; line-height: 1.45; }
+    button {
+      width: 100%; border: 0; border-radius: 10px; padding: 11px 14px;
+      font-weight: 700; font-size: 14px; cursor: pointer;
+      background: #111827; color: #fff;
+    }
+    button:hover { filter: brightness(1.08); }
+    button.picked { background: #0b8f4e; }
+    .links { margin-top: 28px; font-size: 14px; }
+    .links a { color: #0b8f4e; font-weight: 600; }
+    #choice {
+      margin-top: 18px; padding: 12px 14px; border-radius: 10px;
+      background: #ecfdf5; border: 1px solid #a7f3d0; color: #065f46;
+      font-weight: 700; display: none; max-width: 980px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Casino white theme options</h1>
+  <p class="sub">
+    Current casino lobby is black + orange. Pick a white theme below.
+    Tell me <strong>A</strong>, <strong>B</strong>, or <strong>C</strong> and I’ll add a
+    black/white toggle on <code>/casino/</code> like sports.
+  </p>
+
+  <div class="grid">
+    <article class="card" data-opt="A">
+      <img src="./casino-theme-white-a.png" alt="Option A — white + emerald" />
+      <div class="meta">
+        <h2>A — White + Emerald</h2>
+        <p>Matches sports Option A. Bright white shell, emerald brand/login/LIVE accents.</p>
+        <button type="button" onclick="pick('A')">Select A</button>
+      </div>
+    </article>
+
+    <article class="card" data-opt="B">
+      <img src="./casino-theme-white-b.png" alt="Option B — white + orange" />
+      <div class="meta">
+        <h2>B — White + Casino Orange</h2>
+        <p>Keeps your current orange brand accents on a clean white lobby.</p>
+        <button type="button" onclick="pick('B')">Select B</button>
+      </div>
+    </article>
+
+    <article class="card" data-opt="C">
+      <img src="./casino-theme-white-c.png" alt="Option C — white + navy/gold" />
+      <div class="meta">
+        <h2>C — White + Navy / Gold</h2>
+        <p>Cool white cards, navy chrome, gold Login/LIVE — premium casino feel.</p>
+        <button type="button" onclick="pick('C')">Select C</button>
+      </div>
+    </article>
+  </div>
+
+  <div id="choice"></div>
+  <p class="links">
+    Or reply in chat with <strong>A</strong>, <strong>B</strong>, or <strong>C</strong>.
+  </p>
+
+  <script>
+    function pick(opt) {
+      document.querySelectorAll('button').forEach(function (b) { b.classList.remove('picked'); });
+      var card = document.querySelector('[data-opt="' + opt + '"]');
+      if (card) card.querySelector('button').classList.add('picked');
+      var el = document.getElementById('choice');
+      el.style.display = 'block';
+      el.textContent = 'Selected Option ' + opt + ' — tell me this letter in chat and I’ll apply it.';
+      try { localStorage.setItem('gundu_casino_theme_pick', opt); } catch (_) {}
+    }
+    try {
+      var saved = localStorage.getItem('gundu_casino_theme_pick');
+      if (saved) pick(saved);
+    } catch (_) {}
+  </script>
+</body>
+</html>

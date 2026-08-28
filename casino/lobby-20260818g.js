@@ -829,14 +829,21 @@ function renderBanners() {
     img.alt = game.title;
     img.loading = i === 0 ? "eager" : "lazy";
 
+    const isDesktop = document.documentElement.classList.contains("is-desktop");
+    const rushIds = new Set(["aviator", "jet", "chicken-road", "chicken-road-2", "air-balloon"]);
+    const headline = isDesktop && rushIds.has(game.id) ? "Feel the Rush" : game.title;
+    const sub = isDesktop
+      ? rushIds.has(game.id)
+        ? "Crash higher. Win bigger. The thrill never stops!"
+        : `Play ${game.title} — ignite the win`
+      : "Tap Play to open — long-press tiles below to preview";
+
     const copy = document.createElement("div");
     copy.className = "banner-copy";
     copy.innerHTML = `
       <span class="banner-tag">Featured</span>
-      <h3>${game.title}</h3>
-      <p>${document.documentElement.classList.contains("is-desktop")
-        ? "Play now and ignite the win"
-        : "Tap Play to open — long-press tiles below to preview"}</p>
+      <h3>${headline}</h3>
+      <p>${sub}</p>
     `;
     const btn = document.createElement("button");
     btn.type = "button";
@@ -849,6 +856,20 @@ function renderBanners() {
     copy.appendChild(btn);
 
     slide.append(img, copy);
+    if (isDesktop && rushIds.has(game.id)) {
+      const mult = document.createElement("div");
+      mult.className = "banner-mult";
+      mult.innerHTML = `
+        <div class="mult-big">3.62x</div>
+        <div class="mult-list">
+          <span>1.23x</span>
+          <span class="win">6.91x</span>
+          <span class="hot">3.62x</span>
+          <span>1.87x</span>
+        </div>
+      `;
+      slide.appendChild(mult);
+    }
     slide.addEventListener("click", () => playGame(game));
     track.appendChild(slide);
 
@@ -924,12 +945,14 @@ function setCategory(id) {
     fillRail(allRail, games);
     mountSectionNav(document, "allRail");
   }
-  document.querySelectorAll("#desktopNavList button").forEach((btn) => {
+  document.querySelectorAll("#desktopNavList button, #sidebarNav button").forEach((btn) => {
     btn.classList.toggle("is-on", btn.dataset.cat === activeCategory);
   });
   if (document.documentElement.classList.contains("is-desktop")) {
+    const lobby = document.getElementById("lobby");
     if (activeCategory === "all") {
-      window.scrollTo({ top: 0, behavior: "smooth" });
+      (lobby || window).scrollTo?.({ top: 0, behavior: "smooth" });
+      lobby?.scrollTo({ top: 0, behavior: "smooth" });
       return;
     }
     document.getElementById(`section-${activeCategory}`)?.scrollIntoView({
@@ -941,20 +964,38 @@ function setCategory(id) {
   document.getElementById("allSection")?.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
-function renderDesktopNav() {
-  const list = document.getElementById("desktopNavList");
+const SIDEBAR_ICONS = {
+  all: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 10.5 12 4l8 6.5V20a1 1 0 0 1-1 1h-5v-6H10v6H5a1 1 0 0 1-1-1v-9.5z"/></svg>`,
+  crash: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 16c4-1 6-5 7-9 2 3 5 5 9 5-3 2-5 5-6 9-1-4-4-6-10-5z"/><path d="M9 15l-3 5"/></svg>`,
+  cards: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="3" width="10" height="14" rx="1.5"/><rect x="9" y="7" width="10" height="14" rx="1.5"/></svg>`,
+  vortex: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3c4 2 6 5 6 9s-2 7-6 9c-4-2-6-5-6-9s2-7 6-9z"/><circle cx="12" cy="12" r="2.5"/></svg>`,
+  line: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12h16M7 8l-3 4 3 4M17 8l3 4-3 4"/></svg>`,
+  mini: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2 4 14h7l-1 8 10-14h-7l0-6z"/></svg>`,
+  classic: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3 14.5 9H21l-5 4 2 7-6-4-6 4 2-7-5-4h6.5L12 3z"/></svg>`,
+};
+
+function renderNavInto(list, { icons = false } = {}) {
   if (!list) return;
   list.innerHTML = "";
-    const items = [{ id: "all", title: "Casino" }, ...CATEGORIES];
+  const items = [{ id: "all", title: "Casino" }, ...CATEGORIES];
   items.forEach((item) => {
     const btn = document.createElement("button");
     btn.type = "button";
     btn.dataset.cat = item.id;
-    btn.textContent = item.title;
+    if (icons) {
+      btn.innerHTML = `${SIDEBAR_ICONS[item.id] || SIDEBAR_ICONS.all}<span>${item.title}</span>`;
+    } else {
+      btn.textContent = item.title;
+    }
     if (item.id === activeCategory) btn.classList.add("is-on");
     btn.addEventListener("click", () => setCategory(item.id));
     list.appendChild(btn);
   });
+}
+
+function renderDesktopNav() {
+  renderNavInto(document.getElementById("desktopNavList"));
+  renderNavInto(document.getElementById("sidebarNav"), { icons: true });
 }
 
 function render() {
@@ -1030,6 +1071,82 @@ function syncTopPlayBtn() {
   }
 }
 
+function formatBalance(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return "0.00";
+  return n.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+async function syncDesktopHeader() {
+  const walletChip = document.getElementById("walletChip");
+  const walletAmount = document.getElementById("walletAmount");
+  const depositBtn = document.getElementById("depositBtn");
+  const userChip = document.getElementById("userChip");
+  const userName = document.getElementById("userName");
+  const userSub = document.getElementById("userSub");
+  const userAvatar = document.getElementById("userAvatar");
+  const referBtn = document.getElementById("referInviteBtn");
+  const token = readAccessToken();
+
+  if (depositBtn) {
+    depositBtn.setAttribute(
+      "href",
+      token ? "/deposit" : "/login?next=" + encodeURIComponent("/deposit")
+    );
+  }
+  if (referBtn) {
+    referBtn.setAttribute(
+      "href",
+      token ? "/profile" : "/login?next=" + encodeURIComponent("/profile")
+    );
+  }
+
+  if (!token) {
+    if (walletChip) walletChip.hidden = true;
+    if (userChip) userChip.setAttribute("href", "/login?next=" + encodeURIComponent("/casino/"));
+    if (userName) userName.textContent = "Guest";
+    if (userSub) userSub.textContent = "Login";
+    if (userAvatar) userAvatar.textContent = "G";
+    return;
+  }
+
+  if (userChip) userChip.setAttribute("href", "/profile");
+  if (userSub) userSub.textContent = "Profile";
+
+  try {
+    const headers = { Authorization: `Bearer ${token}`, Accept: "application/json" };
+    const [walletRes, profileRes] = await Promise.all([
+      fetch("/api/auth/wallet/", { headers, credentials: "same-origin" }),
+      fetch("/api/auth/profile/", { headers, credentials: "same-origin" }),
+    ]);
+
+    if (walletRes.ok && walletChip && walletAmount) {
+      const wallet = await walletRes.json();
+      const bal = wallet.balance ?? wallet.wallet_balance ?? wallet.amount ?? 0;
+      walletAmount.textContent = formatBalance(bal);
+      walletChip.hidden = false;
+    }
+
+    if (profileRes.ok) {
+      const profile = await profileRes.json();
+      const name =
+        profile.username ||
+        profile.user?.username ||
+        profile.name ||
+        profile.phone ||
+        "Player";
+      if (userName) userName.textContent = String(name);
+      if (userAvatar) userAvatar.textContent = String(name).trim().charAt(0).toUpperCase() || "P";
+    } else if (userName) {
+      userName.textContent = "Player";
+      if (userAvatar) userAvatar.textContent = "P";
+    }
+  } catch (_) {
+    if (walletChip) walletChip.hidden = true;
+    if (userName) userName.textContent = "Player";
+  }
+}
+
 document.addEventListener("click", (e) => {
   const btn = e.target.closest(".view-all");
   if (!btn) return;
@@ -1072,19 +1189,24 @@ try {
 
 readAccessToken();
 syncTopPlayBtn();
+syncDesktopHeader();
 window.addEventListener("storage", () => {
   readAccessToken();
   syncTopPlayBtn();
+  syncDesktopHeader();
 });
 window.addEventListener("kokoroko-auth", () => {
   readAccessToken();
   syncTopPlayBtn();
+  syncDesktopHeader();
 });
 function syncDesktopClass() {
   const w = Math.max(window.innerWidth || 0, document.documentElement.clientWidth || 0);
   const desktop = w >= 768;
+  const wasDesktop = document.documentElement.classList.contains("is-desktop");
   document.documentElement.classList.toggle("is-desktop", desktop);
   document.documentElement.classList.toggle("is-wide", w >= 1200);
+  if (wasDesktop !== desktop) render();
 }
 syncDesktopClass();
 window.addEventListener("resize", syncDesktopClass);
