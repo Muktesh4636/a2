@@ -1,0 +1,52 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Game frontends
+aviator/node_modules
+aviator/dist
+maestro/node_modules
+maestro/dist
+jet/node_modules
+jet/dist
+deep-dive/node_modules
+deep-dive/dist
+sky-lift/node_modules
+sky-lift/dist
+paper-plane/node_modules
+paper-plane/dist
+ufo-lift/node_modules
+ufo-lift/dist
+wave-surf/node_modules
+wave-surf/dist
+*.local
+
+# Per-game Django backends
+**/backend/.venv/
+**/backend/**/__pycache__/
+**/backend/**/*.py[cod]
+**/backend/db.sqlite3
+**/backend/*.sqlite3
+**/backend/.env
+
+# Editor
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Local media / recordings (optional large assets)
+*.mov
+.frame_extract/
+.frame_extract10/
+.line_compare/

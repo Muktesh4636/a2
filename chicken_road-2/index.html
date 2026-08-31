@@ -57,17 +57,11 @@
             <div class="GameViewport">
               <div class="StageContainer">
                 <canvas id="game" width="1250" height="722"></canvas>
-                <div class="LiveOverlay">
-                  <div class="LiveLine">
-                    <span>Live wins:</span>
-                    <span class="dot"></span>
-                    <span id="onlineLabel">Online: 8716</span>
-                  </div>
-                  <div class="WinToast" id="winToast">
-                    <span class="avatar"></span>
-                    <span class="name" id="winName">Rose Defeate...</span>
-                    <span class="amt" id="winAmt">+₹350</span>
-                  </div>
+                <span id="onlineLabel" style="display:none"></span>
+                <div class="WinToast" id="winToast" style="display:none">
+                  <span class="avatar"></span>
+                  <span class="name" id="winName"></span>
+                  <span class="amt" id="winAmt"></span>
                 </div>
                 <div class="MultBadge" id="multBadge" hidden>
                   <span id="multValue">1.01x</span>
@@ -201,15 +195,38 @@
 
       <div class="MenuDrawer" id="menuDrawer" hidden>
         <div class="MenuPanel">
-          <button type="button" id="closeMenu">Close</button>
-          <p>Sound / Music</p>
-          <button type="button" id="musicToggle">Music: On</button>
-          <button type="button" id="resetBalance">Reset balance</button>
+          <div class="MenuPanelHeader">
+            <span class="MenuTitle">Settings</span>
+            <button type="button" id="closeMenu" class="MenuClose" aria-label="Close">&#10005;</button>
+          </div>
+
+          <!-- Sound toggle -->
+          <div class="MenuRow">
+            <span class="MenuRowLabel">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+                <path id="soundWaves" d="M15.54 8.46a5 5 0 0 1 0 7.07M19.07 4.93a10 10 0 0 1 0 14.14"></path>
+                <line id="soundMuteLine" x1="23" y1="9" x2="17" y2="15" style="display:none"></line>
+                <line id="soundMuteLine2" x1="17" y1="9" x2="23" y2="15" style="display:none"></line>
+              </svg>
+              Sound
+            </span>
+            <button type="button" id="soundToggle" class="ToggleBtn active" aria-pressed="true">ON</button>
+          </div>
+
+          <!-- Recent bet history -->
+          <div class="MenuRow MenuRowHistory">
+            <span class="MenuRowLabel">Recent Bets</span>
+            <button type="button" id="historyRefresh" class="RefreshBtn" title="Refresh">&#8635;</button>
+          </div>
+          <div id="betHistoryList" class="BetHistoryList">
+            <div class="HistoryLoading">Loading…</div>
+          </div>
         </div>
       </div>
     </div>
 
-    <script type="module" src="./game.js?v=95"></script>
+    <script type="module" src="./game.js?v=114"></script>
       <link rel="stylesheet" href="/casino/live-wins.css" />
     <script src="/casino/live-wins.js" defer></script>
 </body>

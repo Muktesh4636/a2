@@ -8,6 +8,7 @@ import {
   type ColorId,
 } from './gameConfig'
 import { Reel } from './Reel'
+import { playSpinSound, stopSpinSound } from './spinSound'
 
 const CELL = 68
 const GAP = 10
@@ -72,6 +73,7 @@ export default function App() {
   const onPlay = useCallback(async () => {
     if (!playerId || spinning || bet > balance || bet < 1) return
     setSpinning(true)
+    playSpinSound()
     setAnimate(false)
     setLastPayout(null)
     setLastMult(null)
@@ -95,6 +97,7 @@ export default function App() {
       })
 
       window.setTimeout(() => {
+        stopSpinSound()
         setLastMult(Number(r.multiplier))
         setLastPayout(Number(r.payout))
         setBalance(Number(r.balance))
@@ -102,6 +105,7 @@ export default function App() {
         setAnimate(false)
       }, ANIM_MS)
     } catch (e) {
+      stopSpinSound()
       setBalance((b) => b + bet)
       setSpinning(false)
       setAnimate(false)

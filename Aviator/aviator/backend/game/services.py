@@ -7,10 +7,12 @@ from django.db import transaction
 from django.utils import timezone
 
 from .models import Bet, GameRound, Player
+from . import gundu_wallet
 
 MIN_BET = Decimal('10')
 MAX_BET = Decimal('10000')
 START_BALANCE = Decimal('5000.00')
+GAME_SLUG = 'aviator'
 
 
 def get_or_create_player(token: str | None) -> Player:
@@ -20,6 +22,33 @@ def get_or_create_player(token: str | None) -> Player:
             return player
     token = secrets.token_hex(16)
     return Player.objects.create(token=token, balance=START_BALANCE)
+
+
+def get_or_create_gundu_player(jwt: str) -> Player:
+    """Link player to real Gundu wallet via JWT."""
+    uid, bal = gundu_wallet.fetch_balance(jwt)
+    token = f'gundu:{uid}'
+    player, created = Player.objects.get_or_create(
+        token=token,
+        defaults={'balance': bal, 'currency': 'INR'},
+    )
+    if not created and player.balance != bal:
+        player.balance = bal
+        player.save(update_fields=['balance', 'updated_at'])
+    return player
+
+
+def sync_player_balance(player: Player, jwt: str | None) -> Player:
+    if not jwt or not player.token.startswith('gundu:'):
+        return player
+    try:
+        _, bal = gundu_wallet.fetch_balance(jwt)
+        if player.balance != bal:
+            player.balance = bal
+            player.save(update_fields=['balance', 'updated_at'])
+    except Exception:
+        pass
+    return player
 
 
 def latest_history(limit: int = 30) -> list[float]:
@@ -53,6 +82,7 @@ def place_bet(
     panel: int,
     amount: Decimal,
     auto_cashout: Decimal | None = None,
+    jwt: str | None = None,
 ) -> Bet:
     if amount < MIN_BET or amount > MAX_BET:
         raise ValueError(f'Bet must be between {MIN_BET} and {MAX_BET}')
@@ -63,6 +93,9 @@ def place_bet(
     if round_obj.status != GameRound.Status.WAITING:
         raise ValueError('Bets are only accepted while waiting')
 
+    player = Player.objects.select_for_update().get(pk=player.pk)
+    linked = bool(jwt and player.token.startswith('gundu:'))
+
     # Cancel existing pending bet on this panel for this round
     existing = Bet.objects.filter(
         player=player,
@@ -71,17 +104,33 @@ def place_bet(
         status=Bet.Status.PENDING,
     ).first()
     if existing:
-        player.balance = player.balance + existing.amount
+        refund = existing.amount
+        if linked:
+            player.balance = gundu_wallet.adjust_balance(
+                jwt, refund, game=GAME_SLUG, reason='REFUND', ref=f'cancel:{existing.id}'
+            )
+        else:
+            player.balance = player.balance + refund
+            player.save(update_fields=['balance', 'updated_at'])
         existing.status = Bet.Status.CANCELLED
         existing.save(update_fields=['status', 'updated_at'])
-        player.save(update_fields=['balance', 'updated_at'])
+        if linked:
+            player.save(update_fields=['balance', 'updated_at'])
         return existing
 
-    if player.balance < amount:
-        raise ValueError('Insufficient balance')
-
-    player.balance = player.balance - amount
-    player.save(update_fields=['balance', 'updated_at'])
+    if linked:
+        try:
+            player.balance = gundu_wallet.adjust_balance(
+                jwt, -amount, game=GAME_SLUG, reason='BET', ref=f'panel:{panel}'
+            )
+            player.save(update_fields=['balance', 'updated_at'])
+        except gundu_wallet.WalletBridgeError as exc:
+            raise ValueError(exc.message) from exc
+    else:
+        if player.balance < amount:
+            raise ValueError('Insufficient balance')
+        player.balance = player.balance - amount
+        player.save(update_fields=['balance', 'updated_at'])
 
     return Bet.objects.create(
         player=player,
@@ -115,7 +164,7 @@ def start_round(round_id: str | None = None) -> GameRound:
 
 
 @transaction.atomic
-def cash_out(player: Player, panel: int, mult: Decimal) -> Bet:
+def cash_out(player: Player, panel: int, mult: Decimal, jwt: str | None = None) -> Bet:
     round_obj = (
         GameRound.objects.filter(status=GameRound.Status.FLYING)
         .order_by('-created_at')
@@ -127,6 +176,7 @@ def cash_out(player: Player, panel: int, mult: Decimal) -> Bet:
     if mult < Decimal('1.01') or mult > round_obj.crash_point:
         raise ValueError('Invalid cashout multiplier')
 
+    player = Player.objects.select_for_update().get(pk=player.pk)
     bet = (
         Bet.objects.select_for_update()
         .filter(
@@ -146,7 +196,16 @@ def cash_out(player: Player, panel: int, mult: Decimal) -> Bet:
     bet.win = win
     bet.save(update_fields=['status', 'cashout_mult', 'win', 'updated_at'])
 
-    player.balance = player.balance + win
+    linked = bool(jwt and player.token.startswith('gundu:'))
+    if linked:
+        try:
+            player.balance = gundu_wallet.adjust_balance(
+                jwt, win, game=GAME_SLUG, reason='WIN', ref=f'cashout:{bet.id}'
+            )
+        except gundu_wallet.WalletBridgeError as exc:
+            raise ValueError(exc.message) from exc
+    else:
+        player.balance = player.balance + win
     player.save(update_fields=['balance', 'updated_at'])
     return bet
 

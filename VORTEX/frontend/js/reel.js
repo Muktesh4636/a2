@@ -2,6 +2,9 @@
  * Center vertical symbol reel
  * Logical offset only increases; visual position is modulo-mapped
  * into the middle strip copy — no wrap jumps / glitches.
+ *
+ * Optional onTick(): fired once per symbol/cell that crosses the window
+ * so SFX can match each item.
  */
 
 const REEL_FACES = ["earth", "water", "fire", "skull", "wind"];
@@ -28,7 +31,7 @@ export function normalizeDrop(drop) {
   return REEL_FACES.includes(d) ? d : "fire";
 }
 
-export function createReel(coreEl) {
+export function createReel(coreEl, { onTick } = {}) {
   const windowEl = document.createElement("div");
   windowEl.className = "reel-window";
   const strip = document.createElement("div");
@@ -45,7 +48,6 @@ export function createReel(coreEl) {
     for (const face of REEL_FACES) sequence.push(face);
   }
 
-  // Preload so decode doesn't hitch mid-spin
   Object.values(SYMBOL_SRC).forEach((src) => {
     const im = new Image();
     im.src = src;
@@ -64,15 +66,15 @@ export function createReel(coreEl) {
   });
 
   let cellH = 80;
-  let offset = 0; // logical, only increases
+  let offset = 0;
   let speed = 0;
   let raf = 0;
   let mode = "idle";
   let currentFace = "fire";
   let stopTarget = 0;
-  let stopDecel = 0;
   let lastTs = 0;
   let stopResolver = null;
+  let lastTickCell = -1;
 
   const nFaces = REEL_FACES.length;
   const cyclePx = () => nFaces * cellH;
@@ -91,11 +93,6 @@ export function createReel(coreEl) {
     if (g) coreEl.classList.add(g);
   };
 
-  /**
-   * Map logical offset → visual Y inside the middle copy.
-   * Strip layout: [copy0][copy1][copy2], each cyclePx tall.
-   * Showing copy1 means visual in [cyclePx, 2*cyclePx).
-   */
   const visualY = () => {
     const c = cyclePx();
     if (c <= 0) return 0;
@@ -105,6 +102,17 @@ export function createReel(coreEl) {
 
   const paint = () => {
     strip.style.transform = `translate3d(0, ${-visualY()}px, 0)`;
+  };
+
+  /** One tick per symbol that crosses the center line. */
+  const emitTicks = () => {
+    if (!onTick || cellH <= 0) return;
+    const cell = Math.floor(offset / cellH);
+    if (cell === lastTickCell) return;
+    lastTickCell = cell;
+    try {
+      onTick();
+    } catch (_) {}
   };
 
   const facePos = (face) => Math.max(0, REEL_FACES.indexOf(face)) * cellH;
@@ -119,6 +127,7 @@ export function createReel(coreEl) {
     const face = normalizeDrop(drop);
     currentFace = face;
     offset = facePos(face);
+    lastTickCell = Math.floor(offset / cellH);
     paint();
     applyGlow(face);
   };
@@ -128,6 +137,7 @@ export function createReel(coreEl) {
     speed = 0;
     lastTs = 0;
     offset = facePos(currentFace);
+    lastTickCell = Math.floor(offset / cellH);
     paint();
     applyGlow(currentFace);
     coreEl.classList.remove("reel-spinning");
@@ -138,11 +148,17 @@ export function createReel(coreEl) {
     if (r) r(currentFace);
   };
 
+  let stopStartOffset = 0;
+  let stopStartTs = 0;
+  let stopDuration = 0;
+  let stopDist = 0;
+  let stopEase = 3;
+
   const frame = (ts) => {
     if (!lastTs) lastTs = ts;
     let dt = (ts - lastTs) / 1000;
     lastTs = ts;
-    if (dt > 0.032) dt = 0.032; // avoid big jumps after tab sleep
+    if (dt > 0.032) dt = 0.032;
     if (dt < 0.001) dt = 0.001;
 
     if (mode === "spin") {
@@ -150,20 +166,23 @@ export function createReel(coreEl) {
       const accel = cellH * 12;
       speed = Math.min(cruise, speed + accel * dt);
       offset += speed * dt;
+      emitTicks();
       paint();
       raf = requestAnimationFrame(frame);
       return;
     }
 
     if (mode === "stop") {
-      speed = Math.max(0, speed + stopDecel * dt);
-      offset += speed * dt;
-
-      if (speed < 8 || offset >= stopTarget) {
+      if (!stopStartTs) stopStartTs = ts;
+      const t = Math.min(1, (ts - stopStartTs) / stopDuration);
+      const eased = 1 - Math.pow(1 - t, stopEase);
+      offset = stopStartOffset + stopDist * eased;
+      emitTicks();
+      paint();
+      if (t >= 1) {
         finishStop();
         return;
       }
-      paint();
       raf = requestAnimationFrame(frame);
       return;
     }
@@ -178,6 +197,8 @@ export function createReel(coreEl) {
     }
     mode = "spin";
     speed = cellH * 2;
+    stopStartTs = 0;
+    lastTickCell = Math.floor(offset / cellH);
     coreEl.classList.add("reel-spinning");
     coreEl.classList.remove("pulse");
     cancelAnimationFrame(raf);
@@ -185,23 +206,28 @@ export function createReel(coreEl) {
     raf = requestAnimationFrame(frame);
   };
 
-  const stopOn = (drop, { turbo = false } = {}) =>
+  const stopOn = (drop, { turbo = false, durationMs } = {}) =>
     new Promise((resolve) => {
       measure();
       const face = normalizeDrop(drop);
       currentFace = face;
 
-      // Softer, longer coast so landing fills ~1.5s of the spin SFX
-      speed = cellH * (turbo ? 9 : 6);
+      // Coast duration should match spin-end.wav (~2.5s) so ticks + ending line up.
+      stopDuration = Math.max(400, durationMs ?? (turbo ? 900 : 2500));
+      stopEase = turbo ? 2 : 3.4;
 
       const c = cyclePx();
       const posInCycle = ((offset % c) + c) % c;
       let delta = facePos(face) - posInCycle;
       if (delta < cellH * 0.35) delta += c;
-      stopTarget = offset + delta + (turbo ? 0 : 2) * c;
-
-      const dist = Math.max(cellH * 0.75, stopTarget - offset);
-      stopDecel = -((speed * speed) / (2 * dist));
+      // Enough symbols during coast so you hear distinct ticks slowing down
+      const extra = turbo ? 1 : 5;
+      stopDist = Math.max(cellH * 1.2, delta + extra * c);
+      stopStartOffset = offset;
+      stopStartTs = 0;
+      stopTarget = offset + stopDist;
+      speed = 0;
+      lastTickCell = Math.floor(offset / cellH);
 
       mode = "stop";
       stopResolver = resolve;

@@ -352,7 +352,7 @@
 
   <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.15/dist/hls.min.js"></script>
   <script src="/sports/theme.js?v=1"></script>
-  <script src="/sports/auth-wallet.js"></script>
+  <script src="/sports/auth-wallet.js?v=6"></script>
   <script src="/sports/live-tv.js?v=2"></script>
   <script>
     const feedEl = document.getElementById('feed');
@@ -520,6 +520,15 @@
         q.set('has_tv', '1');
         if (payload.event_id) q.set('radhe_event_id', String(payload.event_id));
       }
+      // Keep JWT on match links (WebView / multi-tab) so bet place does not 401
+      try {
+        if (window.GunduSportsAuth) {
+          const access = GunduSportsAuth.getAccessToken && GunduSportsAuth.getAccessToken();
+          const refresh = GunduSportsAuth.getRefreshToken && GunduSportsAuth.getRefreshToken();
+          if (access) q.set('token', access);
+          if (refresh) q.set('refresh', refresh);
+        }
+      } catch (_) {}
       const base = sportKey === 'cricket' ? '/cricket/' : '/sports/match/';
       return `${base}?${q.toString()}`;
     }

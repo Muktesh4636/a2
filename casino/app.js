@@ -258,6 +258,7 @@ function selectCard(card, game) {
 }
 
 function playGame(game) {
+  if (!game || game.disabled) return;
   if (!readAccessToken()) {
     showPlayLoginPrompt(game);
     return;

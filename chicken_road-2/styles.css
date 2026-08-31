@@ -695,6 +695,135 @@ input {
   border-radius: 12px;
   padding: 16px;
   border: 1px solid var(--border-soft);
+  max-height: 80vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.MenuPanelHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.MenuTitle {
+  font-size: 16px;
+  font-weight: 700;
+  color: #fff;
+}
+
+.MenuClose {
+  background: transparent !important;
+  border: none !important;
+  color: #aaa !important;
+  font-size: 18px !important;
+  width: 32px !important;
+  height: 32px !important;
+  margin: 0 !important;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.MenuRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 0;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+}
+
+.MenuRowLabel {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #ddd;
+  font-size: 14px;
+}
+
+.ToggleBtn {
+  padding: 4px 16px !important;
+  width: auto !important;
+  height: 30px !important;
+  margin: 0 !important;
+  background: #555 !important;
+  border-radius: 20px !important;
+  font-size: 12px !important;
+  font-weight: 700;
+  color: #aaa !important;
+  transition: background 0.15s, color 0.15s;
+}
+
+.ToggleBtn.active {
+  background: #f7a527 !important;
+  color: #000 !important;
+}
+
+.RefreshBtn {
+  background: transparent !important;
+  border: none !important;
+  color: #f7a527 !important;
+  font-size: 20px !important;
+  width: 32px !important;
+  height: 32px !important;
+  margin: 0 !important;
+  cursor: pointer;
+  line-height: 1;
+}
+
+.MenuRowHistory {
+  border-bottom: none;
+  padding-bottom: 4px;
+}
+
+.BetHistoryList {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 260px;
+  overflow-y: auto;
+  margin-bottom: 8px;
+}
+
+.HistoryLoading {
+  color: #888;
+  font-size: 13px;
+  text-align: center;
+  padding: 12px 0;
+}
+
+.HistoryRow {
+  display: grid;
+  grid-template-columns: 1fr auto auto auto;
+  align-items: center;
+  gap: 6px;
+  background: rgba(255,255,255,0.05);
+  border-radius: 6px;
+  padding: 7px 10px;
+  font-size: 12px;
+}
+
+.HistoryRow .hr-date { color: #888; font-size: 11px; }
+.HistoryRow .hr-bet  { color: #ccc; }
+.HistoryRow .hr-step { color: #aaa; }
+.HistoryRow .hr-win  { font-weight: 700; }
+.HistoryRow .hr-win.pos { color: #4caf50; }
+.HistoryRow .hr-win.neg { color: #ef5350; }
+
+.MenuResetBtn {
+  margin-top: 8px;
+  width: 100%;
+  height: 42px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--input);
+  color: #fff;
+  font-weight: 700;
+  cursor: pointer;
 }
 
 .MenuPanel button {

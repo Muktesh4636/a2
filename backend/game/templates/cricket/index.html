@@ -354,9 +354,9 @@
   <div class="toast" id="toast"></div>
 
   <script src="/sports/theme.js?v=1"></script>
-  <script src="/sports/auth-wallet.js"></script>
+  <script src="/sports/auth-wallet.js?v=6"></script>
   <script src="/sports/live-tv.js?v=2"></script>
-  <script src="/sports/betslip.js?v=5"></script>
+  <script src="/sports/betslip.js?v=6"></script>
   <script>
     const app = document.getElementById('app');
     const backBtn = document.getElementById('backBtn');
@@ -732,6 +732,7 @@
       stopLiveTv();
       showLiveTv = false;
       liveTvUserDismissed = true;
+      let lastDetail = null;
 
       const p = qs();
       const radheEventId = p.get('radhe_event_id') || p.get('radhe_id') || radheEventIdFromQuery();
@@ -764,11 +765,42 @@
       }
 
       async function load({ fromPoll = false } = {}) {
-        const url = isPre
-          ? `/api/cricket/preevent-odds/?event_id=${eventId}`
-          : `/api/cricket/live-odds/?event_id=${eventId}`;
+        const liveUrl = `/api/cricket/live-odds/?event_id=${eventId}`;
+        const preUrl = `/api/cricket/preevent-odds/?event_id=${eventId}`;
+        let url = isPre ? preUrl : liveUrl;
         const prefetch = window.GunduLiveTv ? GunduLiveTv.fetchIndex(false).catch(() => null) : null;
-        const [d] = await Promise.all([getJson(url), prefetch]);
+        let d;
+        try {
+          [d] = await Promise.all([getJson(url), prefetch]);
+        } catch (err) {
+          // Live gap: try the other endpoint once before failing the screen.
+          if (!fromPoll && !isPre && /Failed \(404\)/.test(err.message || '')) {
+            try {
+              d = await getJson(preUrl);
+              isPre = true;
+            } catch (_) {
+              throw err;
+            }
+          } else if (fromPoll && lastDetail) {
+            toast('Odds updating…');
+            return;
+          } else {
+            throw err;
+          }
+        }
+
+        if (d && d.status === 'UNAVAILABLE') {
+          if (fromPoll && lastDetail) {
+            const el = document.querySelector('.updated');
+            if (el) el.textContent = 'Match finished or odds paused';
+            return;
+          }
+          app.innerHTML = `<div class="empty">This match is no longer available for betting.
+            <div style="margin-top:12px"><a href="javascript:history.back()" style="color:var(--gold)">Go back</a></div></div>`;
+          return;
+        }
+
+        lastDetail = d;
         if (!isPre) {
           const tv = await resolveLiveTv(d);
           liveTvInfo = hasLiveTvInfo(tv) ? tv : null;
@@ -918,7 +950,7 @@
         };
         app.querySelectorAll('.chip').forEach(c => c.onclick = () => {
           filter = c.dataset.f;
-          load().catch(e => toast(e.message));
+          load({ fromPoll: true }).catch(e => toast(e.message || 'Could not refresh'));
         });
         if (window.GunduBetslip) {
           GunduBetslip.bindOddButtons(app, {
@@ -943,11 +975,15 @@
 
       try {
         await load();
-        window.addEventListener('gundu:bets-changed', () => load().catch(() => {}));
+        window.addEventListener('gundu:bets-changed', () => load({ fromPoll: true }).catch(() => {}));
         const interval = isPre ? 30000 : 8000;
         pollTimer = setInterval(() => load({ fromPoll: true }).catch(() => {}), interval);
       } catch (err) {
-        app.innerHTML = `<div class="error">${esc(err.message)}. <a href="javascript:location.reload()">Retry</a></div>`;
+        const msg = /Failed \(404\)/.test(err.message || '')
+          ? 'Match finished or odds temporarily unavailable'
+          : (err.message || 'Could not load match');
+        app.innerHTML = `<div class="error">${esc(msg)}. <a href="javascript:location.reload()">Retry</a>
+          <div style="margin-top:10px"><a href="javascript:history.back()" style="color:var(--gold)">Back</a></div></div>`;
       }
     }
 

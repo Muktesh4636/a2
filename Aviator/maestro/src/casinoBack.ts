@@ -1,5 +1,7 @@
-/** Back to casino lobby — keeps JWT */
+/** Back to casino lobby — prefer history.back() to avoid reload / loading bar */
 import { captureGunduToken } from './gunduAuth'
+
+const FROM_CASINO_KEY = 'gundu_from_casino'
 
 function casinoUrl() {
   const u = new URL('/casino/', location.origin)
@@ -8,18 +10,81 @@ function casinoUrl() {
   return u.toString()
 }
 
+function cameFromCasino(): boolean {
+  try {
+    if (sessionStorage.getItem(FROM_CASINO_KEY) === '1') return true
+  } catch (_) {}
+  try {
+    if ((document.referrer || '').includes('/casino')) return true
+  } catch (_) {}
+  return false
+}
+
+/** Stop HTML media + any game-provided WebAudio hooks (crash flight loops, etc.). */
+export function stopAllAudio() {
+  try {
+    const w = window as any
+    if (typeof w.stopGameAudio === 'function') w.stopGameAudio()
+    if (typeof w.silenceGameAudio === 'function') w.silenceGameAudio(true)
+  } catch (_) {}
+  try {
+    document.querySelectorAll('audio, video').forEach((el) => {
+      const m = el as HTMLMediaElement
+      try {
+        m.pause()
+        m.muted = true
+        m.currentTime = 0
+      } catch (_) {}
+    })
+  } catch (_) {}
+}
+
 function goCasino() {
+  stopAllAudio()
   try {
     if ((window as any).AndroidBridge?.goBack) {
       ;(window as any).AndroidBridge.goBack()
       return
     }
   } catch (_) {}
-  location.href = casinoUrl()
+
+  // Restore the existing casino tab from history (bfcache) — no loading bar.
+  if (cameFromCasino() && history.length > 1) {
+    let left = false
+    const markLeft = () => {
+      left = true
+    }
+    window.addEventListener('pagehide', markLeft, { once: true })
+    window.addEventListener('unload', markLeft, { once: true })
+    history.back()
+    window.setTimeout(() => {
+      if (left) return
+      try {
+        sessionStorage.removeItem(FROM_CASINO_KEY)
+      } catch (_) {}
+      location.replace(casinoUrl())
+    }, 450)
+    return
+  }
+
+  location.replace(casinoUrl())
 }
 
-export function installCasinoBack(gameId: string) {
+export function installCasinoBack(_gameId: string) {
   captureGunduToken()
+  try {
+    if ((document.referrer || '').includes('/casino')) {
+      sessionStorage.setItem(FROM_CASINO_KEY, '1')
+    }
+  } catch (_) {}
+
+  // Kill sound when leaving / backgrounding (history.back bfcache keeps AudioContext alive otherwise)
+  window.addEventListener('pagehide', stopAllAudio)
+  window.addEventListener('freeze', stopAllAudio as EventListener)
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') stopAllAudio()
+  })
+
   if (document.getElementById('gunduBackBtn')) return
   const btn = document.createElement('button')
   btn.type = 'button'
@@ -34,8 +99,6 @@ export function installCasinoBack(gameId: string) {
     '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M15.5 4.5 8 12l7.5 7.5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>'
   btn.addEventListener('click', goCasino)
   document.body.appendChild(btn)
-  try {
-    history.pushState({ gundu_game: gameId }, '', location.href)
-    window.addEventListener('popstate', () => location.replace(casinoUrl()))
-  } catch (_) {}
+  // Intentionally no pushState/popstate → location.replace(casino):
+  // that forced a full casino reload and showed the loading bar again.
 }

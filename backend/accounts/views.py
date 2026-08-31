@@ -248,8 +248,6 @@ def _set_single_session(user_id, refresh_token):
     """Store this login's access iat and refresh jti in Redis so only this session is valid (single session per user)."""
     if not getattr(settings, 'SINGLE_SESSION_PER_USER', False):
         return
-    if not redis_client:
-        return
     try:
         # Access token iat: used by CachedJWTAuthentication to reject old access tokens
         at = getattr(refresh_token, 'access_token', None)
@@ -260,11 +258,23 @@ def _set_single_session(user_id, refresh_token):
             iat = None
         if iat is None:
             iat = int(timezone.now().timestamp())
-        redis_client.set(f"user_valid_iat:{user_id}", str(int(iat)), ex=86400 * 30)  # 30 days
+        # Short-timeout client so a slow Redis never leaves the Sign-in button spinning.
+        import redis
+        host = getattr(settings, 'REDIS_HOST', 'localhost')
+        port = int(getattr(settings, 'REDIS_PORT', 6379))
+        db = int(getattr(settings, 'REDIS_DB', 0))
+        password = getattr(settings, 'REDIS_PASSWORD', None)
+        client = redis.Redis(
+            host=host, port=port, db=db, password=password,
+            decode_responses=True,
+            socket_connect_timeout=1,
+            socket_timeout=1,
+        )
+        client.set(f"user_valid_iat:{user_id}", str(int(iat)), ex=86400 * 30)  # 30 days
         # Refresh token jti: used by custom refresh view to reject old refresh tokens (so other device cannot refresh)
         ref_payload = getattr(refresh_token, 'payload', None)
         if isinstance(ref_payload, dict) and ref_payload.get('jti'):
-            redis_client.set(f"user_valid_refresh_jti:{user_id}", str(ref_payload['jti']), ex=86400 * 30)
+            client.set(f"user_valid_refresh_jti:{user_id}", str(ref_payload['jti']), ex=86400 * 30)
     except Exception as e:
         logger.warning(f"Single-session set skipped: {e}")
 
@@ -641,7 +651,8 @@ def login(request):
         password = (request.data.get('password') or '').strip()
 
         if not username or not password:
-            return Response({'error': 'Username and password required'}, status=status.HTTP_400_BAD_REQUEST)
+            msg = 'Username and password required'
+            return Response({'error': msg, 'detail': msg, 'message': msg}, status=status.HTTP_400_BAD_REQUEST)
 
         # Normalize phone the same way as registration (10 digits, no country code)
         clean_phone = username
@@ -662,14 +673,17 @@ def login(request):
         ).select_related('wallet').first()
 
         if not user or not user.check_password(password):
-            return Response({'error': 'Invalid credentials'}, status=status.HTTP_401_UNAUTHORIZED)
+            msg = 'Invalid credentials'
+            return Response({'error': msg, 'detail': msg, 'message': msg}, status=status.HTTP_401_UNAUTHORIZED)
 
         if not user.is_active:
-            return Response({'error': 'User account is disabled'}, status=status.HTTP_403_FORBIDDEN)
+            msg = 'User account is disabled'
+            return Response({'error': msg, 'detail': msg, 'message': msg}, status=status.HTTP_403_FORBIDDEN)
 
         # Admins/Staff are not allowed to login to the game app
         if user.is_staff or user.is_superuser:
-            return Response({'error': 'Admins are not allowed to login to the game app.'}, status=status.HTTP_403_FORBIDDEN)
+            msg = 'Admins are not allowed to login to the game app.'
+            return Response({'error': msg, 'detail': msg, 'message': msg}, status=status.HTTP_403_FORBIDDEN)
 
         # Link to franchise admin by APK package name (optional) – so this user's activity shows only to that admin
         package = (request.data.get('package') or request.data.get('package_name') or '').strip()
@@ -693,26 +707,33 @@ def login(request):
             user.last_login = now
             user.save(update_fields=['last_login'])
 
-        # IP tracking for multi-account detection
+        # IP tracking off the request path — DB/Redis here must never stall Sign-in.
         try:
-            from game.models import IPTracker
             ip = (
                 request.META.get('HTTP_X_FORWARDED_FOR', '').split(',')[0].strip()
                 or request.META.get('REMOTE_ADDR', '')
             )
-            is_flagged = IPTracker.register_login(ip, user.id)
-            if is_flagged:
-                # Silently flag in Redis — no error to user
-                if redis_client:
-                    import json as _json
-                    ps_key = f"player_state:{user.id}"
-                    raw = redis_client.get(ps_key) or '{}'
-                    try:
-                        ps = _json.loads(raw)
-                    except Exception:
-                        ps = {}
-                    ps['is_flagged'] = True
-                    redis_client.set(ps_key, _json.dumps(ps), ex=86400)
+            uid = user.id
+
+            def _track_login_ip():
+                try:
+                    from game.models import IPTracker
+                    is_flagged = IPTracker.register_login(ip, uid)
+                    if is_flagged and redis_client:
+                        import json as _json
+                        ps_key = f"player_state:{uid}"
+                        raw = redis_client.get(ps_key) or '{}'
+                        try:
+                            ps = _json.loads(raw)
+                        except Exception:
+                            ps = {}
+                        ps['is_flagged'] = True
+                        redis_client.set(ps_key, _json.dumps(ps), ex=86400)
+                except Exception:
+                    pass
+
+            import threading
+            threading.Thread(target=_track_login_ip, daemon=True).start()
         except Exception:
             pass
 
@@ -1237,6 +1258,82 @@ class WalletView(APIView):
         }
 
         return Response(wallet_response)
+
+
+class WalletGameAdjustView(APIView):
+    """Debit/credit Gundu wallet for external mini-games (Aviator crash family).
+
+    Body: { "amount": <signed number>, "game": "aviator", "reason": "bet|win|refund", "ref": "optional" }
+    Negative amount = debit (bet), positive = credit (win/refund).
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, format=None):
+        from django.db import transaction as db_transaction
+        from decimal import ROUND_HALF_UP
+
+        try:
+            amount = Decimal(str(request.data.get('amount', '0')))
+        except Exception:
+            return Response({'error': 'Invalid amount'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Wallet stores integer rupees
+        amount_i = int(amount.quantize(Decimal('1'), rounding=ROUND_HALF_UP))
+        if amount_i == 0:
+            return Response({'error': 'Amount must be non-zero'}, status=status.HTTP_400_BAD_REQUEST)
+
+        game = str(request.data.get('game') or 'crash')[:40]
+        reason = str(request.data.get('reason') or ('BET' if amount_i < 0 else 'WIN')).upper()[:20]
+        ref = str(request.data.get('ref') or '')[:120]
+        if reason not in ('BET', 'WIN', 'REFUND'):
+            reason = 'BET' if amount_i < 0 else 'WIN'
+
+        user = request.user
+        try:
+            with db_transaction.atomic():
+                wallet, _ = Wallet.objects.select_for_update().get_or_create(
+                    user=user, defaults={'balance': 0}
+                )
+                before = int(wallet.balance)
+                after = before + amount_i
+                if after < 0:
+                    return Response({'error': 'Insufficient balance'}, status=status.HTTP_400_BAD_REQUEST)
+                wallet.balance = after
+                if amount_i < 0:
+                    # Count wager toward turnover (same as other games)
+                    try:
+                        wallet.turnover = int(wallet.turnover or 0) + abs(amount_i)
+                    except Exception:
+                        pass
+                wallet.save(update_fields=['balance', 'turnover', 'updated_at'])
+                Transaction.objects.create(
+                    user=user,
+                    transaction_type=reason,
+                    amount=amount_i,
+                    balance_before=before,
+                    balance_after=after,
+                    description=f'{game} {reason.lower()}' + (f' {ref}' if ref else ''),
+                )
+        except Exception as e:
+            logger.error(f'WalletGameAdjust error user={user.id}: {e}', exc_info=True)
+            return Response({'error': 'Wallet update failed'}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+
+        # Keep Redis hot balance in sync for dice + other clients
+        try:
+            if redis_client:
+                redis_client.set(f'user_balance:{user.id}', str(after), ex=86400)
+        except Exception:
+            pass
+        try:
+            cache_user_session(user, balance=Decimal(after))
+        except Exception:
+            pass
+
+        return Response({
+            'balance': str(after),
+            'user_id': user.id,
+            'username': user.username,
+        })
 
 
 class TransactionList(generics.ListAPIView):

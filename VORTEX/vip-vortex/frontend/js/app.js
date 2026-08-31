@@ -13,7 +13,53 @@ import { fetchState, postBet, postSpin, postCashout, postPart } from "./api.js";
 const $ = (id) => document.getElementById(id);
 
 const board = createRingBoard($("board"));
-const reel = createReel($("core"));
+const tickUrl = new URL("./sounds/spin-tick.wav", location.href).href;
+const tickPool = Array.from({ length: 8 }, () => {
+  try {
+    const a = new Audio(tickUrl);
+    a.preload = "auto";
+    a.volume = 0.72;
+    return a;
+  } catch (_) {
+    return null;
+  }
+}).filter(Boolean);
+let tickI = 0;
+const playTick = () => {
+  if (!tickPool.length) return;
+  const a = tickPool[tickI++ % tickPool.length];
+  try {
+    a.currentTime = 0;
+    void a.play().catch(() => {});
+  } catch (_) {}
+};
+const endSfx = (() => {
+  try {
+    const a = new Audio(new URL("./sounds/spin-end.wav", location.href).href);
+    a.preload = "auto";
+    a.volume = 0.9;
+    return a;
+  } catch (_) {
+    return null;
+  }
+})();
+const playEndSound = () => {
+  if (!endSfx) return;
+  try {
+    endSfx.pause();
+    endSfx.currentTime = 0;
+    endSfx.volume = 0.9;
+    void endSfx.play().catch(() => {});
+  } catch (_) {}
+};
+const stopEndSound = () => {
+  if (!endSfx) return;
+  try {
+    endSfx.pause();
+    endSfx.currentTime = 0;
+  } catch (_) {}
+};
+const reel = createReel($("core"), { onTick: playTick });
 
 let balance = 5000;
 let bet = 5;
@@ -28,33 +74,9 @@ let totalM = 0;
 const fmt = (n) => (Math.round(n * 100) / 100).toFixed(2);
 const delay = (ms) => new Promise((r) => setTimeout(r, turbo ? ms * 0.45 : ms));
 
-const spinSfx = (() => {
-  try {
-    const a = new Audio(new URL("./sounds/spin.wav", location.href).href);
-    a.preload = "auto";
-    a.volume = 0.85;
-    return a;
-  } catch (_) {
-    return null;
-  }
-})();
-
-const playSpinSound = () => {
-  if (!spinSfx) return;
-  try {
-    spinSfx.pause();
-    spinSfx.currentTime = 0;
-    void spinSfx.play().catch(() => {});
-  } catch (_) {}
-};
-
-const stopSpinSound = () => {
-  if (!spinSfx) return;
-  try {
-    spinSfx.pause();
-    spinSfx.currentTime = 0;
-  } catch (_) {}
-};
+const SPIN_CRUISE_MS = 3800;
+const SPIN_STOP_MS = 2500;
+const SPIN_STOP_TURBO_MS = 1000;
 
 const applyState = (data) => {
   balance = data.balance;
@@ -144,28 +166,27 @@ const spin = async () => {
   balance = +(balance - bet).toFixed(2);
   render();
 
-  // Vertical reel races while the server rolls the result
-  playSpinSound();
+  // Per-item ticks while cruising; ending flourish starts with the coast.
   reel.startSpin();
-  // Match sounds/spin.wav (8s): cruise most of it, then decelerate into the landing.
-  const SPIN_SOUND_MS = 8000;
-  const stopBudgetMs = turbo ? 900 : 1600;
-  const minSpinMs = Math.max(0, (turbo ? Math.round(SPIN_SOUND_MS * 0.5) : SPIN_SOUND_MS) - stopBudgetMs);
+  const stopBudgetMs = turbo ? SPIN_STOP_TURBO_MS : SPIN_STOP_MS;
+  const cruiseMs = turbo ? Math.round(SPIN_CRUISE_MS * 0.45) : SPIN_CRUISE_MS;
   const spunAt = performance.now();
 
   try {
     const data = await postSpin();
-    const wait = Math.max(0, minSpinMs - (performance.now() - spunAt));
+    const wait = Math.max(0, cruiseMs - (performance.now() - spunAt));
     if (wait) await new Promise((r) => setTimeout(r, wait));
     applyState(data);
-    await reel.stopOn(data.drop || "fire", { turbo });
+    playEndSound();
+    await reel.stopOn(data.drop || "fire", { turbo, durationMs: stopBudgetMs });
     toast(data.message);
     await syncBoard(true, data.changed || null);
   } catch (e) {
     toast(e.message || "Spin failed");
     if (e.data) {
       applyState(e.data);
-      await reel.stopOn(e.data.drop || reel.getFace(), { turbo: true });
+      playEndSound();
+      await reel.stopOn(e.data.drop || reel.getFace(), { turbo: true, durationMs: SPIN_STOP_TURBO_MS });
       await syncBoard(false);
     } else {
       try {
@@ -179,7 +200,7 @@ const spin = async () => {
     auto = false;
   }
 
-  stopSpinSound();
+  stopEndSound();
   busy = false;
   controls.setSpinning(false);
   render();

@@ -365,21 +365,44 @@ def serve_react_app(request, path=''):
 (function () {
   var next = new URLSearchParams(location.search).get('next');
   if (!next) return;
+  function pick(keys) {
+    for (var i = 0; i < keys.length; i++) {
+      try {
+        var v = localStorage.getItem(keys[i]);
+        if (v && v.split('.').length === 3) return v;
+      } catch (e) {}
+    }
+    return '';
+  }
   function token() {
-    return localStorage.getItem('access_token')
-      || localStorage.getItem('gundu_access_token')
-      || localStorage.getItem('accessToken')
-      || '';
+    return pick([
+      'sikwin_access', 'gundu_access_token', 'access_token', 'accessToken', 'token',
+      'kiran_access', 'sai_access'
+    ]);
+  }
+  function refresh() {
+    return pick([
+      'sikwin_refresh', 'gundu_refresh_token', 'refresh_token', 'refreshToken',
+      'kiran_refresh', 'sai_refresh'
+    ]);
   }
   function go() {
     var t = token();
     if (!t) return;
     try {
+      // Mirror into casino/WebGL keys so games see the session even without ?token=
+      localStorage.setItem('gundu_access_token', t);
+      localStorage.setItem('access_token', t);
+      localStorage.setItem('accessToken', t);
+      var r = refresh();
+      if (r) {
+        localStorage.setItem('gundu_refresh_token', r);
+        localStorage.setItem('refresh_token', r);
+      }
       var u = new URL(next, location.origin);
       u.searchParams.set('token', t);
-      var r = localStorage.getItem('refresh_token') || localStorage.getItem('gundu_refresh_token') || '';
       if (r) u.searchParams.set('refresh', r);
-      location.replace(u.pathname + u.search);
+      location.replace(u.pathname + u.search + u.hash);
     } catch (e) {}
   }
   window.addEventListener('storage', go);

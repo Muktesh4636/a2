@@ -48,12 +48,59 @@ flyAwayOnce.preload = 'auto'
 flyAwayOnce.loop = false
 flyAwayOnce.volume = 1
 
+const isPreviewMode = (() => {
+  try {
+    return new URLSearchParams(location.search).has('preview')
+  } catch (_) {
+    return false
+  }
+})()
+let audioSilenced = isPreviewMode
+
+function stopAllGameAudio() {
+  audioSilenced = true
+  stopNode(noiseNode)
+  stopNode(awayNode)
+  noiseNode = null
+  awayNode = null
+  try {
+    flyAwayOnce.pause()
+    flyAwayOnce.currentTime = 0
+    flyAwayOnce.muted = true
+  } catch (_) {}
+  if (audioCtx) {
+    try {
+      void audioCtx.suspend()
+    } catch (_) {}
+  }
+}
+
+function silenceGameAudio(on: boolean) {
+  if (on) {
+    stopAllGameAudio()
+    return
+  }
+  audioSilenced = false
+  try {
+    flyAwayOnce.muted = false
+  } catch (_) {}
+  if (audioCtx && audioCtx.state === 'suspended') {
+    try {
+      void audioCtx.resume()
+    } catch (_) {}
+  }
+}
+
+;(window as any).stopGameAudio = stopAllGameAudio
+;(window as any).silenceGameAudio = silenceGameAudio
+
 function startFlyingSound() {
+  if (audioSilenced || isPreviewMode) return
   const ctx = getAudioCtx()
   flyAwayOnce.pause()
   flyAwayOnce.currentTime = 0
   void loadFlightBuffers().then(() => {
-    if (!noiseBuf) return
+    if (audioSilenced || isPreviewMode || !noiseBuf) return
     stopNode(noiseNode)
     stopNode(awayNode)
     noiseNode = null
@@ -71,6 +118,7 @@ function startFlyingSound() {
 }
 
 function startFlyAwaySound() {
+  if (audioSilenced || isPreviewMode) return
   stopNode(noiseNode)
   stopNode(awayNode)
   noiseNode = null
@@ -87,7 +135,7 @@ function startFlyAwaySound() {
     p.catch(() => {
       const ctx = getAudioCtx()
       void loadFlightBuffers().then(() => {
-        if (!awayBuf) return
+        if (audioSilenced || isPreviewMode || !awayBuf) return
         const src = ctx.createBufferSource()
         src.buffer = awayBuf
         src.loop = false
@@ -103,6 +151,7 @@ function startFlyAwaySound() {
 }
 
 function armFlightAudio() {
+  if (audioSilenced || isPreviewMode) return
   getAudioCtx()
   flyAwayOnce.muted = true
   const unlock = flyAwayOnce.play()
@@ -123,6 +172,16 @@ function armFlightAudio() {
     if (phase === 'flying' && !noiseNode) startFlyingSound()
   })
 }
+
+
+window.addEventListener('pageshow', () => {
+  if (isPreviewMode) return
+  if (document.visibilityState !== 'visible') return
+  audioSilenced = false
+  try {
+    flyAwayOnce.muted = false
+  } catch (_) {}
+})
 
 document.addEventListener('pointerdown', armFlightAudio, { capture: true })
 document.addEventListener('touchstart', armFlightAudio, { capture: true })
@@ -172,7 +231,44 @@ const CURRENCY = 'INR'
 const NAMES = [
   'd***7', 'a***k', 'r***9', 's***m', 'p***2', 'v***l', 'n***4', 'k***x',
   'm***8', 'j***p', 't***3', 'b***y', 'h***1', 'c***w', 'g***5', 'u***q',
+  'x***2', 'z***f', 'q***1', 'w***9', 'e***3', 'y***7', 'i***6', 'o***4',
+  'l***0', 'f***8', 'd***d', 's***s', 'a***a', 'b***b', 'c***c', 'n***n',
 ]
+
+const BET_AMOUNTS = [10, 20, 40, 50, 80, 100, 150, 200, 300, 500, 800, 1000, 2000, 5000]
+
+function randomLiveBet(): LiveBet {
+  return {
+    name: NAMES[Math.floor(Math.random() * NAMES.length)],
+    amount: BET_AMOUNTS[Math.floor(Math.random() * BET_AMOUNTS.length)],
+    cashout: null,
+    win: null,
+  }
+}
+
+function avatarHue(name: string) {
+  let h = 0
+  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) % 360
+  return h
+}
+
+function avatarIndex(name: string) {
+  let h = 0
+  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0
+  return h
+}
+
+/** Real photo avatar filling the full circle — stable per player name */
+function betsAvatarHtml(name: string) {
+  const h = avatarIndex(name)
+  const gender = h % 2 === 0 ? 'm' : 'w'
+  const id = h % 20
+  const src = `/casino/avatars/${gender}${id}.jpg`
+  const ring = `hsl(${avatarHue(name)} 70% 48%)`
+  return `<i class="bets-av" style="box-shadow:0 0 0 1.5px ${ring}"><img src="${src}" alt="" width="22" height="22" loading="lazy" decoding="async" /></i>`
+}
+
+
 
 function round2(n: number) {
   return Math.round(n * 100) / 100
@@ -262,6 +358,8 @@ let activeTab: Tab = 'all'
 let liveBets: LiveBet[] = []
 let previousBets: LiveBet[] = []
 let topWins: LiveBet[] = []
+let liveBetTarget = 60
+let lastTrickleAt = 0
 /** Server round id — crash point comes from Django */
 let serverRoundId: string | null = null
 let apiReady = false
@@ -269,16 +367,6 @@ let growthRate = GROWTH
 let waitMs = WAIT_MS
 
 const panels: BetPanel[] = [
-  {
-    amount: 20,
-    mode: 'bet',
-    autoCashout: 2,
-    autoEnabled: false,
-    pending: false,
-    active: false,
-    cashed: false,
-    cashMult: 0,
-  },
   {
     amount: 20,
     mode: 'bet',
@@ -302,7 +390,6 @@ function panelHtml(i: number) {
         <button type="button" class="${p.mode === 'bet' ? 'active' : ''}" data-mode="bet">Bet</button>
         <button type="button" class="${p.mode === 'auto' ? 'active' : ''}" data-mode="auto">Auto</button>
       </div>
-      <button type="button" class="collapse-btn" aria-label="Close panel" style="${i === 0 ? 'visibility:hidden' : ''}">−</button>
     </div>
     <div class="bet-row">
       <div class="amount-controls">
@@ -382,7 +469,6 @@ app.innerHTML = `
 
 <div class="bet-panels">
   ${panelHtml(0)}
-  ${panelHtml(1)}
 </div>
 
 <nav class="footer-tabs">
@@ -425,23 +511,37 @@ function renderBetsList() {
   else if (activeTab === 'prev') rows = previousBets
   else rows = topWins
 
+  const totalAmt = rows.reduce((s, b) => s + b.amount, 0)
+  const cashed = rows.filter((b) => b.win != null && b.win > 0).length
+  const allBtn = document.querySelector('.footer-tabs [data-tab="all"]') as HTMLButtonElement | null
+  if (allBtn && activeTab === 'all') {
+    allBtn.textContent = `All Bets ${rows.length || ''}`
+  } else if (allBtn) {
+    allBtn.textContent = 'All Bets'
+  }
+
   if (!rows.length) {
-    betsListEl.innerHTML = `<div class="bets-empty">No bets yet</div>`
+    betsListEl.innerHTML = `<div class="bets-empty">Waiting for players…</div>`
     return
   }
 
   betsListEl.innerHTML = `
+    <div class="bets-summary">
+      <span><strong>${rows.length}</strong> players</span>
+      <span>${formatMoney(totalAmt)} ${CURRENCY}</span>
+      ${activeTab === 'all' && cashed ? `<span class="bets-cashed">${cashed} cashed out</span>` : ''}
+    </div>
     <div class="bets-head">
       <span>Player</span><span>Bet</span><span>X</span><span>Win</span>
     </div>
     ${rows
-      .slice(0, 40)
+      .slice(0, 80)
       .map(
         (b) => `
       <div class="bets-row ${b.win && b.win > 0 ? 'won' : ''}">
-        <span class="bets-name">${b.name}</span>
+        <span class="bets-name">${betsAvatarHtml(b.name)}${b.name}</span>
         <span>${formatMoney(b.amount)}</span>
-        <span>${b.cashout != null ? formatMult(b.cashout) : '—'}</span>
+        <span class="${b.cashout != null ? 'bets-x' : ''}">${b.cashout != null ? formatMult(b.cashout) : '—'}</span>
         <span class="bets-win">${b.win != null && b.win > 0 ? formatMoney(b.win) : '—'}</span>
       </div>`
       )
@@ -451,6 +551,7 @@ function renderBetsList() {
 function updatePanelUI(i: number) {
   const panel = document.querySelector(`.bet-panel[data-panel="${i}"]`) as HTMLElement
   const p = panels[i]
+  if (!panel || !p) return
   const action = panel.querySelector('[data-action]') as HTMLButtonElement
   const label = action.querySelector('.action-label') as HTMLElement
   const sub = action.querySelector('.action-sub') as HTMLElement
@@ -486,8 +587,7 @@ function updatePanelUI(i: number) {
 }
 
 function updateAllPanels() {
-  updatePanelUI(0)
-  updatePanelUI(1)
+  for (let i = 0; i < panels.length; i++) updatePanelUI(i)
 }
 
 function placePlane(px: number, py: number, angle: number, opacity = 1) {
@@ -588,29 +688,52 @@ function updateFlyAway(now: number) {
 }
 
 function spawnLiveBets() {
-  const count = 18 + Math.floor(Math.random() * 22)
-  liveBets = Array.from({ length: count }, () => {
-    const amount = [10, 20, 50, 100, 200, 500, 1000][Math.floor(Math.random() * 7)]
-    return {
-      name: NAMES[Math.floor(Math.random() * NAMES.length)],
-      amount,
-      cashout: null,
-      win: null,
-    }
-  })
+  liveBetTarget = 55 + Math.floor(Math.random() * 50)
+  const seed = 22 + Math.floor(Math.random() * 16)
+  liveBets = Array.from({ length: seed }, () => randomLiveBet())
+  lastTrickleAt = performance.now()
   renderBetsList()
 }
 
+/** Keep adding fake players during wait — same “busy room” feel as Spribe/4rabet */
+function trickleLiveBets(now: number) {
+  if (liveBets.length >= liveBetTarget) return
+  if (now - lastTrickleAt < 140 + Math.random() * 220) return
+  lastTrickleAt = now
+  const n = 1 + Math.floor(Math.random() * 3)
+  for (let i = 0; i < n && liveBets.length < liveBetTarget; i++) {
+    liveBets.unshift(randomLiveBet())
+  }
+  // Cap visible feed length like the real game
+  if (liveBets.length > 120) liveBets.length = 120
+  if (activeTab === 'all') renderBetsList()
+  playerCountEl.textContent = String(liveBets.length + 800 + Math.floor(Math.random() * 400)).replace(
+    /\B(?=(\d{3})+(?!\d))/g,
+    ','
+  )
+}
+
 function simulateBotCashouts(mult: number) {
+  let changed = false
   for (const b of liveBets) {
     if (b.cashout != null) continue
     const target = 1.05 + Math.random() * Math.min(mult * 0.9, 12)
-    if (mult >= target && Math.random() < 0.08) {
+    if (mult >= target && Math.random() < 0.1) {
       b.cashout = round2(Math.min(target, mult))
       b.win = round2(b.amount * b.cashout)
+      changed = true
     }
   }
-  if (activeTab === 'all') renderBetsList()
+  if (changed && activeTab === 'all') {
+    // Winners bubble toward the top of the feed
+    liveBets.sort((a, b) => {
+      const aw = a.win && a.win > 0 ? 1 : 0
+      const bw = b.win && b.win > 0 ? 1 : 0
+      if (aw !== bw) return bw - aw
+      return 0
+    })
+    renderBetsList()
+  }
 }
 
 function finalizeRoundBets() {
@@ -860,10 +983,9 @@ document.querySelectorAll('.footer-tabs button').forEach((btn) => {
 })
 
 wirePanel(0)
-wirePanel(1)
 renderHistory()
 renderBalance()
-renderBetsList()
+spawnLiveBets()
 updateAllPanels()
 
 function beginWaiting(now: number) {
@@ -925,9 +1047,19 @@ function beginFlying(now: number) {
   crashPoint = 99999
 
   if (apiReady && serverRoundId) {
+    const heldRound = serverRoundId
+    const safety = window.setTimeout(() => {
+      if (phase === 'flying' && crashPoint >= 99999) {
+        crashPoint = sampleCrashPoint()
+        if (crashPoint < 1.01) crashPoint = 1.0
+        lockPendingBets()
+        updateAllPanels()
+      }
+    }, 3500)
     void (async () => {
       try {
-        const data = await api.startRound(serverRoundId!)
+        const data = await api.startRound(heldRound)
+        window.clearTimeout(safety)
         serverRoundId = data.round.id
         crashPoint = Number(data.round.crash_point)
         if (!(crashPoint >= 1)) crashPoint = sampleCrashPoint()
@@ -948,10 +1080,12 @@ function beginFlying(now: number) {
         lockPendingBets()
         updateAllPanels()
       } catch (err) {
+        window.clearTimeout(safety)
         console.warn(err)
         crashPoint = sampleCrashPoint()
         if (crashPoint < 1.01) crashPoint = 1.0
         lockPendingBets()
+        updateAllPanels()
       }
     })()
     return
@@ -1000,44 +1134,64 @@ function beginCrash(now: number) {
 }
 
 function loop(now: number) {
-  if (phase === 'waiting') {
-    const elapsed = now - phaseStarted
-    const u = Math.min(1, elapsed / waitMs)
-    waitFill.style.width = `${(1 - u) * 100}%`
-    statusLine.textContent = `Waiting for next round`
-    setPlane(0, now, false)
-    playerCountEl.textContent = String(900 + Math.floor((now / 400) % 1400))
+  try {
+    if (phase === 'waiting') {
+      const elapsed = now - phaseStarted
+      const u = Math.min(1, elapsed / Math.max(1, waitMs))
+      waitFill.style.width = `${(1 - u) * 100}%`
+      statusLine.textContent = `Waiting for next round`
+      setPlane(0, now, false)
+      trickleLiveBets(now)
 
-    if (elapsed >= waitMs) {
-      beginFlying(now)
-    }
-  } else if (phase === 'flying') {
-    const elapsedSec = (now - flightStart) / 1000
-    currentMult = multFromElapsed(elapsedSec)
+      if (elapsed >= waitMs) {
+        beginFlying(now)
+      }
+    } else if (phase === 'flying') {
+      const elapsedSec = (now - flightStart) / 1000
+      currentMult = multFromElapsed(elapsedSec)
 
-    if (currentMult >= crashPoint) {
-      currentMult = crashPoint
-      beginCrash(now)
-    } else {
-      lastProgress = progressFromElapsed(elapsedSec)
-      multiplierDisplay.textContent = formatMult(currentMult)
-      setPlane(lastProgress, now, true)
-      checkAutoCashouts()
-      simulateBotCashouts(currentMult)
-      updateAllPanels()
-      playerCountEl.textContent = String(1200 + Math.floor(lastProgress * 800) + Math.floor((now / 300) % 80))
+      if (currentMult >= crashPoint) {
+        currentMult = crashPoint
+        beginCrash(now)
+      } else {
+        lastProgress = progressFromElapsed(elapsedSec)
+        multiplierDisplay.textContent = formatMult(currentMult)
+        setPlane(lastProgress, now, true)
+        checkAutoCashouts()
+        simulateBotCashouts(currentMult)
+        updateAllPanels()
+        playerCountEl.textContent = String(
+          1200 + Math.floor(lastProgress * 800) + Math.floor((now / 300) % 80)
+        )
+      }
+    } else if (phase === 'crashed') {
+      updateFlyAway(now)
+      if (now - phaseStarted >= CRASH_HOLD_MS) {
+        beginWaiting(now)
+      }
     }
-  } else if (phase === 'crashed') {
-    updateFlyAway(now)
-    if (now - phaseStarted >= CRASH_HOLD_MS) {
-      beginWaiting(now)
-    }
+  } catch (err) {
+    console.warn('tick error', err)
   }
-
-  requestAnimationFrame(loop)
 }
 
-void initFromServer().then(() => {
-  beginWaiting(performance.now())
-  requestAnimationFrame(loop)
-})
+function startGameLoop() {
+  if ((window as unknown as { __aviatorLoop?: number }).__aviatorLoop) return
+  ;(window as unknown as { __aviatorLoop?: number }).__aviatorLoop = window.setInterval(() => {
+    loop(performance.now())
+  }, 50)
+}
+
+void (async () => {
+  try {
+    await initFromServer()
+  } catch (err) {
+    console.warn(err)
+  }
+  try {
+    beginWaiting(performance.now())
+  } catch (err) {
+    console.warn('beginWaiting failed', err)
+  }
+  startGameLoop()
+})()

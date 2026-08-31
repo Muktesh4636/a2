@@ -175,6 +175,31 @@ class RoundDetailView(APIView):
         return Response({"round": public_round(round_obj)})
 
 
+class RoundHistoryView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request):
+        player = player_from_request(request)
+        rounds = (
+            Round.objects.filter(player=player)
+            .exclude(status=Round.Status.ACTIVE)
+            .order_by("-created_at")[:20]
+        )
+        data = []
+        for r in rounds:
+            data.append({
+                "id": str(r.id),
+                "bet": str(r.bet),
+                "payout": str(r.payout),
+                "status": r.status,
+                "difficulty": r.difficulty,
+                "step": r.step,
+                "created_at": r.created_at.strftime("%d %b %H:%M"),
+            })
+        return Response({"history": data})
+
+
 class HealthView(APIView):
     authentication_classes = []
     permission_classes = []

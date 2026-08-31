@@ -13,6 +13,7 @@ import {
   type MultiplierKey,
 } from './gameConfig'
 import { MultiplierBar } from './MultiplierBar'
+import { playSpinSound, stopSpinSound } from './spinSound'
 import { Wheel } from './Wheel'
 
 const SPIN_MS = 4200
@@ -87,6 +88,7 @@ export default function App() {
     if (!playerId || spinning || bet > balance || bet < 1) return
 
     setSpinning(true)
+    playSpinSound()
     setLastMultiplier(null)
     setLastPayout(null)
     setHighlighted(null)
@@ -103,6 +105,7 @@ export default function App() {
       setRotation(nextRotation)
 
       window.setTimeout(() => {
+        stopSpinSound()
         setBalance(Number(result.balance))
         setLastMultiplier(mult)
         setLastPayout(payout)
@@ -111,6 +114,7 @@ export default function App() {
       }, SPIN_MS)
     } catch (e) {
       // Roll back optimistic deduct
+      stopSpinSound()
       setBalance((b) => b + bet)
       setSpinning(false)
       setError(e instanceof Error ? e.message : 'Spin failed')

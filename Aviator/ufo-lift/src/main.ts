@@ -45,6 +45,29 @@ function round2(n: number) {
   return Math.round(n * 100) / 100
 }
 
+function avatarHue(name: string) {
+  let h = 0
+  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) % 360
+  return h
+}
+
+function avatarIndex(name: string) {
+  let h = 0
+  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0
+  return h
+}
+
+/** Real photo avatar filling the full circle — stable per player name */
+function betsAvatarHtml(name: string) {
+  const h = avatarIndex(name)
+  const gender = h % 2 === 0 ? 'm' : 'w'
+  const id = h % 20
+  const src = `/casino/avatars/${gender}${id}.jpg`
+  const ring = `hsl(${avatarHue(name)} 70% 48%)`
+  return `<i class="bets-av" style="box-shadow:0 0 0 1.5px ${ring}"><img src="${src}" alt="" width="22" height="22" loading="lazy" decoding="async" /></i>`
+}
+
+
 function formatMoney(n: number) {
   return n.toFixed(2)
 }
@@ -156,17 +179,6 @@ const panels: BetPanel[] = [
     cashMult: 0,
     remaining: 0,
   },
-  {
-    amount: 20,
-    mode: 'bet',
-    autoCashout: 2,
-    autoEnabled: false,
-    pending: false,
-    active: false,
-    cashed: false,
-    cashMult: 0,
-    remaining: 0,
-  },
 ]
 
 const app = document.querySelector<HTMLDivElement>('#app')!
@@ -254,7 +266,6 @@ app.innerHTML = `
 
 <div class="bet-panels">
   ${panelHtml(0)}
-  ${panelHtml(1)}
 </div>
 
 <nav class="footer-tabs">
@@ -549,7 +560,7 @@ function renderBetsList() {
       .slice(0, 24)
       .map(
         (b) => `<div class="bets-row${b.win != null ? ' won' : ''}">
-      <span>${b.name}</span>
+      <span class="bets-name">${betsAvatarHtml(b.name)}${b.name}</span>
       <span>${formatMoney(b.amount)}</span>
       <span>${b.cashout != null ? formatMult(b.cashout) : '—'}</span>
       <span>${b.win != null ? formatMoney(b.win) : '—'}</span>
@@ -603,8 +614,7 @@ function updatePanelUI(i: number) {
 }
 
 function updateAllPanels() {
-  updatePanelUI(0)
-  updatePanelUI(1)
+  for (let i = 0; i < panels.length; i++) updatePanelUI(i)
 }
 
 function placeJet(x: number, y: number, angle: number, opacity = 1, waiting = false) {
@@ -677,7 +687,7 @@ function updateFlyAway(now: number) {
 }
 
 function spawnLiveBets() {
-  const count = 16 + Math.floor(Math.random() * 18)
+  const count = 40 + Math.floor(Math.random() * 40)
   liveBets = Array.from({ length: count }, () => ({
     name: NAMES[Math.floor(Math.random() * NAMES.length)],
     amount: [10, 20, 50, 100, 200, 500][Math.floor(Math.random() * 6)],
@@ -706,11 +716,11 @@ function finalizeRoundBets() {
   previousBets = liveBets
     .filter((b) => b.win != null)
     .sort((a, b) => (b.win ?? 0) - (a.win ?? 0))
-    .slice(0, 30)
+    .slice(0, 60)
   for (const b of liveBets) {
     if (b.win && b.win > 0) topWins.push({ ...b })
   }
-  topWins = topWins.sort((a, b) => (b.win ?? 0) - (a.win ?? 0)).slice(0, 40)
+  topWins = topWins.sort((a, b) => (b.win ?? 0) - (a.win ?? 0)).slice(0, 80)
   for (const p of panels) {
     if (p.active && !p.cashed) p.active = false
   }
@@ -1076,16 +1086,20 @@ function loop(now: number) {
     updateFlyAway(now)
     if (now - phaseStarted >= CRASH_HOLD_MS) beginWaiting(now)
   }
-  requestAnimationFrame(loop)
 }
 
 wirePanel(0)
-wirePanel(1)
+spawnLiveBets()
 renderHistory()
 renderBalance()
 renderBetsList()
 updateAllPanels()
-void initFromServer().then(() => {
-  beginWaiting(performance.now())
-  requestAnimationFrame(loop)
-})
+void (async () => {
+  try { await initFromServer() } catch (err) { console.warn(err) }
+  try { beginWaiting(performance.now()) } catch (err) { console.warn(err) }
+  if (!(window as unknown as { __crashLoop?: number }).__crashLoop) {
+    ;(window as unknown as { __crashLoop?: number }).__crashLoop = window.setInterval(() => {
+      try { loop(performance.now()) } catch (err) { console.warn('tick error', err) }
+    }, 50)
+  }
+})()

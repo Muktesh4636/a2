@@ -37,6 +37,8 @@ class GameWebViewActivity : ComponentActivity() {
 
     private lateinit var webView: WebView
     private var startUrl: String = Constants.CASINO_URL
+    /** True when this WebView was opened from native/site home (back should return home, not casino). */
+    private var openedFromHome: Boolean = false
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -49,6 +51,8 @@ class GameWebViewActivity : ComponentActivity() {
 
         startUrl = intent.getStringExtra(EXTRA_URL)?.takeIf { it.isNotBlank() }
             ?: buildUrlWithTokens(Constants.CASINO_PATH)
+        openedFromHome = startUrl.contains("from=home") ||
+            intent.getBooleanExtra(EXTRA_FROM_HOME, false)
 
         webView = WebView(this).apply {
             layoutParams = FrameLayout.LayoutParams(
@@ -141,6 +145,7 @@ class GameWebViewActivity : ComponentActivity() {
                 """
                 (function(){
                   try{ if(window.stopGameAudio) window.stopGameAudio(); }catch(e){}
+                  try{ if(window.silenceGameAudio) window.silenceGameAudio(true); }catch(e){}
                   try{
                     if(typeof WEBAudio!=='undefined' && WEBAudio && WEBAudio.audioContext){
                       try{ WEBAudio.audioContext.suspend(); }catch(e1){}
@@ -148,8 +153,10 @@ class GameWebViewActivity : ComponentActivity() {
                     }
                   }catch(e3){}
                   try{
-                    var a=document.querySelectorAll('audio');
-                    for(var i=0;i<a.length;i++){ try{ a[i].pause(); a[i].src=''; }catch(e4){} }
+                    var a=document.querySelectorAll('audio,video');
+                    for(var i=0;i<a.length;i++){
+                      try{ a[i].pause(); a[i].muted=true; a[i].currentTime=0; }catch(e4){}
+                    }
                   }catch(e5){}
                 })();
                 """.trimIndent(),
@@ -161,24 +168,22 @@ class GameWebViewActivity : ComponentActivity() {
 
     private fun handleBack() {
         val current = webView.url.orEmpty()
-        if (current.contains("/game")) stopWebAudio()
+        // Always silence game audio before navigating away (crash games use WebAudio, not only /game).
+        if (!isLobbyUrl(current)) stopWebAudio()
         // Casino lobby → app home.
         if (isLobbyUrl(current)) {
             finishToHome()
             return
         }
         // Opened from site/app home (?from=home) → native home in one back.
-        if (current.contains("/game") && current.contains("from=home")) {
+        if (openedFromHome || (current.contains("/game") && current.contains("from=home"))) {
             finishToHome()
             return
         }
         // Opened from casino (?from=casino) → WebView back to casino.
         if (webView.canGoBack()) {
+            stopWebAudio()
             webView.goBack()
-            return
-        }
-        if (current.contains("/game")) {
-            webView.loadUrl(buildUrlWithTokens(Constants.CASINO_PATH))
             return
         }
         webView.loadUrl(buildUrlWithTokens(Constants.CASINO_PATH))
@@ -352,6 +357,7 @@ class GameWebViewActivity : ComponentActivity() {
         const val EXTRA_URL = "url"
         const val EXTRA_TOKEN = "token"
         const val EXTRA_REFRESH = "refresh"
+        const val EXTRA_FROM_HOME = "from_home"
 
         fun companionBuildUrl(path: String, access: String?, refresh: String?): String {
             val base = if (path.startsWith("http")) path else Constants.WEB_ORIGIN.trimEnd('/') + path

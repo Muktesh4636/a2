@@ -91,7 +91,7 @@ function unlockJumpSound() {
 }
 
 function playJumpSound() {
-  if (!jumpSfx) return;
+  if (!jumpSfx || !soundEnabled) return;
   try {
     jumpSfx.muted = false;
     jumpSfx.volume = 1;
@@ -110,48 +110,30 @@ function playJumpSound() {
 document.addEventListener("pointerdown", unlockAudio, { capture: true });
 document.addEventListener("touchstart", unlockAudio, { capture: true });
 
-const bgm = (() => {
-  try {
-    const a = new Audio(new URL("./static/sounds/purity-piano.mp3", location.href).href);
-    a.preload = "auto";
-    a.loop = true;
-    a.volume = 0.32;
-    return a;
-  } catch (_) {
-    return null;
-  }
-})();
+// Background music removed — only jump SFX remains.
+function startBgm() {}
+function stopBgm() {}
+function setMusicOn(_on) {}
+function syncMusicToggle() {}
 
-let musicOn = localStorage.getItem("chicken2_music_off") !== "1";
+// ── Sound on/off (persisted in localStorage) ────────────────────────────────
+let soundEnabled = localStorage.getItem("cr2_sound") !== "off";
 
-function syncMusicToggle() {
-  const btn = document.getElementById("musicToggle");
-  if (btn) btn.textContent = musicOn ? "Music: On" : "Music: Off";
+function applySoundState() {
+  if (jumpSfx) jumpSfx.muted = !soundEnabled;
 }
 
-function startBgm() {
-  if (!bgm || !musicOn) return;
-  bgm.muted = false;
-  const p = bgm.play();
-  if (p && typeof p.catch === "function") p.catch(() => {});
+function setSoundEnabled(on) {
+  soundEnabled = on;
+  localStorage.setItem("cr2_sound", on ? "on" : "off");
+  applySoundState();
 }
 
-function stopBgm() {
-  if (!bgm) return;
-  bgm.pause();
-}
-
-function setMusicOn(on) {
-  musicOn = !!on;
-  localStorage.setItem("chicken2_music_off", musicOn ? "0" : "1");
-  syncMusicToggle();
-  if (musicOn) startBgm();
-  else stopBgm();
-}
+// Apply immediately on load
+applySoundState();
 
 function unlockAudio() {
   unlockJumpSound();
-  startBgm();
 }
 
 const canvas = document.getElementById("game");
@@ -183,7 +165,9 @@ const els = {
   menuBtn: document.getElementById("menuBtn"),
   menuDrawer: document.getElementById("menuDrawer"),
   closeMenu: document.getElementById("closeMenu"),
-  resetBalance: document.getElementById("resetBalance"),
+  soundToggle: document.getElementById("soundToggle"),
+  betHistoryList: document.getElementById("betHistoryList"),
+  historyRefresh: document.getElementById("historyRefresh"),
   fsBtn: document.querySelector('[data-testid="menu-fullscreen"]'),
 };
 
@@ -222,9 +206,9 @@ const TRUCK_BRAND = "PRIDE";
 const MIN_CAR_GAP = 200;
 /** Queue spacing at a barricade — must clear tall truck sprites. */
 const PARK_CAR_GAP = 130;
-/** How fast a death truck races into the hen — official slam is short, not a teleport. */
-const DEATH_RUSH_SPEED = 900;
-const DEATH_SPAWN_Y = -90;
+/** How fast a death truck approaches the hen — slow enough to see coming. */
+const DEATH_RUSH_SPEED = 280;
+const DEATH_SPAWN_Y = -200;
 
 /* Spine atlas body (Y from bottom of page) */
 const CHICK = {
@@ -234,10 +218,19 @@ const CHICK = {
 
 const assets = {
   objects: loadImg("./static/image/objects.png"),
-  chick: loadImg("./static/image/chicken_idle.png"),
+  chick: loadImg("./static/image/chicken_idle_eyes.png"),
   chickDead: loadImg("./static/image/chicken_dead.png"),
+  splat: loadImg("./static/image/death/splat.png"),
+  roast: loadImg("./static/image/death/roast_chicken.png"),
   feather: loadImg("./static/image/death/feather.png"),
   fluff: loadImg("./static/image/death/fluff.png"),
+  // Official pop-apart body parts (from chicken atlas)
+  partA: loadImg("./static/image/death/feather_a.png"),
+  partB: loadImg("./static/image/death/feather_b.png"),
+  partC: loadImg("./static/image/death/feather_c.png"),
+  partD: loadImg("./static/image/death/feather_d.png"),
+  partE: loadImg("./static/image/death/feather_e.png"),
+  partF: loadImg("./static/image/death/feather_f.png"),
   startBg: loadImg("./static/image/start_bg.png"),
   finishBg: loadImg("./static/image/finish_bg.png"),
 };
@@ -269,6 +262,8 @@ const state = {
   hitLane: -1,
   hitCar: null,
   pendingDeath: false,
+  /** "burst" = flat body + flying parts | "roast" = gold pad roast marker only */
+  deathPhase: null,
   /** Server already paid the final pad — don't cash out / credit again */
   roundCompleted: false,
   /** Lane the hen stands on / is hopping to — traffic must not drive through it */
@@ -603,6 +598,7 @@ function resetWorld() {
   state.hitLane = -1;
   state.hitCar = null;
   state.pendingDeath = false;
+  state.deathPhase = null;
   state.roundCompleted = false;
   state.landingLane = -1;
   state.panning = false;
@@ -665,6 +661,7 @@ async function onPlay() {
   state.hitLane = -1;
   state.hitCar = null;
   state.pendingDeath = false;
+  state.deathPhase = null;
   state.feathers = [];
   state.particles = [];
   state.barriers = [];
@@ -804,10 +801,14 @@ function padY(h) {
   return h * 0.52;
 }
 
-/** Barricade just above the hen (official: stopper sits behind her on the pad). */
+/** Barricade logic position — cars park and queue relative to this. */
 function barrierY(h) {
   return padY(h) - 58;
 }
+
+/** Visual draw offset — shifts the sprite up so there's a visible gap between
+ *  the hen and the barricade without affecting traffic / parking logic. */
+const BARRIER_VISUAL_OFFSET = 38;
 
 /** Drawn stopper size — keep park math in sync with drawBarriers. */
 function stopperSize() {
@@ -895,24 +896,19 @@ function carSharesHenColumn(car) {
 }
 
 /**
- * True when this car has to give way to the hen.
- *
- * Three lanes are held. The one she is standing on or hopping to, obviously.
- * The one she will step to next (`state.step`), claimed early so the pad is
- * already empty by the time she commits — waiting until the hop begins leaves a
- * car mid-pad with nowhere to go but through her. And whichever column covers
- * her right now, so a car released behind her cannot clip her as she leaves.
- *
- * The crash truck is exempt — it is the one car allowed to reach her.
+ * Cars never yield to the hen — they keep their natural speed at all times.
+ * Collision detection handles death; no visual cheating needed.
  */
-function mustYieldToHen(car) {
-  if (car.rush || car.hitCue) return false;
-  if (state.phase === "idle" || state.phase === "ended") return false;
-  return (
-    car.lane === state.landingLane ||
-    car.lane === state.step ||
-    carSharesHenColumn(car)
-  );
+function mustYieldToHen(_car) {
+  return false;
+}
+
+function vaultPastHen(_car) {
+  return false;
+}
+
+function hurryPastHen(_car) {
+  // no-op — cars never speed up for the hen
 }
 
 // Hen hit box, matching carOverlapsHen, plus the height she gains mid-hop —
@@ -958,28 +954,6 @@ function laneHardCap(car) {
   return car.y <= stopShort ? stopShort : Infinity;
 }
 
-/**
- * Never paint a truck on top of the hen on a safe step.
- *
- * Approaching cars are held by laneHardCap. Anything that is already inside her
- * band (closed-lane exit used to crawl through her at Infinity) is jumped just
- * past her in one frame — a flash of motion beats a body through her.
- * Death trucks (rush / hitCue) are left alone.
- */
-function vaultPastHen(car) {
-  if (!mustYieldToHen(car)) return false;
-  const top = henBlockedFrom(car);
-  const bot = henClearPast(car);
-  if (car.y <= top || car.y >= bot) return false;
-  car.y = bot;
-  car._prevY = bot;
-  car.approaching = false;
-  car.parking = false;
-  car.stopped = false;
-  car.exiting = true;
-  car.speed = cappedExitSpeed(car, HEN_CLEAR_SPEED);
-  return true;
-}
 
 /**
  * True when this car's body (especially the rear) still covers the pad the hen
@@ -1009,59 +983,15 @@ function laneBlockedForHop(lane) {
  * Briefly hold the hop so any car whose end would touch the hen can clear.
  * Traffic keeps animating during the wait (draw loop).
  */
-function waitForSafeCrossing(lane, maxMs = 700) {
-  // Claim the lane early so yield / hurry kick in while we wait
+/**
+ * No longer waits or speeds up cars — hop starts immediately.
+ * Cars keep their natural speed; if the hen jumps into one, she dies.
+ */
+function waitForSafeCrossing(lane) {
   state.landingLane = lane;
-  for (const car of carsOnLane(lane)) {
-    if (carBlocksCrossing(car, lane)) {
-      car.approaching = false;
-      car.parking = false;
-      car.stopped = false;
-      car.exiting = true;
-      car.speed = cappedExitSpeed(car, HEN_CLEAR_SPEED);
-    }
-  }
-  if (!laneBlockedForHop(lane)) return Promise.resolve();
-  const start = performance.now();
-  return new Promise((resolve) => {
-    let settled = false;
-    const tick = () => {
-      if (settled) return;
-      for (const car of carsOnLane(lane)) {
-        if (carBlocksCrossing(car, lane)) {
-          car.exiting = true;
-          car.stopped = false;
-          car.speed = cappedExitSpeed(car, HEN_CLEAR_SPEED);
-        }
-      }
-      if (!laneBlockedForHop(lane) || performance.now() - start >= maxMs) {
-        settled = true;
-        clearInterval(id);
-        resolve();
-      }
-    };
-    const id = setInterval(tick, 32);
-    tick();
-  });
+  return Promise.resolve();
 }
 
-/**
- * Drains the exit side of a lane the hen needs.
- *
- * Cars already inside her band are vaulted clear. Cars past the band but still
- * on the exit run get a mild speed bump so they don't dam up the ones behind.
- */
-function hurryPastHen(car) {
-  if (!mustYieldToHen(car)) return;
-  if (car.stopped || car.parking) return;
-  if (vaultPastHen(car)) return;
-  if (car.y < henClearPast(car)) return;
-  car.approaching = false;
-  car.parking = false;
-  car.stopped = false;
-  car.exiting = true;
-  car.speed = cappedExitSpeed(car, HEN_CLEAR_SPEED);
-}
 
 /** Hen dies the moment a car passes over her (same as original local game). */
 function forfeitServerRound() {
@@ -1075,15 +1005,6 @@ function killFromCollision(car) {
   if (state.hitAnim > 0) return;
   if (state.phase === "idle") return;
   if (!car) return;
-  // Live wallet round: only the dedicated crash truck may kill.
-  // Random traffic must not zoom in and flatten the hen mid-round.
-  if (
-    state.roundId &&
-    !state.pendingDeath &&
-    !(car.rush || car.hitCue)
-  ) {
-    return;
-  }
 
   forfeitServerRound();
   state.pendingDeath = false;
@@ -1092,15 +1013,17 @@ function killFromCollision(car) {
   state.hitCar = car;
   state.feathers = [];
   state.particles = [];
+  // Official CR2: car keeps driving; hen pops apart instantly, then gold roast pad.
   car.approaching = false;
-  car.exiting = false;
   car.parking = false;
+  car.stopped = false;
   car.safePass = false;
   car.gone = false;
-  // Freeze at the impact — do not rocket the truck off-screen
   car.rush = false;
-  car.stopped = true;
-  car.speed = 0;
+  car.hitCue = false;
+  car.exiting = true;
+  if (!car.speed || car.speed < 140) car.speed = 200 + Math.random() * 80;
+  state.deathPhase = "burst";
   setPlayingUI(false);
   els.playBtn.hidden = true;
   startDeathFx();
@@ -1111,20 +1034,9 @@ function checkHenCarHits() {
   if (state.phase === "idle") return;
   const midHop = state.phase === "animating" && state.hopT < 0.98;
   for (const car of state.cars) {
-    // Mid-hop: only the death rush may splat — random traffic waits for landing
-    if (midHop && !(car.rush || car.hitCue)) continue;
     if (!carOverlapsHen(car)) continue;
-    if (
-      state.roundId &&
-      !state.pendingDeath &&
-      !car.hitCue &&
-      !car.rush
-    ) {
-      vaultPastHen(car);
-      car.exiting = true;
-      car.speed = cappedExitSpeed(car, HEN_CLEAR_SPEED);
-      continue;
-    }
+    // Only exception: car was already stopped/parked when the hen started her jump
+    if (midHop && (car.stopped || car.parking) && !(car.rush || car.hitCue)) continue;
     killFromCollision(car);
     return;
   }
@@ -1373,30 +1285,107 @@ function survive(step) {
 }
 
 function startDeathFx() {
-  if (state.hitAnim > 0) return; // already dying
-  state.hitAnim = 4; // keep dead hen visible for 4 seconds
+  if (state.hitAnim > 0) return;
+  // Timeline (hitAnim counts down) — match official CR2 recording:
+  //  1.65→0.95  flat dead body + eyes/parts explode outward
+  //  0.95→0     gold pad + roast icon only (body gone)
+  state.hitAnim = 1.65;
   state.pendingDeath = false;
+  if (!state.deathPhase) state.deathPhase = "burst";
+  // Pin hen to the death-lane pad (do not ride the car)
+  if (state.hitLane >= 0) {
+    state.chickenX = state.sidewalk + state.hitLane * state.laneW + state.laneW / 2;
+  }
+  triggerSplatBurst();
+  scheduleReset(3000);
+  els.playBtn.hidden = false;
+  disablePlayFor(2200);
+}
+
+/** Instant pop-apart: eyes shoot sideways, feet/beak/feathers spray like the official game. */
+function triggerSplatBurst() {
   const cy = padY(state.viewH);
-  const featherImgs = [assets.feather, assets.fluff, assets.feather];
-  for (let i = 0; i < 16; i++) {
-    const img = featherImgs[i % featherImgs.length];
-    const ang = (Math.PI * 2 * i) / 16 + Math.random() * 0.35;
-    const spd = 70 + Math.random() * 200;
-    state.feathers.push({
-      x: state.chickenX + (Math.random() - 0.5) * 24,
-      y: cy - 24 + (Math.random() - 0.5) * 24,
-      vx: Math.cos(ang) * spd,
-      vy: Math.sin(ang) * spd * 0.5 - 100 - Math.random() * 140,
-      rot: Math.random() * Math.PI * 2,
-      vr: (Math.random() - 0.5) * 10,
-      life: 1.2 + Math.random() * 0.8,
-      size: 14 + Math.random() * 16,
-      img,
+  const cx = state.chickenX;
+  state.feathers = [];
+  state.particles = [];
+
+  // Impact flash lines
+  for (let i = 0; i < 14; i++) {
+    const ang = (Math.PI * 2 * i) / 14 + Math.random() * 0.15;
+    state.particles.push({
+      x: cx,
+      y: cy - 8,
+      vx: Math.cos(ang) * (320 + Math.random() * 220),
+      vy: Math.sin(ang) * (320 + Math.random() * 220),
+      life: 0.18 + Math.random() * 0.12,
+      color: "#ffffff",
+      line: true,
+      len: 22 + Math.random() * 28,
+      ang,
     });
   }
-  scheduleReset(4000);
-  els.playBtn.hidden = false;
-  disablePlayFor(3000);
+
+  // Official burst: big yellow eyes fly left/right first
+  const eyeShots = [
+    { img: assets.partA, size: 72, vx: -420 - Math.random() * 120, vy: -160 - Math.random() * 80 },
+    { img: assets.partB, size: 78, vx: 420 + Math.random() * 120, vy: -140 - Math.random() * 90 },
+  ];
+  for (const e of eyeShots) {
+    state.feathers.push({
+      x: cx,
+      y: cy - 22,
+      vx: e.vx,
+      vy: e.vy,
+      rot: Math.random() * 0.6 - 0.3,
+      vr: (Math.random() - 0.5) * 10,
+      life: 1.35 + Math.random() * 0.35,
+      size: e.size,
+      img: e.img,
+      part: true,
+    });
+  }
+
+  const parts = [
+    { img: assets.partC, size: 48, spd: 400 },
+    { img: assets.partD, size: 44, spd: 380 },
+    { img: assets.partE, size: 56, spd: 420 },
+    { img: assets.partF, size: 36, spd: 340 },
+    { img: assets.fluff, size: 30, spd: 280 },
+    { img: assets.feather, size: 28, spd: 300 },
+    { img: assets.partC, size: 40, spd: 360 },
+    { img: assets.partE, size: 50, spd: 390 },
+  ];
+  parts.forEach((p, i) => {
+    const ang = -Math.PI * 0.95 + (Math.PI * 1.9 * i) / Math.max(1, parts.length - 1) + (Math.random() - 0.5) * 0.35;
+    const spd = p.spd * (0.85 + Math.random() * 0.55);
+    state.feathers.push({
+      x: cx + (Math.random() - 0.5) * 18,
+      y: cy - 14 + (Math.random() - 0.5) * 14,
+      vx: Math.cos(ang) * spd,
+      vy: Math.sin(ang) * spd - 140 - Math.random() * 160,
+      rot: Math.random() * Math.PI * 2,
+      vr: (Math.random() - 0.5) * 22,
+      life: 1.15 + Math.random() * 0.7,
+      size: p.size,
+      img: p.img,
+      part: true,
+    });
+  });
+  for (let i = 0; i < 18; i++) {
+    const ang = Math.random() * Math.PI * 2;
+    const spd = 120 + Math.random() * 280;
+    state.feathers.push({
+      x: cx + (Math.random() - 0.5) * 20,
+      y: cy - 12,
+      vx: Math.cos(ang) * spd,
+      vy: Math.sin(ang) * spd * 0.5 - 150 - Math.random() * 100,
+      rot: Math.random() * Math.PI * 2,
+      vr: (Math.random() - 0.5) * 16,
+      life: 0.85 + Math.random() * 0.55,
+      size: 14 + Math.random() * 20,
+      img: i % 2 ? assets.feather : assets.fluff,
+    });
+  }
 }
 
 function kill() {
@@ -1429,7 +1418,7 @@ function kill() {
       state.hitCar._prevY = state.hitCar.y;
       killFromCollision(state.hitCar);
     }
-  }, 900);
+  }, 3500);
 }
 
 function sampleRoadColor() {
@@ -1489,19 +1478,29 @@ function draw(dt) {
     const cy = padY(h);
     const cleared = state.step > i;
     const next = state.phase !== "ended" && state.step === i;
-    drawManhole(cx, cy, mults()[i], cleared, next);
+    drawManhole(cx, cy, mults()[i], cleared, next, i);
   }
 
   drawCars(roadTop, roadBot, dt);
   drawBarriers(h);
   drawFinish(lanes, h);
-  // Car touches hen first; after impact, splat is on top of the car briefly
-  if (state.pendingDeath || state.hitAnim > 1.2) {
+  // Death layering: burst body under traffic; roast lives on the pad itself
+  if (state.hitAnim > 0 && state.deathPhase === "burst") {
+    drawChicken(h);
+    for (const car of state.cars) {
+      if (car.gone) continue;
+      if (car.lane === state.hitLane || carSharesHenColumn(car)) {
+        drawOneCar(car, roadTop);
+      }
+    }
+  } else if (state.pendingDeath) {
     drawChicken(h);
     drawRushCarOverlay(h);
+  } else if (state.deathPhase !== "roast") {
+    drawRushCarOverlay(h);
+    drawChicken(h);
   } else {
     drawRushCarOverlay(h);
-    drawChicken(h);
   }
   drawFeathers(dt);
   drawParticles(dt);
@@ -1514,7 +1513,14 @@ function draw(dt) {
   }
 
   if (state.hitAnim > 0) {
+    const prev = state.hitAnim;
     state.hitAnim = Math.max(0, state.hitAnim - dt);
+    // After the pop-apart, settle to gold roast pad (body disappears)
+    if (state.deathPhase === "burst" && state.hitAnim <= 0.95 && prev > 0.95) {
+      state.deathPhase = "roast";
+    }
+  } else if (state.deathPhase === "burst") {
+    state.deathPhase = "roast";
   }
 }
 
@@ -1543,33 +1549,52 @@ function drawFinish(lanes, h) {
   }
 }
 
-function drawManhole(cx, cy, mult, cleared, isNext) {
+function drawManhole(cx, cy, mult, cleared, isNext, lane = -1) {
   const size = 96;
-  const key = cleared ? "luke_gold" : "luke_default";
+  const isDeathPad =
+    state.phase === "ended" &&
+    state.hitLane >= 0 &&
+    lane === state.hitLane &&
+    (state.deathPhase === "burst" || state.deathPhase === "roast" || state.deathPhase === "splat");
+  const key = cleared || isDeathPad ? "luke_gold" : "luke_default";
   ctx.save();
   ctx.translate(cx, cy);
-  if (!cleared && !isNext) ctx.globalAlpha = 0.55;
+  if (!cleared && !isNext && !isDeathPad) ctx.globalAlpha = 0.55;
   const ok = drawObj(key, -size / 2, -size / 2, size, size);
   if (!ok) {
     ctx.beginPath();
     ctx.ellipse(0, 0, 46, 40, 0, 0, Math.PI * 2);
-    ctx.fillStyle = cleared ? "#3dc55b" : "#5c5c5c";
+    ctx.fillStyle = cleared || isDeathPad ? "#e8b84a" : "#5c5c5c";
     ctx.fill();
   }
-  if (isNext) {
-    ctx.beginPath();
-    ctx.ellipse(0, 0, size * 0.52, size * 0.52, 0, 0, Math.PI * 2);
-    ctx.strokeStyle = "rgba(255,255,255,0.95)";
-    ctx.lineWidth = 4;
-    ctx.stroke();
+  if (isDeathPad) {
+    const roast = assets.roast;
+    // During burst, roast fades in under the flat body; full once roast phase
+    const roastAlpha =
+      state.deathPhase === "roast" || state.hitAnim <= 0
+        ? 1
+        : Math.max(0.15, 1 - (state.hitAnim - 0.95) / 0.7);
+    if (roast && roast.complete && roast.naturalWidth) {
+      const rw = 58;
+      const rh = rw * (roast.naturalHeight / roast.naturalWidth);
+      ctx.globalAlpha = roastAlpha;
+      ctx.drawImage(roast, -rw / 2, -rh / 2 - 2, rw, rh);
+    }
+  } else {
+    if (isNext) {
+      ctx.beginPath();
+      ctx.ellipse(0, 0, size * 0.52, size * 0.52, 0, 0, Math.PI * 2);
+      ctx.strokeStyle = "rgba(255,255,255,0.95)";
+      ctx.lineWidth = 4;
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = cleared ? "#1a1a1a" : "#ffffff";
+    ctx.font = "700 15px Montserrat, sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(fmtMult(mult), 0, 2);
   }
-  // multiplier text (coef sits on luke)
-  ctx.globalAlpha = 1;
-  ctx.fillStyle = cleared ? "#1a1a1a" : "#ffffff";
-  ctx.font = "700 15px Montserrat, sans-serif";
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  ctx.fillText(fmtMult(mult), 0, 2);
   ctx.restore();
 }
 
@@ -1770,21 +1795,10 @@ function drawCars(roadTop, roadBot, dt) {
     }
     drawOneCar(car, roadTop);
 
-    const canCollide =
-      state.phase !== "animating" || state.hopT >= 0.98;
+    const midHopCar = state.phase === "animating" && state.hopT < 0.98;
+    const canCollide = !midHopCar || car.rush || car.hitCue ||
+      (!car.stopped && !car.parking);
     if (canCollide && carOverlapsHen(car)) {
-      // During a live round, random cars must clear past the hen — not turbo-kill
-      if (
-        state.roundId &&
-        !state.pendingDeath &&
-        !car.hitCue &&
-        !car.rush
-      ) {
-        vaultPastHen(car);
-        car.exiting = true;
-        car.speed = cappedExitSpeed(car, HEN_CLEAR_SPEED);
-        continue;
-      }
       killFromCollision(car);
       if (state.hitAnim > 0) break;
     }
@@ -1797,7 +1811,7 @@ function drawBarriers(h) {
   for (const b of state.barriers) {
     b.life = Math.min(1, b.life + 0.12);
     const x = state.sidewalk + b.lane * state.laneW + state.laneW / 2;
-    const y = barrierY(h);
+    const y = barrierY(h) - BARRIER_VISUAL_OFFSET;
     ctx.save();
     ctx.globalAlpha = b.life;
     const sw = 110;
@@ -1826,56 +1840,132 @@ function drawRushCarOverlay(h) {
   ctx.restore();
 }
 
+/* Idle hen eye layout in source PNG space (chicken_idle_eyes.png = 202×220).
+   Official CR2: pupils glance / dart to look around — not a continuous spin. */
+const HEN_IMG_W = 202;
+const HEN_IMG_H = 220;
+const HEN_EYES = [
+  { ix: 91.3, iy: 69.4, r: 34 },
+  { ix: 152.2, iy: 56.3, r: 32.5 },
+];
+/** Discrete look targets (nx,ny in -1..1 inside the eye). Hold then snap — like the video. */
+const HEN_LOOKS = [
+  { nx: 0.55, ny: 0.05, hold: 0.95 }, // look toward the road (right)
+  { nx: 0.15, ny: -0.4, hold: 0.55 }, // glance up
+  { nx: -0.5, ny: 0.0, hold: 0.85 }, // look left
+  { nx: 0.1, ny: 0.2, hold: 0.65 }, // slight down / forward
+  { nx: 0.45, ny: -0.25, hold: 0.7 }, // up-right
+  { nx: -0.25, ny: -0.3, hold: 0.6 }, // up-left
+  { nx: 0.05, ny: -0.05, hold: 0.8 }, // center / forward
+];
+const HEN_LOOK_SNAP = 0.1; // seconds to dart between looks
+
+function henLookOffset() {
+  const t = performance.now() / 1000;
+  let total = 0;
+  for (const L of HEN_LOOKS) total += L.hold + HEN_LOOK_SNAP;
+  let u = t % total;
+  for (let i = 0; i < HEN_LOOKS.length; i++) {
+    const cur = HEN_LOOKS[i];
+    const next = HEN_LOOKS[(i + 1) % HEN_LOOKS.length];
+    if (u < cur.hold) {
+      return { nx: cur.nx, ny: cur.ny };
+    }
+    u -= cur.hold;
+    if (u < HEN_LOOK_SNAP) {
+      // Quick ease — almost a snap, slight smooth so it doesn’t stutter
+      const k = u / HEN_LOOK_SNAP;
+      const e = k * k * (3 - 2 * k);
+      return {
+        nx: cur.nx + (next.nx - cur.nx) * e,
+        ny: cur.ny + (next.ny - cur.ny) * e,
+      };
+    }
+    u -= HEN_LOOK_SNAP;
+  }
+  const L = HEN_LOOKS[0];
+  return { nx: L.nx, ny: L.ny };
+}
+
+/** Draw looking pupils on top of the no-pupil idle sprite (same transform as body). */
+function drawHenEyes(dw, dh, ox, oy) {
+  const look = henLookOffset();
+  const sx = dw / HEN_IMG_W;
+  const sy = dh / HEN_IMG_H;
+  for (let i = 0; i < HEN_EYES.length; i++) {
+    const e = HEN_EYES[i];
+    const cx = ox + e.ix * sx;
+    const cy = oy + e.iy * sy;
+    const reach = e.r * sx * 0.42;
+    const px = cx + look.nx * reach;
+    const py = cy + look.ny * reach;
+    const pr = Math.max(2.2, e.r * sx * 0.13);
+    ctx.beginPath();
+    ctx.fillStyle = "#1a120c";
+    ctx.arc(px, py, pr, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.fillStyle = "rgba(255,255,255,0.55)";
+    ctx.arc(px - pr * 0.28, py - pr * 0.28, pr * 0.28, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
 function drawChicken(h) {
   const hop = state.hopT < 1 ? Math.sin(state.hopT * Math.PI) * 34 : 0;
-  const x = state.chickenX;
-  // Plant feet on the same Y as manhole centers
-  const y = padY(h) - hop;
   const hit = state.hitAnim;
-  // Dead hen only after a real hit — never on cash-out (phase ended, hitLane still -1)
   const dying =
     hit > 0 ||
     (state.phase === "ended" && state.hitLane >= 0 && !state.pendingDeath);
 
+  // Roast phase: body is gone — only gold pad icon remains
+  if (dying && (state.deathPhase === "roast" || (state.deathPhase === "splat" && hit <= 0))) {
+    return;
+  }
+
+  const x = state.chickenX;
+  const y = padY(h) - hop;
   ctx.save();
   ctx.translate(x, y);
 
-  // soft ground shadow at feet (origin)
   ctx.fillStyle = "rgba(0,0,0,0.28)";
   ctx.beginPath();
-  ctx.ellipse(0, 4, dying ? 36 : 28, dying ? 12 : 9, 0, 0, Math.PI * 2);
+  ctx.ellipse(0, 4, dying ? 40 : 28, dying ? 14 : 9, 0, 0, Math.PI * 2);
   ctx.fill();
 
-  if (dying) {
-    // Official look: flattened splat chicken + floating feathers (no red flash)
+  if (dying && state.deathPhase === "burst") {
+    // Official: white flat body with scratch marks; eyes/parts are separate particles
+    const fade = Math.min(1, Math.max(0.35, (hit - 0.95) / 0.55));
+    ctx.globalAlpha = fade;
+    const splat = assets.splat;
     const dead = assets.chickDead;
-    const age = Math.max(0, 4 - Math.max(hit, 0)); // seconds since death started
-    const progress = Math.min(1, age / 0.18); // pop-in
-    const flat = 0.72 + Math.min(1, age / 0.25) * 0.28;
-    ctx.scale(0.92 * (0.85 + progress * 0.2), 0.92 * flat);
-    if (dead.complete && dead.naturalWidth) {
-      const dw = 168;
+    if (splat && splat.complete && splat.naturalWidth) {
+      const dw = 112;
+      const dh = dw * (splat.naturalHeight / splat.naturalWidth);
+      ctx.save();
+      ctx.scale(1.2, 0.58);
+      ctx.drawImage(splat, -dw / 2, -dh * 0.52, dw, dh);
+      ctx.restore();
+    } else if (dead && dead.complete && dead.naturalWidth) {
+      const dw = 108;
       const dh = dw * (dead.naturalHeight / dead.naturalWidth);
-      ctx.drawImage(dead, -dw / 2, -dh * 0.78, dw, dh);
-    } else {
-      // fallback splat
-      ctx.fillStyle = "#fff";
-      ctx.beginPath();
-      ctx.ellipse(0, -20, 52, 36, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.strokeStyle = "#222";
-      ctx.lineWidth = 3;
-      ctx.stroke();
+      ctx.save();
+      ctx.scale(1.12, 0.62);
+      ctx.drawImage(dead, -dw / 2, -dh * 0.55, dw, dh);
+      ctx.restore();
     }
-  } else {
+  } else if (!dying) {
     const img = assets.chick;
     const s = 0.72;
     ctx.scale(s, s);
     if (img.complete && img.naturalWidth) {
       const dw = 118;
       const dh = dw * (img.naturalHeight / img.naturalWidth);
-      // Anchor at feet so the hen stands on the pad
-      ctx.drawImage(img, -dw / 2, -dh + 8, dw, dh);
+      const ox = -dw / 2;
+      const oy = -dh + 8;
+      ctx.drawImage(img, ox, oy, dw, dh);
+      // Same nervous circling pupils as the official recording
+      drawHenEyes(dw, dh, ox, oy);
     }
   }
   ctx.restore();
@@ -1913,13 +2003,27 @@ function drawParticles(dt) {
     p.life -= dt;
     p.x += p.vx * dt;
     p.y += p.vy * dt;
-    p.vy += 260 * dt;
+    if (!p.line) p.vy += 260 * dt;
     if (p.life <= 0) return false;
-    ctx.globalAlpha = Math.max(0, p.life);
-    ctx.fillStyle = p.color;
-    ctx.beginPath();
-    ctx.arc(p.x, p.y, 3, 0, Math.PI * 2);
-    ctx.fill();
+    ctx.save();
+    ctx.globalAlpha = Math.max(0, Math.min(1, p.life * (p.line ? 4 : 1)));
+    if (p.line) {
+      ctx.strokeStyle = p.color || "#fff";
+      ctx.lineWidth = 3;
+      ctx.lineCap = "round";
+      const len = p.len || 20;
+      const a = p.ang || 0;
+      ctx.beginPath();
+      ctx.moveTo(p.x, p.y);
+      ctx.lineTo(p.x + Math.cos(a) * len, p.y + Math.sin(a) * len);
+      ctx.stroke();
+    } else {
+      ctx.fillStyle = p.color;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, 3, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
     return true;
   });
   ctx.globalAlpha = 1;
@@ -1996,15 +2100,62 @@ function wire() {
   els.goBtn.onclick = onGo;
   els.cashBtn.onclick = onCash;
 
-  els.menuBtn.onclick = () => (els.menuDrawer.hidden = false);
-  els.closeMenu.onclick = () => (els.menuDrawer.hidden = true);
-  document.getElementById("musicToggle")?.addEventListener("click", () => {
-    setMusicOn(!musicOn);
-  });
-  syncMusicToggle();
-  els.resetBalance.onclick = () => {
-    alert("Balance is your Gundu wallet — top up from the app.");
+  els.menuBtn.onclick = () => {
+    els.menuDrawer.hidden = false;
+    // sync toggle button state
+    const active = soundEnabled;
+    els.soundToggle.textContent = active ? "ON" : "OFF";
+    els.soundToggle.classList.toggle("active", active);
+    loadBetHistory();
   };
+  els.closeMenu.onclick = () => (els.menuDrawer.hidden = true);
+
+  els.soundToggle.onclick = () => {
+    setSoundEnabled(!soundEnabled);
+    els.soundToggle.textContent = soundEnabled ? "ON" : "OFF";
+    els.soundToggle.classList.toggle("active", soundEnabled);
+    // update mute icon
+    const waves = document.getElementById("soundWaves");
+    const ml1 = document.getElementById("soundMuteLine");
+    const ml2 = document.getElementById("soundMuteLine2");
+    if (waves) waves.style.display = soundEnabled ? "" : "none";
+    if (ml1) ml1.style.display = soundEnabled ? "none" : "";
+    if (ml2) ml2.style.display = soundEnabled ? "none" : "";
+  };
+
+  els.historyRefresh?.addEventListener("click", () => loadBetHistory());
+
+  async function loadBetHistory() {
+    if (!els.betHistoryList) return;
+    els.betHistoryList.innerHTML = '<div class="HistoryLoading">Loading…</div>';
+    try {
+      const data = await api("/history/");
+      const rows = data.history || [];
+      if (!rows.length) {
+        els.betHistoryList.innerHTML = '<div class="HistoryLoading">No bets yet.</div>';
+        return;
+      }
+      els.betHistoryList.innerHTML = rows.map(r => {
+        const net = typeof r.net === "number" ? r.net : (parseFloat(r.payout) - parseFloat(r.bet));
+        const isWin = net > 0;
+        const sign = net >= 0 ? "+" : "";
+        const cls = isWin ? "pos" : "neg";
+        const statusIcon = r.status === "cashed_out" ? "✓" :
+                           r.status === "crashed"    ? "✗" :
+                           r.status === "completed"  ? "★" : "○";
+        return `<div class="HistoryRow">
+          <span class="hr-date">${r.created_at}</span>
+          <span class="hr-bet">₹${r.bet}</span>
+          <span class="hr-step">${statusIcon} L${r.step}</span>
+          <span class="hr-win ${cls}">${sign}₹${Math.abs(net).toFixed(0)}</span>
+        </div>`;
+      }).join("");
+    } catch (e) {
+      els.betHistoryList.innerHTML =
+        `<div class="HistoryLoading">${e?.message || "Could not load history."}</div>`;
+    }
+  }
+
   els.fsBtn?.addEventListener("click", () => {
     if (!document.fullscreenElement) document.documentElement.requestFullscreen?.();
     else document.exitFullscreen?.();

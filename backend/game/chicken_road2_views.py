@@ -84,6 +84,33 @@ def chicken_road2_forfeit(request, round_id):
 
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
+def chicken_road2_history(request):
+    from game.models import ChickenRoad2Round
+
+    rounds = (
+        ChickenRoad2Round.objects
+        .filter(user=request.user)
+        .exclude(status=ChickenRoad2Round.Status.ACTIVE)
+        .order_by("-created_at")[:20]
+    )
+    data = []
+    for r in rounds:
+        net = r.payout - r.bet
+        data.append({
+            "id": str(r.id),
+            "bet": r.bet,
+            "payout": r.payout,
+            "net": net,
+            "status": r.status,
+            "difficulty": r.difficulty,
+            "step": r.step,
+            "created_at": r.created_at.strftime("%d %b %H:%M"),
+        })
+    return Response({"history": data})
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
 def chicken_road2_round(request, round_id):
     from game.models import ChickenRoad2Round
 

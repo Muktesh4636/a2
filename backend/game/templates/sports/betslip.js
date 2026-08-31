@@ -1,4 +1,5 @@
 /* Floating bet slip — place sports/cricket bets via Gundu wallet JWT */
+/* v=6: refresh/clear JWT on 401 so Place bet works after session expiry */
 (function (global) {
   const STAKES = [50, 100, 200, 500, 1000];
   const state = { pick: null, stake: 100, busy: false, openBets: [], betsUrl: '', cashOutBusy: null };
@@ -13,6 +14,33 @@
     return global.GunduSportsAuth && GunduSportsAuth.getAccessToken
       ? GunduSportsAuth.getAccessToken()
       : '';
+  }
+
+  async function authToken() {
+    if (global.GunduSportsAuth && GunduSportsAuth.ensureAccessToken) {
+      return GunduSportsAuth.ensureAccessToken();
+    }
+    return token();
+  }
+
+  async function refreshAuthToken() {
+    if (global.GunduSportsAuth && GunduSportsAuth.refreshAccessToken) {
+      return GunduSportsAuth.refreshAccessToken();
+    }
+    return '';
+  }
+
+  function clearAuth() {
+    if (global.GunduSportsAuth && GunduSportsAuth.clearTokens) {
+      GunduSportsAuth.clearTokens();
+    }
+  }
+
+  function loginHref() {
+    if (global.GunduSportsAuth && GunduSportsAuth.loginUrl) {
+      return GunduSportsAuth.loginUrl();
+    }
+    return '/login?next=' + encodeURIComponent(location.pathname + location.search);
   }
 
   function injectStyles() {
@@ -489,6 +517,23 @@
     toast._t = setTimeout(() => { t.style.display = 'none'; }, 2400);
   }
 
+  async function postBet(auth, pick, stake) {
+    return fetch(pick.betUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+        Authorization: 'Bearer ' + auth,
+      },
+      body: JSON.stringify({
+        event_id: pick.eventId,
+        market_id: pick.marketId,
+        outcome_id: pick.outcomeId,
+        stake,
+      }),
+    });
+  }
+
   async function placeBet() {
     const pick = state.pick;
     if (!pick || state.busy) return;
@@ -496,31 +541,32 @@
       toast('Open the match page to place this bet');
       return;
     }
-    const auth = token();
+    let auth = await authToken();
     if (!auth) {
-      document.getElementById('betslipMsg').textContent = 'Login required to place bets';
+      const msgEl = document.getElementById('betslipMsg');
+      if (msgEl) {
+        msgEl.innerHTML = `Login required to place bets. <a href="${loginHref()}" style="color:#d4af37">Login</a>`;
+      }
       return;
     }
     const stake = Math.max(1, parseInt(String(state.stake), 10) || 0);
     state.busy = true;
     render();
     try {
-      const r = await fetch(pick.betUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Accept: 'application/json',
-          Authorization: 'Bearer ' + auth,
-        },
-        body: JSON.stringify({
-          event_id: pick.eventId,
-          market_id: pick.marketId,
-          outcome_id: pick.outcomeId,
-          stake,
-        }),
-      });
+      let r = await postBet(auth, pick, stake);
+      if (r.status === 401) {
+        auth = await refreshAuthToken();
+        if (auth) r = await postBet(auth, pick, stake);
+      }
       const data = await r.json().catch(() => ({}));
-      if (!r.ok) throw new Error(data.error || data.detail || `Bet failed (${r.status})`);
+      if (r.status === 401) {
+        clearAuth();
+        throw new Error('Session expired — please login again');
+      }
+      if (!r.ok) {
+        const detail = data.error || data.detail || (Array.isArray(data.messages) && data.messages[0]?.message);
+        throw new Error(detail || `Bet failed (${r.status})`);
+      }
       toast(`Bet placed · ₹${stake} @ ${data.odds || pick.oddsDisplay}`);
       if (global.GunduSportsAuth && GunduSportsAuth.loadWalletBalance) {
         GunduSportsAuth.loadWalletBalance('wallet');
@@ -529,7 +575,15 @@
       notifyBetsChanged();
       close();
     } catch (e) {
-      document.getElementById('betslipMsg').textContent = e.message || 'Could not place bet';
+      const msgEl = document.getElementById('betslipMsg');
+      if (msgEl) {
+        const text = e.message || 'Could not place bet';
+        if (/session expired|login/i.test(text)) {
+          msgEl.innerHTML = `${esc(text)}. <a href="${loginHref()}" style="color:#d4af37">Login</a>`;
+        } else {
+          msgEl.textContent = text;
+        }
+      }
       state.busy = false;
       render();
     }

@@ -1656,17 +1656,30 @@ def cricket_match_detail(request, match_id: int):
     """
     matches = _cache_get(REDIS_KEY_MATCHES)
     if matches is None:
-        fetch_and_cache_cricket_data()
+        try:
+            fetch_and_cache_cricket_data()
+        except Exception:
+            logger.exception("cricket_match_detail: live fetch failed")
         matches = _cache_get(REDIS_KEY_MATCHES) or []
 
-    match = next((m for m in matches if m["id"] == match_id), None)
+    match = next((m for m in matches if m.get("id") == match_id), None)
+    # Fall back to upcoming/odds caches (same as place-bet / live-odds) so brief
+    # live-list gaps do not hard-404 the match screen.
+    if match is None:
+        match = _find_cached_match(match_id)
+    elif not (match.get("odds") or {}).get("markets"):
+        enriched = _find_cached_match(match_id)
+        if enriched and (enriched.get("odds") or {}).get("markets"):
+            match = {**match, "odds": enriched.get("odds") or {}}
 
     if match is None:
         return Response(
             {
                 "error": "not_found",
-                "detail": f"No live match with id={match_id}. "
+                "detail": f"No live/upcoming match with id={match_id}. "
                           f"Get current match ids from /api/cricket/matches/",
+                "status": "UNAVAILABLE",
+                "event_id": match_id,
             },
             status=status.HTTP_404_NOT_FOUND,
         )
@@ -2020,7 +2033,10 @@ def cricket_live_odds(request):
 
     matches = _cache_get(REDIS_KEY_MATCHES)
     if matches is None:
-        fetch_and_cache_cricket_data()
+        try:
+            fetch_and_cache_cricket_data()
+        except Exception:
+            logger.exception("cricket_live_odds: live fetch failed")
         matches = _cache_get(REDIS_KEY_MATCHES) or []
 
     match = next((m for m in matches if m.get("id") == event_id), None)
@@ -2031,19 +2047,32 @@ def cricket_live_odds(request):
             match = enriched
         elif not (match.get("odds") or {}).get("markets"):
             match = {**match, "odds": enriched.get("odds") or match.get("odds") or {}}
-    if match is None:
-        return Response(
-            {
-                "error": "not_found",
-                "detail": f"No match with event_id={event_id}",
-            },
-            status=status.HTTP_404_NOT_FOUND,
-        )
 
     last_sync = _cache_get(REDIS_KEY_SYNC_TS)
+    if match is None:
+        # Soft response (200) so the match UI can keep polling without
+        # flashing "Failed (404). Retry" during brief feed gaps / match end.
+        return Response(
+            {
+                "event_id": event_id,
+                "match_name": "",
+                "competition": "",
+                "current_innings": "",
+                "clock_status": "ENDED",
+                "status": "UNAVAILABLE",
+                "scores": [],
+                "all_markets": [],
+                "poll_interval": 15,
+                "last_sync": last_sync,
+                "detail": f"No match with event_id={event_id}",
+            }
+        )
+
     clock_status = ((match.get("clock") or {}).get("status") or "").upper()
     poll = 30 if clock_status in ("", "NOT_STARTED") else 5
-    return Response(_match_odds_detail_payload(match, poll_interval=poll, last_sync=last_sync))
+    payload = _match_odds_detail_payload(match, poll_interval=poll, last_sync=last_sync)
+    payload["status"] = "LIVE" if clock_status == "STARTED" else (clock_status or "OK")
+    return Response(payload)
 
 
 @api_view(["GET"])
@@ -2077,18 +2106,27 @@ def cricket_preevent_odds(request):
     if match is None:
         match = _find_cached_match(event_id)
     if match is None:
+        # Soft 200 — keep UI from flashing Failed(404) when pre event leaves cache.
         return Response(
             {
-                "error": "not_found",
+                "event_id": event_id,
+                "match_name": "",
+                "competition": "",
+                "current_innings": "",
+                "clock_status": "ENDED",
+                "status": "UNAVAILABLE",
+                "scores": [],
+                "all_markets": [],
+                "poll_interval": 30,
+                "last_sync": _cache_get(REDIS_KEY_SYNC_TS),
                 "detail": f"No pre-event with event_id={event_id}",
-            },
-            status=status.HTTP_404_NOT_FOUND,
+            }
         )
 
     last_sync = _cache_get(REDIS_KEY_SYNC_TS)
-    return Response(
-        _match_odds_detail_payload(match, poll_interval=30, last_sync=last_sync)
-    )
+    payload = _match_odds_detail_payload(match, poll_interval=30, last_sync=last_sync)
+    payload["status"] = "PRE"
+    return Response(payload)
 
 
 # ---------------------------------------------------------------------------

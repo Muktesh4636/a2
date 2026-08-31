@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { createSession, getSession, loadPlayerId, placePlay, savePlayerId } from './api'
 import { ANIM_MS, DEFAULT_BET, MAX_MULT, POCKETS, type Mult } from './gameConfig'
+import { playSpinSound, stopSpinSound } from './spinSound'
 
 const SIZE = 360
 const CX = SIZE / 2
@@ -93,6 +94,7 @@ export default function App() {
   const onPlay = useCallback(async () => {
     if (!playerId || spinning || bet > balance || bet < 1) return
     setSpinning(true)
+    playSpinSound()
     setLastMult(null)
     setLastPayout(null)
     setError(null)
@@ -101,12 +103,14 @@ export default function App() {
       const r = await placePlay(playerId, bet)
       setRotation((prev) => rotationFor(r.target_angle, prev))
       window.setTimeout(() => {
+        stopSpinSound()
         setBalance(Number(r.balance))
         setLastMult(Number(r.multiplier) as Mult)
         setLastPayout(Number(r.payout))
         setSpinning(false)
       }, ANIM_MS)
     } catch (e) {
+      stopSpinSound()
       setBalance((b) => b + bet)
       setSpinning(false)
       setError(e instanceof Error ? e.message : 'Failed')

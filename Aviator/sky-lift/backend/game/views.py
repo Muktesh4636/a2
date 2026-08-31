@@ -3,6 +3,7 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from . import gundu_wallet
 from . import services
 from .models import Bet, GameRound
 from .serializers import (
@@ -16,19 +17,37 @@ from .serializers import (
 TOKEN_HEADER = 'HTTP_X_PLAYER_TOKEN'
 
 
+def _jwt_from_request(request: Request) -> str:
+    return gundu_wallet.extract_bearer(request.headers.get('Authorization'))
+
+
 def player_from_request(request: Request):
+    jwt = _jwt_from_request(request)
+    if jwt:
+        try:
+            return services.get_or_create_gundu_player(jwt)
+        except gundu_wallet.WalletBridgeError as exc:
+            return Response({'detail': exc.message}, status=exc.status)
     token = request.META.get(TOKEN_HEADER) or request.headers.get('X-Player-Token')
     return services.get_or_create_player(token)
 
 
+def _unwrap_player(result):
+    if isinstance(result, Response):
+        return None, result
+    return result, None
+
+
 class BootstrapView(APIView):
-    """Create/load demo player + open round + history."""
+    """Create/load player + open round + history (Gundu wallet when JWT present)."""
 
     authentication_classes: list = []
     permission_classes: list = []
 
     def get(self, request: Request) -> Response:
-        player = player_from_request(request)
+        player, err = _unwrap_player(player_from_request(request))
+        if err:
+            return err
         round_obj = services.ensure_open_round()
         round_data = RoundSerializer(round_obj).data
         if round_obj.status == GameRound.Status.WAITING:
@@ -56,12 +75,13 @@ class CurrentRoundView(APIView):
 
     def get(self, request: Request) -> Response:
         round_obj = services.ensure_open_round()
-        player = player_from_request(request)
+        player, err = _unwrap_player(player_from_request(request))
+        if err:
+            return err
         bets = Bet.objects.filter(player=player, round=round_obj).exclude(
             status=Bet.Status.CANCELLED
         )
         data = RoundSerializer(round_obj).data
-        # Only reveal crash_point once flying has started (demo trust model)
         if round_obj.status == GameRound.Status.WAITING:
             data = {**data, 'crash_point': None}
         return Response(
@@ -80,13 +100,17 @@ class PlaceBetView(APIView):
     def post(self, request: Request) -> Response:
         ser = PlaceBetSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
-        player = player_from_request(request)
+        player, err = _unwrap_player(player_from_request(request))
+        if err:
+            return err
+        jwt = _jwt_from_request(request)
         try:
             bet = services.place_bet(
                 player=player,
                 panel=ser.validated_data['panel'],
                 amount=ser.validated_data['amount'],
                 auto_cashout=ser.validated_data.get('auto_cashout'),
+                jwt=jwt or None,
             )
         except ValueError as exc:
             return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
@@ -100,13 +124,13 @@ class PlaceBetView(APIView):
 
 
 class StartRoundView(APIView):
-    """Frontend calls this when waiting ends — returns crash_point to drive animation."""
-
     authentication_classes: list = []
     permission_classes: list = []
 
     def post(self, request: Request) -> Response:
-        player = player_from_request(request)
+        player, err = _unwrap_player(player_from_request(request))
+        if err:
+            return err
         round_id = request.data.get('round_id')
         try:
             round_obj = services.start_round(round_id)
@@ -131,12 +155,16 @@ class CashOutView(APIView):
     def post(self, request: Request) -> Response:
         ser = CashOutSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
-        player = player_from_request(request)
+        player, err = _unwrap_player(player_from_request(request))
+        if err:
+            return err
+        jwt = _jwt_from_request(request)
         try:
             bet = services.cash_out(
                 player=player,
                 panel=ser.validated_data['panel'],
                 mult=ser.validated_data['mult'],
+                jwt=jwt or None,
             )
         except ValueError as exc:
             return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
@@ -154,7 +182,9 @@ class CrashRoundView(APIView):
     permission_classes: list = []
 
     def post(self, request: Request) -> Response:
-        player = player_from_request(request)
+        player, err = _unwrap_player(player_from_request(request))
+        if err:
+            return err
         round_id = request.data.get('round_id')
         try:
             round_obj = services.crash_round(round_id)
@@ -171,13 +201,13 @@ class CrashRoundView(APIView):
 
 
 class NewRoundView(APIView):
-    """After crash hold — open the next waiting round."""
-
     authentication_classes: list = []
     permission_classes: list = []
 
     def post(self, request: Request) -> Response:
-        player = player_from_request(request)
+        player, err = _unwrap_player(player_from_request(request))
+        if err:
+            return err
         flying = GameRound.objects.filter(status=GameRound.Status.FLYING).first()
         if flying:
             services.crash_round(str(flying.id))

@@ -188,6 +188,74 @@ const CATEGORIES = [
 
 const byId = new Map(GAMES.map((g) => [g.id, g]));
 
+/** Temporary global disable — remove id from this set to re-enable. */
+const DISABLED_GAMES = new Set([]);
+
+/** Per-user casino tile hides (username lowercase → game ids). */
+const HIDDEN_GAMES_BY_USERNAME = {};
+
+let lobbyUsername = "";
+
+function gameAllowed(id) {
+  if (!id) return true;
+  if (DISABLED_GAMES.has(id)) return false;
+  const hidden = HIDDEN_GAMES_BY_USERNAME[lobbyUsername];
+  if (!hidden) return true;
+  return !hidden.has(id);
+}
+
+function filterGames(list) {
+  return (list || []).filter((g) => g && gameAllowed(g.id));
+}
+
+function parseJwtPayload(token) {
+  try {
+    const part = String(token || "").split(".")[1];
+    if (!part) return null;
+    const b64 = part.replace(/-/g, "+").replace(/_/g, "/");
+    const json = atob(b64);
+    return JSON.parse(json);
+  } catch (_) {
+    return null;
+  }
+}
+
+async function resolveLobbyUsername() {
+  try {
+    const cached =
+      localStorage.getItem("gundu_username") ||
+      localStorage.getItem("username") ||
+      sessionStorage.getItem("username") ||
+      "";
+    if (cached) return String(cached).trim().toLowerCase();
+  } catch (_) {}
+
+  const token = readGunduAccessToken();
+  if (!token) return "";
+
+  try {
+    const res = await fetch("/api/auth/profile/", {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (res.ok) {
+      const data = await res.json();
+      const name = String(data.username || "").trim().toLowerCase();
+      if (name) {
+        try {
+          localStorage.setItem("gundu_username", name);
+          localStorage.setItem("username", name);
+        } catch (_) {}
+        return name;
+      }
+    }
+  } catch (_) {}
+
+  const payload = parseJwtPayload(token);
+  const claim =
+    payload?.username || payload?.user_name || payload?.preferred_username || "";
+  return String(claim || "").trim().toLowerCase();
+}
+
 function readAccessToken() {
   return readGunduAccessToken();
 }
@@ -197,11 +265,14 @@ function withToken(path) {
 }
 
 function homeUrlWithToken() {
-  const url = withToken("/");
-  return url.pathname + url.search;
+  try {
+    return withToken("/").toString();
+  } catch (_) {
+    return location.origin + "/";
+  }
 }
 
-/** Casino back always goes home — never through games the user opened earlier. */
+/** Casino back always goes to site home — never casino history / prior games. */
 function leaveCasino() {
   stopPreview();
   try {
@@ -209,15 +280,17 @@ function leaveCasino() {
       window.AndroidBridge.goHome();
       return;
     }
-    if (window.AndroidBridge && typeof window.AndroidBridge.goBack === "function") {
-      window.AndroidBridge.goBack();
-      return;
-    }
   } catch (_) {}
-  location.replace(homeUrlWithToken());
+  // Prefer absolute home URL so we never bounce around /casino history.
+  try {
+    location.replace(homeUrlWithToken());
+  } catch (_) {
+    location.href = location.origin + "/";
+  }
 }
 
 function playGame(game) {
+  if (!game || !gameAllowed(game.id)) return;
   if (!readAccessToken()) {
     showPlayLoginPrompt(game);
     return;
@@ -232,6 +305,9 @@ function playGame(game) {
       window.AndroidBridge.openGame(game.id, url);
       return;
     }
+  } catch (_) {}
+  try {
+    sessionStorage.setItem("gundu_from_casino", "1");
   } catch (_) {}
   location.href = url;
 }
@@ -327,6 +403,15 @@ function clearPressTimer() {
 function stopPreview() {
   clearPressTimer();
   if (previewCard) {
+    previewCard.querySelectorAll("iframe").forEach((iframe) => {
+      try {
+        iframe.contentWindow?.stopGameAudio?.();
+        iframe.contentWindow?.silenceGameAudio?.(true);
+      } catch (_) {}
+      try {
+        iframe.src = "about:blank";
+      } catch (_) {}
+    });
     previewCard.classList.remove("is-previewing");
     previewCard.querySelectorAll(".card-preview").forEach((el) => el.remove());
     previewCard = null;
@@ -364,7 +449,9 @@ function startPreview(card, game) {
   iframe.style.width = `${tileW}px`;
   iframe.style.height = `${tileH}px`;
   iframe.setAttribute("loading", "eager");
-  iframe.setAttribute("allow", "autoplay");
+  // No autoplay in lobby previews — prevents orphan Unity audio after close.
+  iframe.setAttribute("allow", "");
+  iframe.setAttribute("muted", "");
   iframe.referrerPolicy = "no-referrer-when-downgrade";
 
   wrap.appendChild(iframe);
@@ -818,7 +905,7 @@ function renderBanners() {
   track.innerHTML = "";
   dots.innerHTML = "";
 
-  const slides = BANNER_IDS.map((id) => byId.get(id)).filter(Boolean);
+  const slides = filterGames(BANNER_IDS.map((id) => byId.get(id)).filter(Boolean));
   slides.forEach((game, i) => {
     const slide = document.createElement("article");
     slide.className = "banner-slide";
@@ -899,18 +986,18 @@ function renderBanners() {
 }
 
 function popularGames() {
-  return [...GAMES]
-    .sort((a, b) => (PLAYING_BASE[b.id] || 0) - (PLAYING_BASE[a.id] || 0))
-    .slice(0, 12);
+  return filterGames(
+    [...GAMES].sort((a, b) => (PLAYING_BASE[b.id] || 0) - (PLAYING_BASE[a.id] || 0))
+  ).slice(0, 12);
 }
 
 let activeCategory = "all";
 
 function gamesForCategory(id) {
-  if (!id || id === "all") return GAMES;
+  if (!id || id === "all") return filterGames(GAMES);
   const cat = CATEGORIES.find((c) => c.id === id);
-  if (!cat) return GAMES;
-  return cat.ids.map((gid) => byId.get(gid)).filter(Boolean);
+  if (!cat) return filterGames(GAMES);
+  return filterGames(cat.ids.map((gid) => byId.get(gid)).filter(Boolean));
 }
 
 function setCategory(id) {
@@ -963,7 +1050,7 @@ function render() {
 
   renderBanners();
 
-  const continueIds = loadContinueIds();
+  const continueIds = loadContinueIds().filter((id) => gameAllowed(id));
   const continueSection = document.getElementById("continueSection");
   const continueRail = document.getElementById("continueRail");
   if (continueIds.length) {
@@ -985,7 +1072,7 @@ function render() {
   const catHost = document.getElementById("categorySections");
   catHost.innerHTML = "";
   CATEGORIES.forEach((cat) => {
-    const games = cat.ids.map((id) => byId.get(id)).filter(Boolean);
+    const games = filterGames(cat.ids.map((id) => byId.get(id)).filter(Boolean));
     if (!games.length) return;
 
     const section = document.createElement("section");
@@ -1023,7 +1110,9 @@ function syncTopPlayBtn() {
   if (!el) return;
   if (readAccessToken()) {
     el.textContent = "Play";
-    el.setAttribute("href", withToken("/game/?v=8").pathname + withToken("/game/?v=8").search);
+    const fallback = popularGames()[0] || filterGames(GAMES)[0];
+    const path = fallback?.path || "/casino/";
+    el.setAttribute("href", withToken(path).pathname + withToken(path).search);
   } else {
     el.textContent = "Login";
     el.setAttribute("href", "/login?next=" + encodeURIComponent("/casino/"));
@@ -1070,23 +1159,37 @@ try {
   }
 } catch (_) {}
 
-readAccessToken();
-syncTopPlayBtn();
-window.addEventListener("storage", () => {
-  readAccessToken();
-  syncTopPlayBtn();
-});
-window.addEventListener("kokoroko-auth", () => {
-  readAccessToken();
-  syncTopPlayBtn();
-});
 function syncDesktopClass() {
   const w = Math.max(window.innerWidth || 0, document.documentElement.clientWidth || 0);
   const desktop = w >= 768;
   document.documentElement.classList.toggle("is-desktop", desktop);
   document.documentElement.classList.toggle("is-wide", w >= 1200);
 }
+
+readAccessToken();
 syncDesktopClass();
 window.addEventListener("resize", syncDesktopClass);
-render();
+
+void (async () => {
+  lobbyUsername = await resolveLobbyUsername();
+  syncTopPlayBtn();
+  render();
+})();
+
+window.addEventListener("storage", () => {
+  readAccessToken();
+  void resolveLobbyUsername().then((u) => {
+    lobbyUsername = u;
+    syncTopPlayBtn();
+    render();
+  });
+});
+window.addEventListener("kokoroko-auth", () => {
+  readAccessToken();
+  void resolveLobbyUsername().then((u) => {
+    lobbyUsername = u;
+    syncTopPlayBtn();
+    render();
+  });
+});
 setInterval(tickPlayingCounts, 2200);

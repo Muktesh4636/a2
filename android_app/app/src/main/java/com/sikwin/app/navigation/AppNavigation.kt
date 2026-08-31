@@ -240,6 +240,7 @@ fun AppNavigation(
                 putExtra(GameWebViewActivity.EXTRA_URL, gameUrl)
                 putExtra(GameWebViewActivity.EXTRA_TOKEN, authToken ?: "")
                 putExtra(GameWebViewActivity.EXTRA_REFRESH, refreshToken ?: "")
+                putExtra(GameWebViewActivity.EXTRA_FROM_HOME, true)
             }
             context.startActivity(intent)
         } catch (e: Exception) {

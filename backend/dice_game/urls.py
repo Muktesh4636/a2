@@ -98,6 +98,7 @@ urlpatterns = [
     path('api/auth/profile/photo/', accounts_views.update_profile_photo, name='update_profile_photo'),
     path('api/auth/referral-data/', accounts_views.referral_data, name='referral_data'),
     path('api/auth/wallet/', accounts_views.WalletView.as_view(), name='wallet'),
+    path('api/auth/wallet/game-adjust/', accounts_views.WalletGameAdjustView.as_view(), name='wallet_game_adjust'),
     path('api/auth/transactions/', accounts_views.TransactionList.as_view(), name='transactions'),
     path('api/auth/extract-utr/', accounts_views.extract_utr, name='extract_utr'),
     path('api/auth/process-screenshot/', accounts_views.process_payment_screenshot, name='process_payment_screenshot'),
@@ -269,6 +270,7 @@ urlpatterns = [
     path('api/chicken-road/<uuid:round_id>/cashout/', chicken_road_views.chicken_road_cashout, name='chicken_road_cashout'),
 
     # Chicken Road 2 — JWT + wallet
+    path('api/chicken-road-2/history/', chicken_road2_views.chicken_road2_history, name='chicken_road2_history'),
     path('api/chicken-road-2/config/', chicken_road2_views.chicken_road2_config, name='chicken_road2_config'),
     path('api/chicken-road-2/me/', chicken_road2_views.chicken_road2_me, name='chicken_road2_me'),
     path('api/chicken-road-2/start/', chicken_road2_views.chicken_road2_start, name='chicken_road2_start'),
