@@ -539,7 +539,10 @@ fun HotGamesGrid(
     onNavigate: (String) -> Unit,
     onRequireLogin: () -> Unit
 ) {
-    val games = listOf(GameItem("GUNDU ATA", "gundu_ata", Color(0xFF1565C0)))
+    val games = listOf(
+        GameItem("CASINO", "casino", Color(0xFFE65100)),
+        GameItem("GUNDU ATA", "gundu_ata", Color(0xFF1565C0))
+    )
     val context = LocalContext.current
     
     // List of fake winning names and amounts

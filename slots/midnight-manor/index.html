@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Midnight Manor</title>
+  <link href="https://fonts.googleapis.com/css2?family=Creepster&family=Nosifer&family=Nunito:wght@700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="scene">
+    <div class="game">
+      <h1 class="logo"><span>MIDNIGHT</span> <span class="manor">MANOR</span></h1>
+      <section class="stage">
+        <div class="brew">
+          <span>BREW</span>
+          <strong id="brewMult">x1</strong>
+          <div class="vials" id="vials"></div>
+        </div>
+        <div class="reel-shell">
+          <div class="reels" id="reels"></div>
+        </div>
+        <div class="win-banner hidden" id="winBanner">WIN <span id="winAmount">0</span></div>
+        <div class="fs-badge hidden" id="fsBadge">FREE SPINS <span id="fsCount">0</span></div>
+      </section>
+      <footer class="hud">
+        <div class="coffin bet-panel">
+          <button type="button" id="betMinus" class="adj">−</button>
+          <div><span>BET</span><strong id="bet">1.00</strong></div>
+          <button type="button" id="betPlus" class="adj">+</button>
+        </div>
+        <div class="cauldron"><span>WIN</span><strong id="lastWin">0.00</strong></div>
+        <div class="coffin"><span>BALANCE</span><strong id="balance">1000.00</strong></div>
+        <button type="button" id="spinBtn" class="spin"><span>SPIN</span></button>
+        <button type="button" id="autoBtn" class="auto">AUTO</button>
+      </footer>
+      <p class="hint">GHOST = WILD · POTIONS RAISE MULTIPLIER · 3 SPELLBOOKS = FREE SPINS</p>
+    </div>
+  </div>
+  <script src="game.js"></script>
+</body>
+</html>

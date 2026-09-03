@@ -49,25 +49,18 @@ button {
   min-height: 100dvh;
   width: min(100%, 420px);
   margin: 0 auto;
-  padding: 16px 16px 28px;
+  padding: max(52px, calc(env(safe-area-inset-top) + 44px)) 16px 28px;
   display: flex;
   flex-direction: column;
   gap: 16px;
+  justify-content: flex-start;
 }
 
 .cm-topbar {
-  display: grid;
-  grid-template-columns: 1fr auto 1fr;
+  display: flex;
   align-items: center;
-  gap: 8px;
-}
-
-.cm-logo {
-  font-family: Georgia, 'Times New Roman', serif;
-  font-style: italic;
-  font-weight: 700;
-  font-size: 1.35rem;
-  letter-spacing: -0.02em;
+  justify-content: space-between;
+  gap: 12px;
 }
 
 .cm-balance {
@@ -81,6 +74,7 @@ button {
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   font-size: 0.9rem;
+  margin-left: auto;
 }
 
 .cm-bal-dot {
@@ -102,7 +96,7 @@ button {
   height: 34px;
   border-radius: 50%;
   border: 1.5px solid #3b4a66;
-  justify-self: end;
+  flex-shrink: 0;
   background:
     radial-gradient(circle at 50% 38%, #94a3b8 0 34%, transparent 35%),
     linear-gradient(#64748b, #64748b) center 72% / 52% 26% no-repeat;
@@ -125,7 +119,7 @@ button {
 
 .cm-title-block {
   text-align: center;
-  margin-top: 8px;
+  margin-top: 4px;
 }
 
 .cm-title {
@@ -198,15 +192,7 @@ button {
 }
 
 .reel-strip.is-spinning {
-  transition: transform 3.1s cubic-bezier(0.12, 0.7, 0.08, 1);
-}
-
-.reel-window:nth-child(2) .reel-strip.is-spinning {
-  transition-duration: 3.25s;
-}
-
-.reel-window:nth-child(3) .reel-strip.is-spinning {
-  transition-duration: 3.4s;
+  transition: transform 3.5s cubic-bezier(0.12, 0.7, 0.08, 1);
 }
 
 .reel-cell {

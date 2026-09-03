@@ -14,59 +14,133 @@ const $ = (id) => document.getElementById(id);
 
 const board = createRingBoard($("board"));
 
-/** Per-item tick pool — one tick each time a symbol crosses the window. */
-const tickUrl = new URL("./sounds/spin-tick.wav", location.href).href;
-const tickPool = Array.from({ length: 8 }, () => {
+const SPIN_CRUISE_MS = 3800;
+const SPIN_STOP_MS = 1700;
+const SPIN_STOP_TURBO_MS = 900;
+
+/**
+ * Continuous cruise roll — full spin.wav loop (original wheel sound).
+ * Slows with the reel when coasting.
+ */
+const soundBase = new URL("./sounds/", location.href).href;
+
+const makeAudio = (file, { loop = false, volume = 0.85 } = {}) => {
   try {
-    const a = new Audio(tickUrl);
+    const a = new Audio(`${soundBase}${file}`);
     a.preload = "auto";
-    a.volume = 0.72;
+    a.loop = loop;
+    a.volume = volume;
+    a.load();
     return a;
   } catch (_) {
     return null;
   }
-}).filter(Boolean);
-let tickI = 0;
-const playTick = () => {
-  if (!tickPool.length) return;
-  const a = tickPool[tickI++ % tickPool.length];
+};
+
+const cruiseA = makeAudio("spin.wav", { loop: true, volume: 0.8 });
+const cruiseB = makeAudio("spin.wav", { loop: true, volume: 0.8 });
+
+let cruiseActive = false;
+let cruiseKeepalive = null;
+let cruisePrimary = "a";
+let coastRaf = 0;
+
+const rateForCoast = (t) => {
+  const eased = 1 - Math.pow(1 - Math.min(1, Math.max(0, t)), 2.75);
+  return Math.max(0.28, 1.05 - eased * 0.77);
+};
+
+const activeCruise = () => (cruisePrimary === "a" ? cruiseA : cruiseB);
+const otherCruise = () => (cruisePrimary === "a" ? cruiseB : cruiseA);
+
+const clearCoastRaf = () => {
+  if (coastRaf) {
+    cancelAnimationFrame(coastRaf);
+    coastRaf = 0;
+  }
+};
+
+const clearCruiseKeepalive = () => {
+  if (cruiseKeepalive) {
+    clearInterval(cruiseKeepalive);
+    cruiseKeepalive = null;
+  }
+};
+
+const playOneCruise = (a) => {
+  if (!a) return;
   try {
-    a.currentTime = 0;
-    void a.play().catch(() => {});
+    a.loop = true;
+    a.volume = 0.8;
+    a.playbackRate = 1.05;
+    a.muted = false;
+    if (a.paused || a.ended || a.currentTime > 0.2) a.currentTime = 0;
+    const p = a.play();
+    if (p && typeof p.catch === "function") void p.catch(() => {});
   } catch (_) {}
 };
 
-/** Ending flourish of the original spin.wav (last ~2.5s). */
-const endSfx = (() => {
+const stopOneCruise = (a) => {
+  if (!a) return;
   try {
-    const a = new Audio(new URL("./sounds/spin-end.wav", location.href).href);
-    a.preload = "auto";
-    a.volume = 0.9;
-    return a;
-  } catch (_) {
-    return null;
-  }
-})();
-
-const playEndSound = () => {
-  if (!endSfx) return;
-  try {
-    endSfx.pause();
-    endSfx.currentTime = 0;
-    endSfx.volume = 0.9;
-    void endSfx.play().catch(() => {});
+    a.pause();
+    a.currentTime = 0;
+    a.playbackRate = 1;
+    a.volume = 0.8;
   } catch (_) {}
+};
+
+const playCruiseSound = () => {
+  clearCoastRaf();
+  cruiseActive = true;
+  clearCruiseKeepalive();
+  playOneCruise(cruiseA);
+  cruisePrimary = "a";
+  stopOneCruise(cruiseB);
+  cruiseKeepalive = setInterval(() => {
+    if (!cruiseActive) return;
+    const cur = activeCruise();
+    if (cur && !cur.paused && !cur.ended) return;
+    cruisePrimary = cruisePrimary === "a" ? "b" : "a";
+    playOneCruise(activeCruise());
+    stopOneCruise(otherCruise());
+  }, 300);
+};
+
+const stopCruiseSound = () => {
+  cruiseActive = false;
+  clearCoastRaf();
+  clearCruiseKeepalive();
+  stopOneCruise(cruiseA);
+  stopOneCruise(cruiseB);
+};
+
+/** Slow the roll sound down with the reel coast (same duration as stopOn). */
+const playEndSound = (durationMs = SPIN_STOP_MS) => {
+  clearCruiseKeepalive();
+  cruiseActive = false;
+  const cur = activeCruise();
+  if (!cur || cur.paused) return;
+  clearCoastRaf();
+  const startAt = performance.now();
+  const tick = (ts) => {
+    const t = Math.min(1, (ts - startAt) / Math.max(1, durationMs));
+    try {
+      cur.playbackRate = rateForCoast(t);
+      cur.volume = Math.max(0, 0.8 * (1 - t * 0.85));
+    } catch (_) {}
+    if (t < 1) coastRaf = requestAnimationFrame(tick);
+    else stopCruiseSound();
+  };
+  coastRaf = requestAnimationFrame(tick);
 };
 
 const stopEndSound = () => {
-  if (!endSfx) return;
-  try {
-    endSfx.pause();
-    endSfx.currentTime = 0;
-  } catch (_) {}
+  stopCruiseSound();
 };
 
-const reel = createReel($("core"), { onTick: playTick });
+// Reel has no per-tick SFX — continuous loop covers the scroll sound.
+const reel = createReel($("core"));
 
 let balance = 0;
 let bet = 10;
@@ -81,11 +155,6 @@ let payoutAmt = 0;
 
 const fmt = (n) => Number(n || 0).toLocaleString("en-IN");
 const delay = (ms) => new Promise((r) => setTimeout(r, turbo ? ms * 0.45 : ms));
-
-// Fast cruise, then ~2.5s coast matching spin-end.wav + per-item ticks.
-const SPIN_CRUISE_MS = 3800;
-const SPIN_STOP_MS = 2500;
-const SPIN_STOP_TURBO_MS = 1000;
 
 const isSnap = (data) =>
   !!data &&
@@ -215,9 +284,9 @@ const spin = async () => {
   balance = +(balance - bet);
   render();
 
-  // Per-item ticks while cruising; ending flourish starts with the coast.
+  // Start continuous roll sound + reel together (no per-tick lag)
+  playCruiseSound();
   reel.startSpin();
-  const stopBudgetMs = turbo ? SPIN_STOP_TURBO_MS : SPIN_STOP_MS;
   const cruiseMs = turbo ? Math.round(SPIN_CRUISE_MS * 0.45) : SPIN_CRUISE_MS;
   const spunAt = performance.now();
 
@@ -226,8 +295,11 @@ const spin = async () => {
     const wait = Math.max(0, cruiseMs - (performance.now() - spunAt));
     if (wait) await new Promise((r) => setTimeout(r, wait));
     if (!applyState(data)) await recoverState();
-    playEndSound();
-    await reel.stopOn(data.drop || "fire", { turbo, durationMs: stopBudgetMs });
+    playEndSound(turbo ? SPIN_STOP_TURBO_MS : SPIN_STOP_MS);
+    await reel.stopOn(data.drop || "fire", {
+      turbo,
+      durationMs: turbo ? SPIN_STOP_TURBO_MS : SPIN_STOP_MS,
+    });
     toast(data.message);
     await syncBoard(true, data.changed || null);
   } catch (e) {
@@ -236,8 +308,11 @@ const spin = async () => {
     try {
       if (isSnap(e.data)) {
         applyState(e.data);
-        playEndSound();
-        await reel.stopOn(e.data.drop || reel.getFace(), { turbo: true, durationMs: SPIN_STOP_TURBO_MS });
+        playEndSound(SPIN_STOP_TURBO_MS);
+        await reel.stopOn(e.data.drop || reel.getFace(), {
+          turbo: true,
+          durationMs: SPIN_STOP_TURBO_MS,
+        });
       } else {
         balance = prevBalance;
         await recoverState();

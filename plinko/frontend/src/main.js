@@ -4,6 +4,12 @@ import {
   formatMultiplier,
   bucketColor,
 } from "./multipliers.js";
+import {
+  playBucketSound,
+  playDropSound,
+  playPegSound,
+  unlockGameAudio,
+} from "./sounds.js";
 
 function captureGunduToken() {
   try {
@@ -430,6 +436,8 @@ function dropBall(betAmount) {
     return false;
   }
 
+  unlockGameAudio();
+  playDropSound();
   state.balance -= betAmount;
   balanceEl.textContent = money(state.balance);
 
@@ -525,6 +533,7 @@ function settleBall(ballId, bucketIndex) {
     `${formatMultiplier(mult)}× → you got ₹${money(payout)}`,
     payout > 0 ? "win" : "lose"
   );
+  playBucketSound(mult);
 
   pushHistory({
     mult,
@@ -565,6 +574,7 @@ Events.on(engine, "collisionStart", (event) => {
     const peg = ball === a ? b : a;
     if (!ball || !peg || peg.label !== "peg") continue;
     pegFlashes.set(peg.id, performance.now() + 120);
+    playPegSound();
   }
 });
 
@@ -782,6 +792,7 @@ function stopAuto() {
 }
 
 function onBet() {
+  unlockGameAudio();
   if (state.mode === "auto") {
     if (state.autoRunning) {
       stopAuto();

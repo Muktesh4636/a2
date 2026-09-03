@@ -15,6 +15,14 @@ import {
 } from './game/logic'
 import './App.css'
 import { fetchGunduWalletBalance } from './gunduWallet'
+import {
+  playBetSound,
+  playCashOutSound,
+  playGemSound,
+  playMineSound,
+  playTapSound,
+  unlockGameAudio,
+} from './gameSounds'
 
 function emptyBoard(): Cell[] {
   return Array.from({ length: 25 }, () => ({
@@ -103,6 +111,8 @@ export default function App() {
 
   async function handleStart() {
     if (busy || betAmount <= 0 || betAmount > balance) return
+    unlockGameAudio()
+    playBetSound()
     setBusy(true)
     setError(null)
     try {
@@ -117,10 +127,19 @@ export default function App() {
 
   async function handleReveal(index: number) {
     if (busy || status !== 'playing' || !gameId) return
+    // Must unlock + tick in the same gesture as the tap (before await)
+    unlockGameAudio()
+    playTapSound()
     setBusy(true)
     setError(null)
     try {
       const game = await revealTile(gameId, index)
+      const hitMine =
+        game.status === 'lost' ||
+        game.triggered_mine === index ||
+        game.triggered_mine != null
+      if (hitMine) playMineSound()
+      else playGemSound(game.gems_found)
       applyGame(game)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not reveal tile')
@@ -131,6 +150,8 @@ export default function App() {
 
   async function handleCashOut() {
     if (busy || status !== 'playing' || !gameId || gemsFound <= 0) return
+    unlockGameAudio()
+    playCashOutSound()
     setBusy(true)
     setError(null)
     try {

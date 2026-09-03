@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Gold Rush Saloon</title>
+  <link href="https://fonts.googleapis.com/css2?family=Rye&family=Roboto+Condensed:wght@600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="scene">
+    <div class="game">
+      <header class="top">
+        <div class="jackpot">JACKPOT <strong id="jackpot">125000.00</strong></div>
+        <h1 class="logo"><span>GOLD RUSH</span> <span class="saloon">SALOON</span></h1>
+        <div class="lines">25 LINES</div>
+      </header>
+      <section class="stage">
+        <div class="reel-shell">
+          <div class="reels" id="reels"></div>
+        </div>
+        <div class="win-banner hidden" id="winBanner">WIN <span id="winAmount">0</span></div>
+        <div class="boom-flash hidden" id="boomFlash">DYNAMITE RESPIN!</div>
+      </section>
+      <footer class="hud">
+        <div class="chip bet-panel">
+          <button type="button" id="betMinus" class="adj">−</button>
+          <div><span>BET</span><strong id="bet">2.50</strong></div>
+          <button type="button" id="betPlus" class="adj">+</button>
+        </div>
+        <div class="plank"><span>WIN</span><strong id="lastWin">0.00</strong></div>
+        <div class="chip"><span>BALANCE</span><strong id="balance">1234.50</strong></div>
+        <button type="button" id="spinBtn" class="spin"><span>SPIN</span></button>
+        <button type="button" id="autoBtn" class="auto">AUTO</button>
+      </footer>
+      <p class="hint">BADGE = WILD · DYNAMITE EXPLODES &amp; RESPIN · WANTED = SCATTER</p>
+    </div>
+  </div>
+  <script src="game.js"></script>
+</body>
+</html>

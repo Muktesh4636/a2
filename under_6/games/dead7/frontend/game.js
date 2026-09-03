@@ -153,10 +153,12 @@ async function dealIn(rig) {
   rig.style.transition = "transform 0.75s cubic-bezier(0.16, 0.84, 0.22, 1.08)";
   rig.dataset.state = "dealt";
   setLanded(rig, true);
+  try { window.CardSfx && CardSfx.deal(); } catch (_) {}
   await animateMs(780);
 }
 
 async function flipCard(card) {
+  try { window.CardSfx && CardSfx.flip(); } catch (_) {}
   setFlipping(card, true);
   card.dataset.flip = "out";
   await animateMs(380);
@@ -193,6 +195,7 @@ function updateUI() {
 
 function setSide(side) {
   if (state.busy) return;
+  try { window.CardSfx && CardSfx.bet(); } catch (_) {}
   state.side = side;
   els.lanes.forEach((lane) => {
     lane.classList.toggle("selected", lane.dataset.side === side);
@@ -201,8 +204,10 @@ function setSide(side) {
 }
 
 function setChip(amount) {
+  try { window.CardSfx && CardSfx.unlock(); } catch (_) {}
   if (state.busy) return;
   state.chip = amount;
+  try { window.CardSfx && CardSfx.bet(); } catch (_) {}
   els.chips.forEach((chip) => {
     chip.classList.toggle("selected", Number(chip.dataset.amount) === amount);
   });
@@ -210,6 +215,7 @@ function setChip(amount) {
 }
 
 async function deal() {
+  try { window.CardSfx && CardSfx.unlock(); } catch (_) {}
   if (state.busy || !state.side || !state.sessionId) return;
   if (state.bankroll < state.chip) {
     els.roundInfo.textContent = "Not enough bankroll";
@@ -280,11 +286,13 @@ async function deal() {
   state.bankroll = result.bankroll;
 
   if (result.won) {
+    try { window.CardSfx && CardSfx.win(); } catch (_) {}
     els.outcome.textContent = `You win ₹${result.payout}`;
     els.outcome.classList.add("win");
     els.roundInfo.textContent = `Sum ${result.sum} · You win ₹${result.payout}`;
   } else {
     els.outcome.textContent = `${resultLabel(result.result_side)} hits · you lose`;
+    try { window.CardSfx && CardSfx.lose(); } catch (_) {}
     els.outcome.classList.add("lose");
     els.roundInfo.textContent = `Sum ${result.sum} · ${resultLabel(result.result_side)} hits`;
   }

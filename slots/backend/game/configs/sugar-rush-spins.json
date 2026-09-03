@@ -1,0 +1,58 @@
+{
+  "id": "sugar-rush-spins",
+  "title": "Sugar Rush Spins",
+  "cols": 6,
+  "rows": 5,
+  "bets": [
+    0.5,
+    1,
+    2,
+    5,
+    10
+  ],
+  "symbols": [
+    {
+      "id": "heart",
+      "weight": 10
+    },
+    {
+      "id": "bean",
+      "weight": 12
+    },
+    {
+      "id": "orange",
+      "weight": 12
+    },
+    {
+      "id": "lolli",
+      "weight": 9
+    },
+    {
+      "id": "blue",
+      "weight": 11
+    },
+    {
+      "id": "star",
+      "weight": 7
+    },
+    {
+      "id": "rainbow",
+      "weight": 8
+    }
+  ],
+  "lines": null,
+  "mode": "cluster",
+  "free_spins_award": 0,
+  "pearl_goal": 0,
+  "scatter_trigger": null,
+  "cluster_pays": {
+    "5": 2,
+    "6": 3,
+    "7": 5,
+    "8": 8,
+    "9": 12,
+    "10": 18,
+    "11": 25,
+    "12": 40
+  }
+}

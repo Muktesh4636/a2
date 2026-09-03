@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Frozen Crown</title>
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@700;900&family=Nunito:wght@700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="scene">
+    <div class="game">
+      <h1 class="logo">FROZEN<span>CROWN</span></h1>
+      <section class="stage">
+        <button type="button" class="side-badge left" id="buyBtn">BUY<br>FREE SPINS<em id="buyCost">200.00</em></button>
+        <div class="reel-shell">
+          <div class="icicles"></div>
+          <div class="reels" id="reels"></div>
+        </div>
+        <div class="side-badge right">WILD<br>MULTIPLIER<em>×3</em></div>
+        <div class="win-banner hidden" id="winBanner">WIN <span id="winAmount">0</span></div>
+        <div class="fs-badge hidden" id="fsBadge">FREE SPINS <span id="fsCount">0</span></div>
+      </section>
+      <footer class="hud">
+        <button type="button" class="menu" id="menuBtn">☰</button>
+        <div class="panel bet-panel">
+          <button type="button" id="betMinus" class="adj">−</button>
+          <div><span>BET</span><strong id="bet">2.50</strong></div>
+          <button type="button" id="betPlus" class="adj">+</button>
+        </div>
+        <div class="panel"><span>BALANCE</span><strong id="balance">1234.50</strong></div>
+        <button type="button" id="spinBtn" class="spin"><span>SPIN</span></button>
+        <div class="panel"><span>WIN</span><strong id="lastWin">0.00</strong></div>
+        <button type="button" id="autoBtn" class="round">AUTO</button>
+      </footer>
+      <p class="hint">5×4 · 20 LINES · CROWN WILDS FREEZE FOR NEXT SPIN AT ×3</p>
+    </div>
+  </div>
+  <script src="game.js"></script>
+</body>
+</html>

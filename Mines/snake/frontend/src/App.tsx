@@ -5,6 +5,14 @@ import { fetchPlayer, playRound, type TrackTile } from './api/client'
 import { formatMoney } from './game/format'
 import './App.css'
 import { fetchGunduWalletBalance } from './gunduWallet'
+import {
+  DICE_LAND_MS,
+  DICE_ROLL_MS,
+  preloadDiceRollSound,
+  primeDiceRollSound,
+  startDiceRollSound,
+  stopDiceRollSound,
+} from './diceSound'
 
 const DEFAULT_TRACK: TrackTile[] = [
   { index: 0, type: 'start' },
@@ -43,6 +51,10 @@ export default function App() {
   const [busy, setBusy] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    preloadDiceRollSound()
+  }, [])
 
   useEffect(() => {
     let cancelled = false
@@ -85,6 +97,10 @@ export default function App() {
 
   async function handlePlay() {
     if (busy || betAmount <= 0 || betAmount > balance) return
+    // Unlock + start audio on the user gesture BEFORE any await / state paint lag
+    primeDiceRollSound()
+    startDiceRollSound()
+
     setBusy(true)
     setError(null)
     setLost(false)
@@ -102,15 +118,16 @@ export default function App() {
         throw new Error('Invalid game response')
       }
 
-      // Keep tumbling in the air for a natural throw (~1.2s total)
+      // Keep tumbling in the air for a natural throw
       const elapsed = performance.now() - rollStarted
-      await sleep(Math.max(0, 1200 - elapsed))
+      await sleep(Math.max(0, DICE_ROLL_MS - elapsed))
 
       setDie1(g.die1)
       setDie2(g.die2)
       setRolling(false)
       // Wait for decelerating land animation
-      await sleep(1300)
+      await sleep(DICE_LAND_MS)
+      stopDiceRollSound()
 
       // Animate marker from start along the path
       const steps = g.dice_sum
@@ -129,6 +146,7 @@ export default function App() {
       setLastMultiplier(Number(g.multiplier))
       if (state.track?.length) setTrack(state.track)
     } catch (err) {
+      stopDiceRollSound()
       setRolling(false)
       setError(err instanceof Error ? err.message : 'Could not play')
     } finally {

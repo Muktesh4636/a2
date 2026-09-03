@@ -4,7 +4,7 @@
  * into the middle strip copy — no wrap jumps / glitches.
  *
  * Optional onTick(): fired once per symbol/cell that crosses the window
- * so SFX can match each item.
+ * so SFX can match each item during cruise.
  */
 
 const REEL_FACES = ["earth", "water", "fire", "skull", "wind"];
@@ -71,10 +71,10 @@ export function createReel(coreEl, { onTick } = {}) {
   let raf = 0;
   let mode = "idle";
   let currentFace = "fire";
-  let stopTarget = 0;
   let lastTs = 0;
   let stopResolver = null;
   let lastTickCell = -1;
+  let stopWatchdog = null;
 
   const nFaces = REEL_FACES.length;
   const cyclePx = () => nFaces * cellH;
@@ -117,7 +117,15 @@ export function createReel(coreEl, { onTick } = {}) {
 
   const facePos = (face) => Math.max(0, REEL_FACES.indexOf(face)) * cellH;
 
+  const clearWatchdog = () => {
+    if (stopWatchdog) {
+      clearTimeout(stopWatchdog);
+      stopWatchdog = null;
+    }
+  };
+
   const setFaceInstant = (drop) => {
+    clearWatchdog();
     cancelAnimationFrame(raf);
     raf = 0;
     mode = "idle";
@@ -130,9 +138,15 @@ export function createReel(coreEl, { onTick } = {}) {
     lastTickCell = Math.floor(offset / cellH);
     paint();
     applyGlow(face);
+    if (stopResolver) {
+      const r = stopResolver;
+      stopResolver = null;
+      r(face);
+    }
   };
 
   const finishStop = () => {
+    clearWatchdog();
     mode = "idle";
     speed = 0;
     lastTs = 0;
@@ -150,9 +164,8 @@ export function createReel(coreEl, { onTick } = {}) {
 
   let stopStartOffset = 0;
   let stopStartTs = 0;
-  let stopDuration = 0;
+  let stopTotalMs = 0;
   let stopDist = 0;
-  let stopEase = 3;
 
   const frame = (ts) => {
     if (!lastTs) lastTs = ts;
@@ -174,10 +187,11 @@ export function createReel(coreEl, { onTick } = {}) {
 
     if (mode === "stop") {
       if (!stopStartTs) stopStartTs = ts;
-      const t = Math.min(1, (ts - stopStartTs) / stopDuration);
-      const eased = 1 - Math.pow(1 - t, stopEase);
+      const dur = Math.max(1, stopTotalMs);
+      const t = Math.min(1, (ts - stopStartTs) / dur);
+      // Ease-out quad — starts near cruise speed, slows to a stop (no crawl)
+      const eased = 1 - (1 - t) * (1 - t);
       offset = stopStartOffset + stopDist * eased;
-      emitTicks();
       paint();
       if (t >= 1) {
         finishStop();
@@ -190,6 +204,7 @@ export function createReel(coreEl, { onTick } = {}) {
 
   const startSpin = () => {
     measure();
+    clearWatchdog();
     if (stopResolver) {
       const done = stopResolver;
       stopResolver = null;
@@ -212,21 +227,45 @@ export function createReel(coreEl, { onTick } = {}) {
       const face = normalizeDrop(drop);
       currentFace = face;
 
-      // Coast duration should match spin-end.wav (~2.5s) so ticks + ending line up.
-      stopDuration = Math.max(400, durationMs ?? (turbo ? 900 : 2500));
-      stopEase = turbo ? 2 : 3.4;
+      stopTotalMs = Math.max(400, durationMs ?? (turbo ? 900 : 1700));
+      let T = stopTotalMs / 1000;
 
       const c = cyclePx();
       const posInCycle = ((offset % c) + c) % c;
       let delta = facePos(face) - posInCycle;
       if (delta < cellH * 0.35) delta += c;
-      // Enough symbols during coast so you hear distinct ticks slowing down
-      const extra = turbo ? 1 : 5;
-      stopDist = Math.max(cellH * 1.2, delta + extra * c);
+
+      // Ease-out quad: initial speed = 2*dist/T → dist = v0*T/2
+      const v0 = Math.max(cellH * 4, Math.min(speed || cellH * 9, cellH * 9));
+      const ideal = v0 * T * 0.5;
+
+      let best = delta;
+      let bestDiff = Math.abs(delta - ideal);
+      for (let k = 1; k <= 16; k++) {
+        const d = delta + k * c;
+        const diff = Math.abs(d - ideal);
+        if (diff < bestDiff) {
+          best = d;
+          bestDiff = diff;
+        }
+      }
+      while (best < cellH * 3) best += c;
+
+      // Prefer keeping travel near cruise — stretch time a little instead of crawling
+      let needV = (2 * best) / T;
+      if (needV < v0 * 0.85) {
+        // too little travel for this duration → shorten duration so it doesn't look stuck
+        stopTotalMs = Math.max(turbo ? 500 : 900, Math.round((2 * best) / v0 * 1000));
+        T = stopTotalMs / 1000;
+      } else if (needV > v0 * 1.12) {
+        // would surge → add duration instead of cutting travel to nothing
+        stopTotalMs = Math.min(turbo ? 1200 : 2400, Math.round((2 * best) / v0 * 1000));
+        T = stopTotalMs / 1000;
+      }
+
+      stopDist = best;
       stopStartOffset = offset;
       stopStartTs = 0;
-      stopTarget = offset + stopDist;
-      speed = 0;
       lastTickCell = Math.floor(offset / cellH);
 
       mode = "stop";
@@ -234,6 +273,12 @@ export function createReel(coreEl, { onTick } = {}) {
       cancelAnimationFrame(raf);
       lastTs = 0;
       raf = requestAnimationFrame(frame);
+
+      // Never leave the UI hanging if rAF stalls
+      clearWatchdog();
+      stopWatchdog = setTimeout(() => {
+        if (mode === "stop") finishStop();
+      }, stopTotalMs + 800);
     });
 
   requestAnimationFrame(() => requestAnimationFrame(() => setFaceInstant("fire")));

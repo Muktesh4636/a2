@@ -10,12 +10,12 @@
     <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate" />
     <meta http-equiv="Pragma" content="no-cache" />
     <title>Casino</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Poppins:wght@500;600;700;800;900&display=swap"
-      rel="stylesheet"
-    />
+    <style>
+      /* Local fallback — do not block first paint on fonts.googleapis.com */
+      html, body {
+        font-family: "Poppins", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      }
+    </style>
     <script>
       (function () {
         try {
@@ -28,10 +28,12 @@
         var desktop = w >= 768;
         document.documentElement.classList.toggle("is-desktop", desktop);
         document.documentElement.classList.toggle("is-wide", w >= 1200);
-        document.documentElement.dataset.lobby = "d8-20260824liveroulette";
+        document.documentElement.dataset.lobby = "d8-20260904slots13";
       })();
     </script>
-    <link rel="stylesheet" href="./lobby-20260818g.css?v=20260828theme2" />
+    <link rel="stylesheet" href="./lobby-20260818g.css?v=20260904slots13" />
+    <link rel="preload" as="image" href="./images/pharaohs-fortune.jpeg?v=8" />
+    <link rel="preload" as="image" href="./images/horse-racing.jpeg?v=8" />
   </head>
   <body>
     <div class="app">
@@ -119,6 +121,6 @@
       </main>
     </div>
     <script src="./theme.js?v=2"></script>
-    <script type="module" src="./lobby-20260818g.js?v=20260831gunduon"></script>
+    <script type="module" src="./lobby-20260818g.js?v=20260904slots13"></script>
   </body>
 </html>

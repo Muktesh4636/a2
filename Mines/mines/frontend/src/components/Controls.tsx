@@ -1,5 +1,6 @@
 import { formatMoney, formatMultiplier } from '../game/logic'
 import type { GameStatus } from '../game/logic'
+import { unlockGameAudio } from '../gameSounds'
 
 type Props = {
   balance: number
@@ -34,7 +35,7 @@ export function Controls({
   const canCashOut = playing && gemsFound > 0
 
   return (
-    <aside className="controls">
+    <aside className="controls" onPointerDown={unlockGameAudio} onTouchStart={unlockGameAudio}>
 <label className="field">
         <span>Bet Amount</span>
         <div className="field-row">

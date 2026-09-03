@@ -8,6 +8,7 @@ type Props = {
   totalMultiplier: number
   payout: number
   onToggle: (index: number) => void
+  onUnlockAudio?: () => void
 }
 
 export function Board({
@@ -17,6 +18,7 @@ export function Board({
   totalMultiplier,
   payout,
   onToggle,
+  onUnlockAudio,
 }: Props) {
   const selecting = status === 'selecting' || status === 'idle'
   const showResult = status === 'settled'
@@ -41,6 +43,7 @@ export function Board({
               type="button"
               className={classes.join(' ')}
               disabled={!selecting}
+              onPointerDown={() => onUnlockAudio?.()}
               onClick={() => onToggle(cell.index)}
               aria-pressed={cell.selected}
               aria-label={

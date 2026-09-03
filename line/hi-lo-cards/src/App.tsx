@@ -10,6 +10,13 @@ import {
 } from './api'
 import { Card3D } from './Card3D'
 import { DEFAULT_AUTO, DEFAULT_BET, type Card } from './gameConfig'
+import {
+  playBetSound,
+  playDealSound,
+  playFlipSound,
+  playResultSound,
+  unlockGameAudio,
+} from './gameSounds'
 
 const FLIP_MS = 700
 
@@ -63,8 +70,10 @@ export default function App() {
 
   const revealCard = (next: Card) =>
     new Promise<void>((resolve) => {
+      playDealSound()
       setFlipping(true)
       setCard(next)
+      window.setTimeout(() => playFlipSound(), 280)
       window.setTimeout(() => {
         setFlipping(false)
         resolve()
@@ -73,6 +82,8 @@ export default function App() {
 
   const onStart = useCallback(async () => {
     if (!playerId || busy || active || bet > balance) return
+    unlockGameAudio()
+    playBetSound()
     setBusy(true)
     setError(null)
     setFlash(null)
@@ -96,6 +107,8 @@ export default function App() {
   const onGuess = useCallback(
     async (choice: 'higher' | 'lower') => {
       if (!roundId || busy || !active) return
+      unlockGameAudio()
+      playBetSound()
       setBusy(true)
       setError(null)
       setFlash(null)
@@ -108,14 +121,17 @@ export default function App() {
         setBest(Number(r.best_streak_mult))
         setTotalWins(Number(r.total_wins))
         if (r.result === 'lose') {
+          playResultSound(false)
           setFlash('lose')
           setActive(false)
           setRoundId(null)
         } else if (r.status === 'cashed') {
+          playResultSound(true)
           setFlash('win')
           setActive(false)
           setRoundId(null)
         } else {
+          playResultSound(true)
           setFlash('win')
         }
       } catch (e) {
@@ -129,6 +145,7 @@ export default function App() {
 
   const onCash = useCallback(async () => {
     if (!roundId || busy || !active || streak < 1) return
+    unlockGameAudio()
     setBusy(true)
     try {
       const r = await cashout(roundId)
@@ -136,6 +153,7 @@ export default function App() {
       setBest(Number(r.best_streak_mult))
       setTotalWins(Number(r.total_wins))
       setMult(Number(r.multiplier))
+      playResultSound(true)
       setFlash('win')
       setActive(false)
       setRoundId(null)

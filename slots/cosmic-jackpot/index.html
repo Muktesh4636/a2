@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Cosmic Jackpot</title>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;800&family=Rajdhani:wght@600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="scene">
+    <div class="game">
+      <header class="top">
+        <div class="orbit">ORBIT <strong id="orbitMult">x1</strong></div>
+        <h1 class="logo">COSMIC JACKPOT</h1>
+        <div class="fs-badge hidden" id="fsBadge">FREE <span id="fsCount">0</span></div>
+      </header>
+      <section class="stage">
+        <div class="reel-shell">
+          <div class="reels" id="reels"></div>
+        </div>
+        <div class="win-banner hidden" id="winBanner">WIN <span id="winAmount">0</span></div>
+      </section>
+      <footer class="hud">
+        <div class="panel"><span>CREDITS</span><strong id="balance">8888.88</strong></div>
+        <div class="panel bet-panel">
+          <button type="button" id="betMinus" class="adj">−</button>
+          <div><span>BET</span><strong id="bet">1.00</strong></div>
+          <button type="button" id="betPlus" class="adj">+</button>
+        </div>
+        <button type="button" id="spinBtn" class="spin">SPIN</button>
+        <div class="panel"><span>WIN</span><strong id="lastWin">0.00</strong></div>
+        <button type="button" id="autoBtn" class="auto">AUTO</button>
+      </footer>
+      <p class="hint">5×4 · CASCADES RAISE ORBIT · 3 UFOS = FREE SPINS</p>
+    </div>
+  </div>
+  <script src="game.js"></script>
+</body>
+</html>

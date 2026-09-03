@@ -14,6 +14,14 @@ import {
   type MultiplierKey,
 } from './gameConfig'
 import { MultiplierBar } from './MultiplierBar'
+import {
+  playBetSound,
+  playResultSound,
+  playStopSound,
+  startScrollTicks,
+  stopScrollTicks,
+  unlockGameAudio,
+} from './gameSounds'
 import { offsetForTarget, Track } from './Track'
 
 export default function App() {
@@ -95,6 +103,8 @@ export default function App() {
   const onPlay = useCallback(async () => {
     if (!playerId || playing || bet > balance || bet < 1) return
 
+    unlockGameAudio()
+    playBetSound()
     setPlaying(true)
     setScrolling(false)
     setLastMultiplier(null)
@@ -104,8 +114,9 @@ export default function App() {
     setError(null)
     setBalance((b) => b - bet)
 
+    const startOffset = offsetForTarget(8, cycleWidth, 0)
     // Snap strip to start (no transition)
-    setStripOffset(offsetForTarget(8, cycleWidth, 0))
+    setStripOffset(startOffset)
 
     try {
       const result = await placePlay(playerId, bet)
@@ -116,12 +127,16 @@ export default function App() {
 
       requestAnimationFrame(() => {
         setScrolling(true)
+        startScrollTicks(startOffset, finalOffset, cycleWidth, ANIM_MS)
         requestAnimationFrame(() => {
           setStripOffset(finalOffset)
         })
       })
 
       window.setTimeout(() => {
+        stopScrollTicks()
+        playStopSound()
+        playResultSound(payout > 0)
         setBalance(Number(result.balance))
         setLastMultiplier(mult)
         setLastPayout(payout)
@@ -131,6 +146,7 @@ export default function App() {
         setScrolling(false)
       }, ANIM_MS)
     } catch (e) {
+      stopScrollTicks()
       setBalance((b) => b + bet)
       setPlaying(false)
       setScrolling(false)

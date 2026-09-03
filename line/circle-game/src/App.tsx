@@ -13,7 +13,7 @@ import {
   type MultiplierKey,
 } from './gameConfig'
 import { MultiplierBar } from './MultiplierBar'
-import { playSpinSound, stopSpinSound } from './spinSound'
+import { playSpinSoundAfterPaint, stopSpinSound } from './spinSound'
 import { Wheel } from './Wheel'
 
 const SPIN_MS = 4200
@@ -88,7 +88,6 @@ export default function App() {
     if (!playerId || spinning || bet > balance || bet < 1) return
 
     setSpinning(true)
-    playSpinSound()
     setLastMultiplier(null)
     setLastPayout(null)
     setHighlighted(null)
@@ -103,6 +102,7 @@ export default function App() {
       const payout = Number(result.payout)
       const nextRotation = rotationForAngle(result.target_angle, rotation)
       setRotation(nextRotation)
+      playSpinSoundAfterPaint(SPIN_MS)
 
       window.setTimeout(() => {
         stopSpinSound()

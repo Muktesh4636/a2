@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Jackpot Plunder</title>
+  <link href="https://fonts.googleapis.com/css2?family=Pirata+One&family=Roboto+Condensed:wght@600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="scene">
+    <div class="game">
+      <header class="top">
+        <div class="flag">☠</div>
+        <h1 class="logo">JACKPOT PLUNDER</h1>
+        <div class="ways">243 WAYS</div>
+      </header>
+
+      <section class="stage">
+        <div class="ship-frame">
+          <div class="reels" id="reels"></div>
+        </div>
+        <div class="win-banner hidden" id="winBanner">PLUNDER <span id="winAmount">0</span></div>
+        <div class="chest-overlay hidden" id="chestOverlay">
+          <h2>TREASURE CHESTS</h2>
+          <p>Pick a chest to claim your loot</p>
+          <div class="chests" id="chests"></div>
+        </div>
+      </section>
+
+      <footer class="hud">
+        <div class="panel bet-panel">
+          <button type="button" id="betMinus" class="adj">−</button>
+          <div><span>BET</span><strong id="bet">2.50</strong></div>
+          <button type="button" id="betPlus" class="adj">+</button>
+        </div>
+        <button type="button" id="spinBtn" class="spin"><span>SPIN</span></button>
+        <div class="panel map"><span>WIN</span><strong id="lastWin">0.00</strong></div>
+        <div class="panel"><span>BALANCE</span><strong id="balance">1250.00</strong></div>
+        <button type="button" id="autoBtn" class="auto">AUTO</button>
+      </footer>
+    </div>
+  </div>
+  <script src="game.js"></script>
+</body>
+</html>

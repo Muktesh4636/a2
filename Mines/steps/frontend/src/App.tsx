@@ -12,6 +12,13 @@ import {
 import { formatMoney } from './game/format'
 import './App.css'
 import { fetchGunduWalletBalance } from './gunduWallet'
+import {
+  playBetSound,
+  playCashOutSound,
+  playDangerSound,
+  playStepSound,
+  unlockGameAudio,
+} from './gameSounds'
 
 const ROWS = 9
 const COLS = 3
@@ -94,10 +101,12 @@ export default function App() {
 
   async function handleStart() {
     if (busy || betAmount <= 0 || betAmount > balance) return
+    unlockGameAudio()
     setBusy(true)
     setError(null)
     try {
       const game = await startGame(betAmount)
+      playBetSound()
       applyGame(game)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not start game')
@@ -108,10 +117,13 @@ export default function App() {
 
   async function handleChoose(column: number) {
     if (busy || status !== 'playing' || !gameId) return
+    unlockGameAudio()
     setBusy(true)
     setError(null)
     try {
       const game = await chooseStep(gameId, column)
+      if (game.status === 'lost') playDangerSound()
+      else playStepSound(game.steps_cleared)
       applyGame(game)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not choose step')
@@ -122,10 +134,12 @@ export default function App() {
 
   async function handleCashOut() {
     if (busy || status !== 'playing' || !gameId || stepsCleared <= 0) return
+    unlockGameAudio()
     setBusy(true)
     setError(null)
     try {
       const game = await cashOut(gameId)
+      playCashOutSound()
       applyGame(game)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not cash out')

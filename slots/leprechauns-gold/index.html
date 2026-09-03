@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Leprechaun's Gold</title>
+  <link href="https://fonts.googleapis.com/css2?family=Luckiest+Guy&family=Nunito:wght@700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="scene">
+    <div class="game">
+      <h1 class="logo">Leprechaun's <span>Gold</span></h1>
+      <section class="stage">
+        <div class="trail" id="trail">
+          <span class="trail-label">RAINBOW TRAIL</span>
+          <div class="trail-dots" id="trailDots"></div>
+          <img class="trail-pot" src="assets/symbols/pot.png" alt="pot of gold">
+        </div>
+        <div class="reel-shell">
+          <div class="shamrock tl">☘</div><div class="shamrock tr">☘</div>
+          <div class="shamrock bl">☘</div><div class="shamrock br">☘</div>
+          <div class="reels" id="reels"></div>
+        </div>
+        <div class="win-banner hidden" id="winBanner">WIN <span id="winAmount">0</span></div>
+        <div class="luck-banner hidden" id="luckBanner">LEPRECHAUN'S LUCK! WILDS TOSSED!</div>
+      </section>
+      <footer class="hud">
+        <div class="barrel bet-barrel">
+          <button type="button" id="betMinus" class="arrow">◀</button>
+          <div><span>BET</span><strong id="bet">2.50</strong></div>
+          <button type="button" id="betPlus" class="arrow">▶</button>
+        </div>
+        <div class="barrel"><span>BALANCE</span><strong id="balance">1234.56</strong></div>
+        <button type="button" id="spinBtn" class="spin"><span>SPIN</span><em>☘</em></button>
+        <div class="barrel"><span>WIN</span><strong id="lastWin">0.00</strong></div>
+        <div class="side-btns">
+          <button type="button" id="maxBtn" class="pill">MAX<br>BET</button>
+          <button type="button" id="autoBtn" class="pill">AUTO</button>
+        </div>
+      </footer>
+      <p class="hint">5×3 · 20 LINES · 7 RAINBOWS = POT OF GOLD (50×) · CLOVER IS WILD</p>
+    </div>
+  </div>
+  <script src="game.js"></script>
+</body>
+</html>

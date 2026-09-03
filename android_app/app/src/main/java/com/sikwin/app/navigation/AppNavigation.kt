@@ -230,9 +230,13 @@ fun AppNavigation(
                 "executeGameLaunch(web): token=${if (authToken.isNullOrBlank()) "EMPTY" else "${authToken.take(8)}..."}, refresh=${if (refreshToken.isNullOrBlank()) "EMPTY" else "${refreshToken.take(8)}..."}"
             )
 
-            // Gundu Ata from native home → web game directly (back returns to app home).
+            // Home / Gundu Ata / Casino entry → casino lobby (tiles open individual games).
+            // Back from lobby returns to app home (from=home).
+            val casinoPath =
+                if (Constants.CASINO_PATH.contains("?")) "${Constants.CASINO_PATH}&from=home"
+                else "${Constants.CASINO_PATH}?from=home"
             val gameUrl = GameWebViewActivity.buildGameUrl(
-                "${Constants.GUNDU_ATA_PATH}?v=36&from=home",
+                casinoPath,
                 authToken,
                 refreshToken
             )
@@ -353,7 +357,7 @@ fun AppNavigation(
             HomeScreen(
                 viewModel = viewModel,
                 onGameClick = { gameId ->
-                    if (gameId == "gundu_ata") {
+                    if (gameId == "gundu_ata" || gameId == "casino") {
                         if (!viewModel.loginSuccess) {
                             showAuthDialog = true
                         } else {
@@ -363,7 +367,7 @@ fun AppNavigation(
                     }
                 },
                 onNavigate = { route ->
-                    if (route == "gundu_ata") {
+                    if (route == "gundu_ata" || route == "casino") {
                         if (!viewModel.loginSuccess) {
                             showAuthDialog = true
                         } else {

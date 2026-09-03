@@ -9,6 +9,14 @@ import {
   startRound,
 } from './api'
 import { DEFAULT_BET, SAFE_MULTIPLIERS, TILE_COUNT, type TileState } from './gameConfig'
+import {
+  playBetSound,
+  playCashOutSound,
+  playGemSound,
+  playMineSound,
+  playTapSound,
+  unlockGameAudio,
+} from './gameSounds'
 
 function money(n: number) {
   return n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -53,6 +61,8 @@ export default function App() {
 
   const onStart = useCallback(async () => {
     if (!playerId || busy || status === 'active' || bet > balance) return
+    unlockGameAudio()
+    playBetSound()
     setBusy(true)
     setError(null)
     setLastPayout(null)
@@ -74,9 +84,13 @@ export default function App() {
 
   const onReveal = useCallback(async (index: number) => {
     if (!roundId || busy || status !== 'active' || tiles[index] !== 'hidden') return
+    unlockGameAudio()
+    playTapSound()
     setBusy(true)
     try {
       const r = await revealTile(roundId, index)
+      if (r.status === 'bust' || r.result === 'mine') playMineSound()
+      else if (r.result === 'safe') playGemSound()
       setTiles((prev) => {
         const next = [...prev]
         next[index] = r.result
@@ -105,6 +119,8 @@ export default function App() {
 
   const onCashOut = useCallback(async () => {
     if (!roundId || busy || status !== 'active' || safeCount < 1) return
+    unlockGameAudio()
+    playCashOutSound()
     setBusy(true)
     try {
       const r = await cashOut(roundId)
@@ -145,6 +161,7 @@ export default function App() {
               role="listitem"
               className={`tile tile-${t}`}
               disabled={busy || status !== 'active' || t !== 'hidden'}
+              onPointerDown={() => unlockGameAudio()}
               onClick={() => void onReveal(i)}
             >
               {t === 'hidden' ? '?' : t === 'safe' ? '✓' : '✕'}

@@ -8,7 +8,14 @@ import {
   type ColorId,
 } from './gameConfig'
 import { Reel } from './Reel'
-import { playSpinSound, stopSpinSound } from './spinSound'
+import {
+  playBetSound,
+  playResultSound,
+  playSpinSound,
+  playStopSound,
+  stopSpinSound,
+  unlockGameAudio,
+} from './gameSounds'
 
 const CELL = 68
 const GAP = 10
@@ -72,8 +79,9 @@ export default function App() {
 
   const onPlay = useCallback(async () => {
     if (!playerId || spinning || bet > balance || bet < 1) return
+    unlockGameAudio()
+    playBetSound()
     setSpinning(true)
-    playSpinSound()
     setAnimate(false)
     setLastPayout(null)
     setLastMult(null)
@@ -93,11 +101,14 @@ export default function App() {
         requestAnimationFrame(() => {
           setAnimate(true)
           setOffsets(nextStrips.map((s) => stopOffset(s.length)))
+          playSpinSound(ANIM_MS)
         })
       })
 
       window.setTimeout(() => {
         stopSpinSound()
+        playStopSound()
+        playResultSound(Number(r.payout) > 0)
         setLastMult(Number(r.multiplier))
         setLastPayout(Number(r.payout))
         setBalance(Number(r.balance))
@@ -133,7 +144,6 @@ export default function App() {
   return (
     <div className="cm-app">
       <header className="cm-topbar">
-        <div className="cm-logo">stake</div>
         <div className="cm-balance">
           <span className="cm-bal-dot" />
           ₹{money(balance)} INR
@@ -230,6 +240,7 @@ export default function App() {
           type="button"
           className="cm-spin"
           disabled={spinning || !ready || bet > balance}
+          onPointerDown={() => unlockGameAudio()}
           onClick={() => void onPlay()}
         >
           <span>SPIN</span>

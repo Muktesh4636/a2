@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Big Top Bonanza</title>
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka+One&family=Nunito:wght@700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="scene">
+    <div class="game">
+      <h1 class="logo">BIG TOP<span>BONANZA</span></h1>
+      <section class="stage">
+        <div class="ticket-trail" id="trail">
+          <span>TICKET TRAIL</span>
+          <div class="trail-dots" id="trailDots"></div>
+          <img src="assets/symbols/ticket.png" alt="ticket">
+        </div>
+        <div class="reel-shell">
+          <div class="reels" id="reels"></div>
+        </div>
+        <div class="win-banner hidden" id="winBanner">WIN <span id="winAmount">0</span></div>
+      </section>
+      <footer class="hud">
+        <div class="panel"><span>BALANCE</span><strong id="balance">2500.00</strong></div>
+        <div class="panel bet-panel">
+          <button type="button" id="betMinus" class="adj">−</button>
+          <div><span>BET</span><strong id="bet">2.50</strong></div>
+          <button type="button" id="betPlus" class="adj">+</button>
+        </div>
+        <button type="button" id="spinBtn" class="spin"><span>SPIN</span></button>
+        <div class="panel"><span>WIN</span><strong id="lastWin">0.00</strong></div>
+        <button type="button" id="autoBtn" class="auto">AUTO</button>
+      </footer>
+      <p class="hint">5×3 · 20 LINES · 6 TICKETS = CARNIVAL BOOTHS · STAR IS WILD</p>
+    </div>
+  </div>
+  <div class="booth-overlay hidden" id="boothOverlay">
+    <div class="booth-box">
+      <h2>PICK A CARNIVAL BOOTH!</h2>
+      <div class="booths" id="boothRow"></div>
+      <div class="booth-result hidden" id="boothResult"></div>
+    </div>
+  </div>
+  <script src="game.js"></script>
+</body>
+</html>

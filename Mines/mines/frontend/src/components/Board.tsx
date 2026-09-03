@@ -1,5 +1,6 @@
 import { Tile } from './Tile'
 import type { Cell, GameStatus } from '../game/logic'
+import { unlockGameAudio } from '../gameSounds'
 
 type Props = {
   board: Cell[]
@@ -13,7 +14,11 @@ export function Board({ board, status, triggeredMine, onReveal }: Props) {
   const gameOver = status === 'lost' || status === 'won' || status === 'cashed'
 
   return (
-    <div className="board-wrap">
+    <div
+      className="board-wrap"
+      onPointerDown={unlockGameAudio}
+      onTouchStart={unlockGameAudio}
+    >
       <div className="board" role="grid" aria-label="Mines board">
         {board.map((cell, index) => (
           <Tile

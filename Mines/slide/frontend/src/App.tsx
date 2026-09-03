@@ -5,6 +5,13 @@ import { fetchPlayer, playRound, type ReelBox } from './api/client'
 import { formatMoney, formatMultiplier } from './game/format'
 import './App.css'
 import { fetchGunduWalletBalance } from './gunduWallet'
+import {
+  playBetSound,
+  playResultSound,
+  playStopSound,
+  stopSlideTicks,
+  unlockGameAudio,
+} from './game/gameSounds'
 
 const RESULT_HOLD_MS = 4000
 
@@ -84,8 +91,10 @@ export default function App() {
 
   const handleSpinEnd = useCallback(() => {
     setSpinning(false)
+    playStopSound()
     const pending = pendingRef.current
     if (pending) {
+      playResultSound(pending.status === 'won')
       setBalance(pending.balance)
       setLastMultiplier(pending.multiplier)
       setLastProfit(pending.profit)
@@ -104,6 +113,8 @@ export default function App() {
 
   async function handlePlay() {
     if (busy || betAmount <= 0 || betAmount > balance) return
+    unlockGameAudio()
+    playBetSound()
     setBusy(true)
     setError(null)
     setLastStatus(null)
@@ -133,6 +144,7 @@ export default function App() {
       setSpinId((id) => id + 1)
       setSpinning(true)
     } catch (err) {
+      stopSlideTicks()
       setBusy(false)
       setSpinning(false)
       pendingRef.current = null

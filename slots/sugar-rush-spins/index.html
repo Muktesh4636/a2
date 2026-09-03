@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Sugar Rush Spins</title>
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@600;700&family=Nunito:wght@700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="scene">
+    <div class="game">
+      <header class="top">
+        <h1 class="logo"><span>SUGAR</span> <span>RUSH</span> <span>SPINS</span></h1>
+        <div class="balance-box">BALANCE <strong id="balance">1234.56</strong></div>
+      </header>
+
+      <section class="stage">
+        <div class="tumble-box"><span>TUMBLE WIN</span><strong id="tumbleWin">0.00</strong></div>
+        <div class="candy-frame">
+          <div class="frosting"></div>
+          <div class="grid" id="grid"></div>
+        </div>
+        <div class="multiplier">
+          <span class="cap">MULT</span>
+          <div class="levels" id="levels"></div>
+        </div>
+        <div class="win-banner hidden" id="winBanner">SWEET WIN <span id="winAmount">0</span></div>
+      </section>
+
+      <footer class="hud">
+        <div class="panel bet-panel">
+          <button type="button" id="betMinus" class="adj">−</button>
+          <div><span>BET</span><strong id="bet">2.00</strong></div>
+          <button type="button" id="betPlus" class="adj">+</button>
+        </div>
+        <button type="button" id="spinBtn" class="spin">SPIN</button>
+        <div class="panel"><span>WIN</span><strong id="lastWin">0.00</strong></div>
+        <button type="button" id="autoBtn" class="auto">AUTO</button>
+      </footer>
+    </div>
+  </div>
+  <script src="game.js"></script>
+</body>
+</html>

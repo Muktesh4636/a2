@@ -2,7 +2,7 @@
  * Casino lobby — orange Ignite theme
  * Banners → Continue Playing → Popular → Category rails
  */
-import { GAMES } from "./games.js?v=20260824liveroulette";
+import { GAMES } from "./games.js?v=20260904slots13";
 import {
   readGunduAccessToken,
   withAuthUrl,
@@ -50,6 +50,26 @@ const TITLE_IN_ART = new Set([
   "goldlane",
   "dead7",
   "teenpatti",
+  "pharaohs-fortune",
+  "atlantis-depths",
+  "thunder-of-asgard",
+  "neon-reels-2088",
+  "gold-rush-saloon",
+  "midnight-manor",
+  "dragon-sakura",
+  "cosmic-jackpot",
+  "clockwork-fortune",
+  "jackpot-plunder",
+  "sugar-rush-spins",
+  "temple-of-the-jaguar",
+  "big-top-bonanza",
+  "frozen-crown",
+  "inferno-peak",
+  "leprechauns-gold",
+  "olympian-glory",
+  "safari-fortune",
+  "sultans-treasure",
+  "vegas-royale",
 ]);
 
 const PLAYING_BASE = {
@@ -98,17 +118,37 @@ const PLAYING_BASE = {
   dead7: 1590,
   teenpatti: 2480,
   "horse-racing": 9200,
+  "pharaohs-fortune": 3840,
+  "neon-reels-2088": 3620,
+  "vegas-royale": 3410,
+  "sugar-rush-spins": 3180,
+  "thunder-of-asgard": 2960,
+  "dragon-sakura": 2740,
+  "atlantis-depths": 2580,
+  "cosmic-jackpot": 2410,
+  "jackpot-plunder": 2290,
+  "gold-rush-saloon": 2140,
+  "olympian-glory": 2010,
+  "leprechauns-gold": 1890,
+  "inferno-peak": 1760,
+  "frozen-crown": 1680,
+  "sultans-treasure": 1590,
+  "temple-of-the-jaguar": 1520,
+  "safari-fortune": 1410,
+  "midnight-manor": 1340,
+  "big-top-bonanza": 1280,
+  "clockwork-fortune": 1190,
 };
 
 /** Featured banner slides (use existing casino tile images) */
 const BANNER_IDS = [
+  "pharaohs-fortune",
+  "neon-reels-2088",
+  "vegas-royale",
   "horse-racing",
   "live-roulette",
-  "stock-market",
   "aviator",
   "chicken-road",
-  "teenpatti",
-  "vortex",
   "gundu-ata",
 ];
 
@@ -180,6 +220,32 @@ const CATEGORIES = [
       "chicken-road-2",
       "chit-pat",
       "rangu",
+    ],
+  },
+  {
+    id: "slots",
+    title: "Slots",
+    ids: [
+      "pharaohs-fortune",
+      "neon-reels-2088",
+      "vegas-royale",
+      "sugar-rush-spins",
+      "thunder-of-asgard",
+      "dragon-sakura",
+      "atlantis-depths",
+      "cosmic-jackpot",
+      "jackpot-plunder",
+      "gold-rush-saloon",
+      "olympian-glory",
+      "leprechauns-gold",
+      "inferno-peak",
+      "frozen-crown",
+      "sultans-treasure",
+      "temple-of-the-jaguar",
+      "safari-fortune",
+      "midnight-manor",
+      "big-top-bonanza",
+      "clockwork-fortune",
     ],
   },
 ];
@@ -509,7 +575,10 @@ function createCard(game, { wide = false } = {}) {
 
   const img = document.createElement("img");
   img.className = "card-art";
-  img.src = game.image;
+  const tileSrc = String(game.image || "").startsWith("/")
+    ? game.image
+    : `/casino/${String(game.image || "").replace(/^\.\//, "")}`;
+  img.src = tileSrc;
   img.alt = game.title;
   img.loading = "lazy";
   img.decoding = "async";
@@ -814,7 +883,9 @@ function renderBanners() {
     slide.dataset.index = String(i);
 
     const img = document.createElement("img");
-    img.src = game.image;
+    img.src = String(game.image || "").startsWith("/")
+      ? game.image
+      : `/casino/${String(game.image || "").replace(/^\.\//, "")}`;
     img.alt = game.title;
     img.loading = i === 0 ? "eager" : "lazy";
 
@@ -890,7 +961,7 @@ function renderBanners() {
 function popularGames() {
   return [...GAMES]
     .sort((a, b) => (PLAYING_BASE[b.id] || 0) - (PLAYING_BASE[a.id] || 0))
-    .slice(0, 12);
+    .slice(0, 24);
 }
 
 let activeCategory = "all";

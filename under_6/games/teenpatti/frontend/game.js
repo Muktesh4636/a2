@@ -163,10 +163,12 @@ async function dealIn(rig) {
   rig.style.transition = "transform 0.55s cubic-bezier(0.16, 0.84, 0.22, 1.08)";
   rig.dataset.state = "dealt";
   setLanded(rig, true);
+  try { window.CardSfx && CardSfx.deal(); } catch (_) {}
   await sleep(560);
 }
 
 async function flipCard(card) {
+  try { window.CardSfx && CardSfx.flip(); } catch (_) {}
   setFlipping(card, true);
   card.dataset.flip = "out";
   await sleep(280);
@@ -232,13 +234,16 @@ function updateUI() {
 }
 
 function setChip(amount) {
+  try { window.CardSfx && CardSfx.unlock(); } catch (_) {}
   if (state.busy || state.phase === "decide") return;
   state.chip = amount;
+  try { window.CardSfx && CardSfx.bet(); } catch (_) {}
   els.chips.forEach((chip) => chip.classList.toggle("selected", Number(chip.dataset.amount) === amount));
   updateUI();
 }
 
 async function deal() {
+  try { window.CardSfx && CardSfx.unlock(); } catch (_) {}
   if (state.busy || state.phase !== "ante" || !state.sessionId) return;
   if (state.bankroll < state.chip) {
     els.roundInfo.textContent = "Not enough bankroll";
@@ -304,6 +309,7 @@ async function deal() {
 }
 
 async function decide(action) {
+  try { window.CardSfx && CardSfx.bet(); } catch (_) {}
   if (state.busy || state.phase !== "decide" || !state.roundId) return;
   if (action === "play" && state.bankroll < state.chip) {
     els.roundInfo.textContent = "Not enough bankroll to Play";
@@ -351,6 +357,10 @@ async function decide(action) {
   els.outcome.textContent = copy.text;
   els.outcome.classList.remove("win", "lose");
   if (copy.cls) els.outcome.classList.add(copy.cls);
+  try {
+    if (copy.cls === "win") window.CardSfx && CardSfx.win();
+    else if (copy.cls === "lose") window.CardSfx && CardSfx.lose();
+  } catch (_) {}
 
   if (result.outcome === "dealer_nq") {
     els.roundInfo.textContent = `Dealer ${result.dealer_hand_label} · not qualified`;

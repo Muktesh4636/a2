@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Olympian Glory</title>
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@700;900&family=Nunito:wght@700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="scene">
+    <div class="game">
+      <h1 class="logo">OLYMPIAN<span>GLORY</span></h1>
+      <section class="stage">
+        <div class="reel-shell">
+          <div class="laurels"><span>⚜</span><span>⚜</span></div>
+          <div class="reels" id="reels"></div>
+        </div>
+        <div class="win-banner hidden" id="winBanner">WIN <span id="winAmount">0</span></div>
+        <div class="fs-badge hidden" id="fsBadge">FREE SPINS <span id="fsCount">0</span></div>
+        <div class="favor-badge hidden" id="favorBadge">POSEIDON ×<span id="favorMult">2</span></div>
+      </section>
+      <footer class="hud">
+        <div class="panel"><span>BALANCE</span><strong id="balance">10000.00</strong></div>
+        <div class="panel bet-panel">
+          <button type="button" id="betMinus" class="adj">−</button>
+          <div><span>BET</span><strong id="bet">2.50</strong></div>
+          <button type="button" id="betPlus" class="adj">+</button>
+        </div>
+        <button type="button" id="spinBtn" class="spin"><span>SPIN</span></button>
+        <div class="panel"><span>WIN</span><strong id="lastWin">0.00</strong></div>
+        <button type="button" id="autoBtn" class="auto">AUTO</button>
+      </footer>
+      <p class="hint">5×3 · 20 LINES · 3+ BOLTS = GOD'S FAVOR · LAUREL IS WILD</p>
+    </div>
+  </div>
+  <div class="god-overlay hidden" id="godOverlay">
+    <div class="god-box">
+      <h2>THE GODS GRANT A FAVOR</h2>
+      <p>Choose a god…</p>
+      <div class="gods" id="godRow"></div>
+      <div class="god-result hidden" id="godResult"></div>
+    </div>
+  </div>
+  <script src="game.js"></script>
+</body>
+</html>

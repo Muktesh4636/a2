@@ -1,0 +1,117 @@
+{
+  "id": "jackpot-plunder",
+  "title": "Jackpot Plunder",
+  "cols": 5,
+  "rows": 3,
+  "bets": [
+    0.5,
+    1,
+    2.5,
+    5,
+    10,
+    25
+  ],
+  "symbols": [
+    {
+      "id": "skull",
+      "label": "Wild",
+      "wild": true,
+      "weight": 3,
+      "pays": [
+        0,
+        0,
+        12,
+        60,
+        250
+      ]
+    },
+    {
+      "id": "chest",
+      "label": "Scatter",
+      "scatter": true,
+      "weight": 4,
+      "pays": [
+        0,
+        0,
+        2,
+        10,
+        40
+      ]
+    },
+    {
+      "id": "parrot",
+      "label": "Parrot",
+      "weight": 6,
+      "pays": [
+        0,
+        0,
+        8,
+        30,
+        100
+      ]
+    },
+    {
+      "id": "cutlass",
+      "label": "Swords",
+      "weight": 7,
+      "pays": [
+        0,
+        0,
+        6,
+        25,
+        80
+      ]
+    },
+    {
+      "id": "rum",
+      "label": "Rum",
+      "weight": 9,
+      "pays": [
+        0,
+        0,
+        5,
+        18,
+        55
+      ]
+    },
+    {
+      "id": "compass",
+      "label": "Compass",
+      "weight": 10,
+      "pays": [
+        0,
+        0,
+        4,
+        14,
+        45
+      ]
+    },
+    {
+      "id": "coin",
+      "label": "Coin",
+      "weight": 14,
+      "pays": [
+        0,
+        0,
+        3,
+        10,
+        30
+      ]
+    }
+  ],
+  "lines": null,
+  "mode": "ways",
+  "free_spins_award": 0,
+  "pearl_goal": 0,
+  "scatter_trigger": 3,
+  "cluster_pays": null,
+  "ways_bet_divisor": 10,
+  "scatter_id": "chest",
+  "bonus_prizes": [
+    5,
+    10,
+    25,
+    50,
+    100
+  ]
+}

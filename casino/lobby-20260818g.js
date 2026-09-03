@@ -2,18 +2,47 @@
  * Casino lobby — orange Ignite theme
  * Banners → Continue Playing → Popular → Category rails
  */
-import { GAMES } from "./games.js?v=20260824liveroulette";
+import { GAMES } from "./games.js?v=20260904slots13";
 import {
   readGunduAccessToken,
   withAuthUrl,
-} from "./gundu-auth.js";
+} from "./gundu-auth.js?v=3";
 
 const LONG_PRESS_MS = 420;
 const MOVE_CANCEL_PX = 10;
 const CONTINUE_KEY = "casino_continue_ids";
+const LAST_PLAYED_KEY = "casino_last_played_ms";
+/** Games not opened within this window get a lobby skin (same path, different name/art). */
+const SKIN_IDLE_MS = 24 * 60 * 60 * 1000;
 const NATIVE_ONLY = new Set(["chit-pat", "rangu"]);
 /** Old lobby tile ids → current games.js ids */
 const GAME_ID_ALIASES = { "auto-roulette": "live-roulette" };
+
+/** Curated alternate titles for popular games (looks like a different product). */
+const SKIN_TITLES = {
+  "horse-racing": "Derby Kings",
+  "stock-market": "Bull Run",
+  "live-roulette": "Spin Palace",
+  "chicken-road": "Hen Crossing",
+  "chicken-road-2": "Fowl Lane",
+  "gundu-ata": "Marble Clash",
+  aviator: "Sky Surge",
+  jet: "Afterflame",
+  maestro: "Parrot Peak",
+  plinko: "Drop Towers",
+  mines: "Bomb Grid",
+  vortex: "Warp Spiral",
+  "vortex-1": "Orbit Rush",
+  "vip-vortex": "Gold Spiral",
+  "pharaohs-fortune": "Desert Relics",
+  "neon-reels-2088": "Cyber Spins",
+  "vegas-royale": "Neon Jackpot",
+  "air-balloon": "Cloud Lift",
+  "teenpatti": "Teen Showdown",
+  "under-6": "Low Six",
+};
+
+const SKIN_TITLE_PREFIXES = ["Royal", "Neon", "Turbo", "Elite", "Prime", "Ultra", "Lucky"];
 
 const TITLE_IN_ART = new Set([
   "gundu-ata",
@@ -52,6 +81,26 @@ const TITLE_IN_ART = new Set([
   "goldlane",
   "dead7",
   "teenpatti",
+  "pharaohs-fortune",
+  "atlantis-depths",
+  "thunder-of-asgard",
+  "neon-reels-2088",
+  "gold-rush-saloon",
+  "midnight-manor",
+  "dragon-sakura",
+  "cosmic-jackpot",
+  "clockwork-fortune",
+  "jackpot-plunder",
+  "sugar-rush-spins",
+  "temple-of-the-jaguar",
+  "big-top-bonanza",
+  "frozen-crown",
+  "inferno-peak",
+  "leprechauns-gold",
+  "olympian-glory",
+  "safari-fortune",
+  "sultans-treasure",
+  "vegas-royale",
 ]);
 
 const PLAYING_BASE = {
@@ -100,17 +149,37 @@ const PLAYING_BASE = {
   dead7: 1590,
   teenpatti: 2480,
   "horse-racing": 9200,
+  "pharaohs-fortune": 3840,
+  "neon-reels-2088": 3620,
+  "vegas-royale": 3410,
+  "sugar-rush-spins": 3180,
+  "thunder-of-asgard": 2960,
+  "dragon-sakura": 2740,
+  "atlantis-depths": 2580,
+  "cosmic-jackpot": 2410,
+  "jackpot-plunder": 2290,
+  "gold-rush-saloon": 2140,
+  "olympian-glory": 2010,
+  "leprechauns-gold": 1890,
+  "inferno-peak": 1760,
+  "frozen-crown": 1680,
+  "sultans-treasure": 1590,
+  "temple-of-the-jaguar": 1520,
+  "safari-fortune": 1410,
+  "midnight-manor": 1340,
+  "big-top-bonanza": 1280,
+  "clockwork-fortune": 1190,
 };
 
 /** Featured banner slides (use existing casino tile images) */
 const BANNER_IDS = [
+  "pharaohs-fortune",
+  "neon-reels-2088",
+  "vegas-royale",
   "horse-racing",
   "live-roulette",
-  "stock-market",
   "aviator",
   "chicken-road",
-  "teenpatti",
-  "vortex",
   "gundu-ata",
 ];
 
@@ -184,6 +253,32 @@ const CATEGORIES = [
       "rangu",
     ],
   },
+  {
+    id: "slots",
+    title: "Slots",
+    ids: [
+      "pharaohs-fortune",
+      "neon-reels-2088",
+      "vegas-royale",
+      "sugar-rush-spins",
+      "thunder-of-asgard",
+      "dragon-sakura",
+      "atlantis-depths",
+      "cosmic-jackpot",
+      "jackpot-plunder",
+      "gold-rush-saloon",
+      "olympian-glory",
+      "leprechauns-gold",
+      "inferno-peak",
+      "frozen-crown",
+      "sultans-treasure",
+      "temple-of-the-jaguar",
+      "safari-fortune",
+      "midnight-manor",
+      "big-top-bonanza",
+      "clockwork-fortune",
+    ],
+  },
 ];
 
 const byId = new Map(GAMES.map((g) => [g.id, g]));
@@ -206,6 +301,23 @@ function gameAllowed(id) {
 
 function filterGames(list) {
   return (list || []).filter((g) => g && gameAllowed(g.id));
+}
+
+/** Always absolute https://host/casino/images/... — WebView relative paths often 404 as HTML. */
+function tileImageUrl(path) {
+  if (!path) return "";
+  const raw = String(path);
+  if (/^https?:\/\//i.test(raw) || raw.startsWith("data:")) return raw;
+  const rel = raw.startsWith("/casino/")
+    ? raw
+    : raw.startsWith("/")
+      ? raw
+      : `/casino/${raw.replace(/^\.\//, "")}`;
+  try {
+    return new URL(rel, location.origin).href;
+  } catch (_) {
+    return rel;
+  }
 }
 
 function parseJwtPayload(token) {
@@ -233,10 +345,15 @@ async function resolveLobbyUsername() {
   const token = readGunduAccessToken();
   if (!token) return "";
 
+  // Never block the lobby on a slow/hanging profile API.
   try {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 2500);
     const res = await fetch("/api/auth/profile/", {
       headers: { Authorization: `Bearer ${token}` },
+      signal: ctrl.signal,
     });
+    clearTimeout(timer);
     if (res.ok) {
       const data = await res.json();
       const name = String(data.username || "").trim().toLowerCase();
@@ -289,20 +406,35 @@ function leaveCasino() {
   }
 }
 
+function realGameId(gameOrId) {
+  if (gameOrId && typeof gameOrId === "object") {
+    return gameOrId.skinOf || String(gameOrId.id || "").replace(/__skin$/, "");
+  }
+  const id = String(gameOrId || "");
+  return id.endsWith("__skin") ? id.slice(0, -6) : id;
+}
+
+function resolvePlayable(game) {
+  if (!game) return null;
+  if (game.skinOf) return byId.get(game.skinOf) || game;
+  return byId.get(game.id) || game;
+}
+
 function playGame(game) {
-  if (!game || !gameAllowed(game.id)) return;
+  const real = resolvePlayable(game);
+  if (!real || !gameAllowed(real.id)) return;
   if (!readAccessToken()) {
-    showPlayLoginPrompt(game);
+    showPlayLoginPrompt(real);
     return;
   }
-  rememberPlayed(game.id);
-  // Always open the game path from games.js.
+  rememberPlayed(real.id);
+  // Always open the real game path (skins are lobby-only).
   // App launch loads casino once; tapping a tile must NOT reload casino.
-  const url = withToken(game.path).toString();
+  const url = withToken(real.path).toString();
   try {
     if (window.AndroidBridge && typeof window.AndroidBridge.openGame === "function") {
       // Prefer bridge so native can attach refresh if the page URL lacked it.
-      window.AndroidBridge.openGame(game.id, url);
+      window.AndroidBridge.openGame(real.id, url);
       return;
     }
   } catch (_) {}
@@ -313,7 +445,7 @@ function playGame(game) {
 }
 
 function normalizeGameId(id) {
-  return GAME_ID_ALIASES[id] || id;
+  return GAME_ID_ALIASES[realGameId(id)] || realGameId(id);
 }
 
 function loadContinueIds() {
@@ -334,10 +466,97 @@ function loadContinueIds() {
   }
 }
 
+function loadLastPlayedMap() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(LAST_PLAYED_KEY) || "{}");
+    return raw && typeof raw === "object" ? raw : {};
+  } catch (_) {
+    return {};
+  }
+}
+
+function saveLastPlayedMap(map) {
+  try {
+    localStorage.setItem(LAST_PLAYED_KEY, JSON.stringify(map));
+  } catch (_) {}
+}
+
+/** Seed continue-list games as "played recently" so they don't get skins immediately. */
+function seedLastPlayedFromContinue() {
+  const map = loadLastPlayedMap();
+  const now = Date.now();
+  let changed = false;
+  for (const id of loadContinueIds()) {
+    if (map[id] == null) {
+      map[id] = now;
+      changed = true;
+    }
+  }
+  if (changed) saveLastPlayedMap(map);
+  return map;
+}
+
+function wasPlayedWithinDay(gameId, map = loadLastPlayedMap()) {
+  const ts = Number(map[realGameId(gameId)] || 0);
+  if (!ts) return false;
+  return Date.now() - ts < SKIN_IDLE_MS;
+}
+
+function hashStr(s) {
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return h >>> 0;
+}
+
+function altSkinTitle(game) {
+  if (SKIN_TITLES[game.id]) return SKIN_TITLES[game.id];
+  const prefix =
+    SKIN_TITLE_PREFIXES[hashStr(game.id) % SKIN_TITLE_PREFIXES.length];
+  const base = String(game.title || "Game").split(/\s+/)[0];
+  return `${prefix} ${base}`;
+}
+
+function altSkinImage(game) {
+  const pool = GAMES.filter((g) => g.id !== game.id && g.image).map((g) => g.image);
+  if (!pool.length) return game.image;
+  return pool[hashStr(game.id + ":img") % pool.length];
+}
+
+function makeLobbySkin(game) {
+  return {
+    ...game,
+    id: `${game.id}__skin`,
+    skinOf: game.id,
+    title: altSkinTitle(game),
+    image: altSkinImage(game),
+  };
+}
+
+/** Insert a lookalike tile after each game the player has not opened in 24h. */
+function withIdleSkins(games) {
+  const map = loadLastPlayedMap();
+  const out = [];
+  for (const g of games || []) {
+    if (!g) continue;
+    out.push(g);
+    if (g.skinOf) continue;
+    if (wasPlayedWithinDay(g.id, map)) continue;
+    out.push(makeLobbySkin(g));
+  }
+  return out;
+}
+
 function rememberPlayed(id) {
   try {
-    const next = [id, ...loadContinueIds().filter((x) => x !== id)].slice(0, 16);
+    const realId = normalizeGameId(id);
+    const next = [realId, ...loadContinueIds().filter((x) => x !== realId)].slice(0, 16);
     localStorage.setItem(CONTINUE_KEY, JSON.stringify(next));
+    const map = loadLastPlayedMap();
+    map[realId] = Date.now();
+    saveLastPlayedMap(map);
   } catch (_) {}
 }
 
@@ -420,7 +639,7 @@ function stopPreview() {
 }
 
 function startPreview(card, game) {
-  if (NATIVE_ONLY.has(game.id)) return;
+  if (NATIVE_ONLY.has(realGameId(game))) return;
   if (previewGameId === game.id && previewCard === card) {
     previewStartedThisPress = true;
     return;
@@ -519,9 +738,12 @@ function randInt(min, max) {
 }
 
 function initialPlaying(id) {
-  const base = PLAYING_BASE[id] ?? randInt(600, 2400);
+  const realId = realGameId(id);
+  const base = PLAYING_BASE[realId] ?? randInt(600, 2400);
+  // Skins get a nearby but different count so they don't look identical.
+  const skinNudge = id !== realId ? randInt(80, 420) : 0;
   const spread = Math.max(40, Math.floor(base * 0.12));
-  return base + randInt(-spread, spread);
+  return base + skinNudge + randInt(-spread, spread);
 }
 
 function formatPlaying(n) {
@@ -588,16 +810,20 @@ function tickPlayingCounts() {
   });
 }
 
-function createCard(game, { wide = false } = {}) {
+function createCard(game, { wide = false, eager = false } = {}) {
+  const artId = realGameId(game);
   const card = document.createElement("article");
-  card.className = TITLE_IN_ART.has(game.id) ? "card art-has-frame" : "card";
+  // Skins use foreign art — always show the alternate title on the tile.
+  card.className =
+    !game.skinOf && TITLE_IN_ART.has(artId) ? "card art-has-frame" : "card";
   if (wide) card.classList.add("card-wide");
   card.dataset.id = game.id;
+  if (game.skinOf) card.dataset.skinOf = game.skinOf;
   card.setAttribute("role", "button");
   card.setAttribute("tabindex", "0");
   card.setAttribute(
     "aria-label",
-    NATIVE_ONLY.has(game.id)
+    NATIVE_ONLY.has(artId)
       ? game.title
       : `${game.title}. Long press to preview`
   );
@@ -607,10 +833,16 @@ function createCard(game, { wide = false } = {}) {
 
   const img = document.createElement("img");
   img.className = "card-art";
-  img.src = game.image;
   img.alt = game.title;
-  img.loading = "lazy";
   img.decoding = "async";
+  img.loading = eager ? "eager" : "lazy";
+  if (eager) img.fetchPriority = "high";
+  img.src = tileImageUrl(game.image);
+  img.onerror = () => {
+    if (img.dataset.retried) return;
+    img.dataset.retried = "1";
+    img.src = tileImageUrl(game.image).split("?")[0];
+  };
 
   const overlay = document.createElement("div");
   overlay.className = "card-overlay";
@@ -628,7 +860,7 @@ function createCard(game, { wide = false } = {}) {
   overlay.appendChild(play);
   media.appendChild(img);
   media.appendChild(makePlayersBadge(game));
-  if (!TITLE_IN_ART.has(game.id)) {
+  if (game.skinOf || !TITLE_IN_ART.has(artId)) {
     const title = document.createElement("h2");
     title.className = "card-title";
     title.textContent = game.title;
@@ -659,7 +891,12 @@ function createCard(game, { wide = false } = {}) {
 
 function fillRail(rail, games, opts) {
   rail.innerHTML = "";
-  games.forEach((g) => rail.appendChild(createCard(g, opts)));
+  const eagerCount = opts?.eagerCount ?? 0;
+  (games || []).forEach((g, i) => {
+    rail.appendChild(
+      createCard(g, { ...opts, eager: i < eagerCount || !!opts?.eager })
+    );
+  });
   enableSmoothRail(rail);
 }
 
@@ -912,9 +1149,16 @@ function renderBanners() {
     slide.dataset.index = String(i);
 
     const img = document.createElement("img");
-    img.src = game.image;
+    img.src = tileImageUrl(game.image);
     img.alt = game.title;
-    img.loading = i === 0 ? "eager" : "lazy";
+    img.loading = i < 2 ? "eager" : "lazy";
+    img.decoding = "async";
+    if (i < 2) img.fetchPriority = "high";
+    img.onerror = () => {
+      if (img.dataset.retried) return;
+      img.dataset.retried = "1";
+      img.src = tileImageUrl(game.image).split("?")[0];
+    };
 
     const copy = document.createElement("div");
     copy.className = "banner-copy";
@@ -986,18 +1230,22 @@ function renderBanners() {
 }
 
 function popularGames() {
-  return filterGames(
-    [...GAMES].sort((a, b) => (PLAYING_BASE[b.id] || 0) - (PLAYING_BASE[a.id] || 0))
-  ).slice(0, 12);
+  return withIdleSkins(
+    filterGames(
+      [...GAMES].sort((a, b) => (PLAYING_BASE[b.id] || 0) - (PLAYING_BASE[a.id] || 0))
+    ).slice(0, 10)
+  );
 }
 
 let activeCategory = "all";
 
 function gamesForCategory(id) {
-  if (!id || id === "all") return filterGames(GAMES);
+  if (!id || id === "all") return withIdleSkins(filterGames(GAMES));
   const cat = CATEGORIES.find((c) => c.id === id);
-  if (!cat) return filterGames(GAMES);
-  return filterGames(cat.ids.map((gid) => byId.get(gid)).filter(Boolean));
+  if (!cat) return withIdleSkins(filterGames(GAMES));
+  return withIdleSkins(
+    filterGames(cat.ids.map((gid) => byId.get(gid)).filter(Boolean))
+  );
 }
 
 function setCategory(id) {
@@ -1008,7 +1256,7 @@ function setCategory(id) {
   if (title) title.textContent = cat ? cat.title : "All Games";
   const allRail = document.getElementById("allRail");
   if (allRail) {
-    fillRail(allRail, games);
+    fillRail(allRail, games, { eagerCount: 4 });
     mountSectionNav(document, "allRail");
   }
   document.querySelectorAll("#desktopNavList button").forEach((btn) => {
@@ -1047,6 +1295,7 @@ function renderDesktopNav() {
 function render() {
   playingById.clear();
   playingDrift.clear();
+  seedLastPlayedFromContinue();
 
   renderBanners();
 
@@ -1058,7 +1307,7 @@ function render() {
     fillRail(
       continueRail,
       continueIds.map((id) => byId.get(id)).filter(Boolean),
-      { wide: true }
+      { wide: true, eagerCount: 2 }
     );
     mountSectionNav(continueSection, "continueRail");
   } else {
@@ -1066,13 +1315,17 @@ function render() {
     continueRail.innerHTML = "";
   }
 
-  fillRail(document.getElementById("popularRail"), popularGames());
+  fillRail(document.getElementById("popularRail"), popularGames(), {
+    eagerCount: 4,
+  });
   mountSectionNav(document, "popularRail");
 
   const catHost = document.getElementById("categorySections");
   catHost.innerHTML = "";
   CATEGORIES.forEach((cat) => {
-    const games = filterGames(cat.ids.map((id) => byId.get(id)).filter(Boolean));
+    const games = withIdleSkins(
+      filterGames(cat.ids.map((id) => byId.get(id)).filter(Boolean))
+    );
     if (!games.length) return;
 
     const section = document.createElement("section");
@@ -1092,7 +1345,7 @@ function render() {
       </div>
     `;
     const rail = section.querySelector(`#${railId}`);
-    games.forEach((g) => rail.appendChild(createCard(g)));
+    fillRail(rail, games, { eagerCount: cat.id === "slots" || cat.id === "crash" ? 3 : 2 });
     catHost.appendChild(section);
     mountSectionNav(section, railId);
   });
@@ -1100,7 +1353,12 @@ function render() {
   renderDesktopNav();
   const allRail = document.getElementById("allRail");
   if (allRail) {
-    fillRail(allRail, gamesForCategory(activeCategory));
+    // Mobile "All Games" is a heavy duplicate of category rails — keep empty until user filters.
+    if (activeCategory === "all") {
+      allRail.innerHTML = "";
+    } else {
+      fillRail(allRail, gamesForCategory(activeCategory), { eagerCount: 4 });
+    }
     mountSectionNav(document, "allRail");
   }
 }
@@ -1170,14 +1428,23 @@ readAccessToken();
 syncDesktopClass();
 window.addEventListener("resize", syncDesktopClass);
 
-void (async () => {
-  lobbyUsername = await resolveLobbyUsername();
-  syncTopPlayBtn();
+// Paint games immediately — don't wait on auth/profile (can hang → blank lobby).
+syncTopPlayBtn();
+try {
   render();
+} catch (err) {
+  console.error("casino render failed", err);
+}
+
+void (async () => {
+  try {
+    lobbyUsername = await resolveLobbyUsername();
+    syncTopPlayBtn();
+    render();
+  } catch (_) {}
 })();
 
 window.addEventListener("storage", () => {
-  readAccessToken();
   void resolveLobbyUsername().then((u) => {
     lobbyUsername = u;
     syncTopPlayBtn();
@@ -1185,7 +1452,7 @@ window.addEventListener("storage", () => {
   });
 });
 window.addEventListener("kokoroko-auth", () => {
-  readAccessToken();
+  // Tokens already persisted by gundu-auth — do not re-read/persist here (loop risk).
   void resolveLobbyUsername().then((u) => {
     lobbyUsername = u;
     syncTopPlayBtn();

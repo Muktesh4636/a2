@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Sultan's Treasure</title>
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@700;900&family=Nunito:wght@700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="scene">
+    <div class="game">
+      <h1 class="logo"><span>Sultan's</span>Treasure</h1>
+      <section class="stage">
+        <div class="reel-shell">
+          <div class="arch-jewel"></div>
+          <div class="reels" id="reels"></div>
+        </div>
+        <div class="win-banner hidden" id="winBanner">WIN <span id="winAmount">0</span></div>
+        <div class="fs-badge hidden" id="fsBadge">FREE SPINS <span id="fsCount">0</span></div>
+      </section>
+      <footer class="hud">
+        <button type="button" class="menu" id="menuBtn">☰</button>
+        <div class="panel"><span>BALANCE</span><strong id="balance">10000.00</strong></div>
+        <div class="panel bet-panel">
+          <button type="button" id="betMinus" class="adj">−</button>
+          <div><span>BET</span><strong id="bet">2.50</strong></div>
+          <button type="button" id="betPlus" class="adj">+</button>
+        </div>
+        <button type="button" id="spinBtn" class="spin"><i></i><span>SPIN</span></button>
+        <div class="panel"><span>WIN</span><strong id="lastWin">0.00</strong></div>
+        <div class="round-btns">
+          <button type="button" id="autoBtn" class="round">AUTO<br>PLAY</button>
+          <button type="button" id="turboBtn" class="round">TURBO</button>
+        </div>
+      </footer>
+      <p class="hint">5×3 · 20 LINES · 3+ LAMPS = GENIE'S WISH</p>
+    </div>
+  </div>
+
+  <div class="genie-overlay hidden" id="genieOverlay">
+    <div class="genie-box">
+      <h2>THE GENIE GRANTS A WISH</h2>
+      <p>Choose a lamp…</p>
+      <div class="lamps" id="lampRow"></div>
+      <div class="genie-result hidden" id="genieResult"></div>
+    </div>
+  </div>
+
+  <script src="game.js"></script>
+</body>
+</html>

@@ -29,8 +29,9 @@ echo "=== 2) Static frontends → LB ==="
 for g in $GAMES; do
   SRC="$ROOT/under_6/games/$g/frontend"
   echo "  /$g/ from $SRC"
-  $SSH root@$LB "mkdir -p /var/www/gunduata/$g"
-  $SCP "$SRC/index.html" "$SRC/styles.css" "$SRC/game.js" "$SRC/table3d.js" "root@$LB:/var/www/gunduata/$g/"
+  $SSH root@$LB "mkdir -p /var/www/gunduata/$g/sounds"
+  $SCP "$SRC/index.html" "$SRC/styles.css" "$SRC/game.js" "$SRC/table3d.js" "$SRC/sounds.js" "root@$LB:/var/www/gunduata/$g/"
+  $SCP -r "$SRC/sounds/." "root@$LB:/var/www/gunduata/$g/sounds/"
   $SSH root@$LB "chown -R www-data:www-data /var/www/gunduata/$g"
 done
 

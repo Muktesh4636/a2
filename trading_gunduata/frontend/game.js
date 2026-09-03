@@ -31,6 +31,58 @@
 
   let voiceMuted = localStorage.getItem("trading_voice_muted") === "1";
   let hostSpeakingOn = false;
+  let gameSilenced = false;
+  let pollTimer = null;
+  let playingTimer = null;
+
+  function stopGameAudio() {
+    gameSilenced = true;
+    try {
+      if (hostVoice) {
+        hostVoice.pause();
+        hostVoice.currentTime = 0;
+        hostVoice.muted = true;
+      }
+    } catch (_) {}
+    try {
+      if (chipSfx) {
+        chipSfx.pause();
+        chipSfx.currentTime = 0;
+      }
+    } catch (_) {}
+    try {
+      const vid = document.getElementById("hostClip");
+      if (vid) {
+        vid.pause();
+        vid.removeAttribute("src");
+        vid.load();
+      }
+    } catch (_) {}
+    if (typeof clearHostTimer === "function") clearHostTimer();
+    if (toastTimer) {
+      clearTimeout(toastTimer);
+      toastTimer = null;
+    }
+    if (chipFanCloseTimer) {
+      clearTimeout(chipFanCloseTimer);
+      chipFanCloseTimer = null;
+    }
+    if (pollTimer) {
+      clearInterval(pollTimer);
+      pollTimer = null;
+    }
+    if (playingTimer) {
+      clearInterval(playingTimer);
+      playingTimer = null;
+    }
+    if (hostFadeRaf) {
+      cancelAnimationFrame(hostFadeRaf);
+      hostFadeRaf = null;
+    }
+  }
+
+  window.stopGameAudio = stopGameAudio;
+  window.silenceGameAudio = () => stopGameAudio();
 
   function applyVoiceMuteUi() {
     els.hostVoiceBtn?.classList.toggle("is-muted", voiceMuted);
@@ -39,7 +91,7 @@
   }
 
   function syncHostVoice() {
-    if (!hostVoice) return;
+    if (!hostVoice || gameSilenced) return;
     hostVoice.muted = voiceMuted;
     if (voiceMuted) {
       hostVoice.pause();
@@ -59,7 +111,7 @@
   }
 
   function playChipSound() {
-    if (!chipSfx) return;
+    if (!chipSfx || gameSilenced) return;
     try {
       chipSfx.currentTime = 0;
       void chipSfx.play();
@@ -1345,7 +1397,7 @@
     }
 
     tickEcg();
-    requestAnimationFrame(tick);
+    if (!gameSilenced) requestAnimationFrame(tick);
   }
 
   // Events
@@ -1584,6 +1636,7 @@
   }
 
   function setHostSpeaking(on) {
+    if (gameSilenced) return;
     hostSpeakingOn = !!on;
     syncHostVoice();
     if (!hostReady) return;
@@ -1617,6 +1670,7 @@
       return;
     }
     const playNext = () => {
+      if (gameSilenced) return;
       vid.src = HOST_CLIPS[hostClipI % HOST_CLIPS.length];
       hostClipI += 1;
       vid.muted = true;
@@ -1625,13 +1679,18 @@
     };
     vid.addEventListener("ended", playNext);
     document.addEventListener("pointerdown", () => {
-      if (vid.paused) {
-        const p = vid.play();
-        if (p && typeof p.catch === "function") p.catch(() => {});
-      }
+      if (gameSilenced || !vid.paused) return;
+      const p = vid.play();
+      if (p && typeof p.catch === "function") p.catch(() => {});
     }, { once: true, passive: true });
     playNext();
   }
+
+  window.addEventListener("pagehide", stopGameAudio);
+  window.addEventListener("beforeunload", stopGameAudio);
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") stopGameAudio();
+  });
 
   window.addEventListener("resize", () => {
     resizeCanvases();
@@ -1655,9 +1714,10 @@
   syncHud();
   // Always start the loop — do not gate setInterval on first poll success
   pollState();
-  setInterval(pollState, 350);
+  pollTimer = setInterval(pollState, 350);
   syncPlayingHud();
-  setInterval(() => {
+  playingTimer = setInterval(() => {
+    if (gameSilenced) return;
     onlinePlaying = Math.max(900, onlinePlaying + Math.floor(Math.random() * 9 - 4));
     syncPlayingHud();
   }, 2800);
@@ -1669,12 +1729,14 @@
     return u.toString();
   }
   function goCasino() {
+    stopGameAudio();
     location.href = casinoUrl();
   }
   document.getElementById("gunduBackBtn")?.addEventListener("click", goCasino);
   try {
     history.pushState({ gundu_game: "trading" }, "", location.href);
     window.addEventListener("popstate", () => {
+      stopGameAudio();
       location.replace(casinoUrl());
     });
   } catch (_) {}

@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Safari Fortune</title>
+  <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@600;700&family=Nunito:wght@700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="scene">
+    <div class="game">
+      <h1 class="logo">SAFARI<span>FORTUNE</span></h1>
+      <section class="stage">
+        <div class="reel-shell">
+          <div class="compass-mark tl"></div><div class="compass-mark tr"></div>
+          <div class="compass-mark bl"></div><div class="compass-mark br"></div>
+          <div class="reels" id="reels"></div>
+        </div>
+        <div class="win-banner hidden" id="winBanner">WIN <span id="winAmount">0</span></div>
+        <div class="fs-badge hidden" id="fsBadge">FREE SPINS <span id="fsCount">0</span></div>
+        <div class="stampede hidden" id="stampede">HERD STAMPEDE!</div>
+      </section>
+      <footer class="hud">
+        <div class="panel"><span>BALANCE</span><strong id="balance">3450.00</strong></div>
+        <div class="panel bet-panel">
+          <button type="button" id="betMinus" class="adj">−</button>
+          <div><span>BET</span><strong id="bet">2.50</strong></div>
+          <button type="button" id="betPlus" class="adj">+</button>
+        </div>
+        <button type="button" id="spinBtn" class="spin"><span>SPIN</span></button>
+        <div class="panel"><span>WIN</span><strong id="lastWin">0.00</strong></div>
+        <button type="button" id="autoBtn" class="auto">AUTO</button>
+      </footer>
+      <p class="hint">5×3 · 20 LINES · LION EXPANDS · 3+ ELEPHANTS = FREE SPINS WITH STICKY WILDS</p>
+    </div>
+  </div>
+  <script src="game.js"></script>
+</body>
+</html>

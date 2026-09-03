@@ -12,6 +12,14 @@ import {
 import { formatMoney } from './game/format'
 import './App.css'
 import { fetchGunduWalletBalance } from './gunduWallet'
+import {
+  playBetSound,
+  playLoseSound,
+  playRevealSound,
+  playTapSound,
+  playWinSound,
+  unlockGameAudio,
+} from './gameSounds'
 
 const ROWS = 6
 const COLS = 5
@@ -78,6 +86,8 @@ export default function App() {
 
   async function handleToggle(index: number) {
     if (busy || (status !== 'selecting' && status !== 'idle')) return
+    unlockGameAudio()
+    playTapSound()
     setBusy(true)
     setError(null)
     try {
@@ -92,11 +102,18 @@ export default function App() {
 
   async function handleBet() {
     if (busy || selected.length !== PICK) return
+    unlockGameAudio()
+    playBetSound()
     setBusy(true)
     setError(null)
     try {
       const game = await placeBet(betAmount)
       applyGame(game)
+      if (game.status === 'settled') {
+        playRevealSound()
+        if (Number(game.profit) > 0) playWinSound()
+        else playLoseSound()
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not place bet')
     } finally {
@@ -106,6 +123,8 @@ export default function App() {
 
   async function handleNewRound() {
     if (busy) return
+    unlockGameAudio()
+    playTapSound()
     setBusy(true)
     setError(null)
     try {
@@ -167,6 +186,7 @@ export default function App() {
           totalMultiplier={totalMultiplier}
           payout={payout}
           onToggle={handleToggle}
+          onUnlockAudio={unlockGameAudio}
         />
       </main>
       {error && <p className="footer-note error-note">{error}</p>}

@@ -413,9 +413,9 @@ function laneMates(lane, self) {
   );
 }
 
-/** Recycle well above the road — cars always re-enter from the top. */
+/** Recycle above the top of the screen — cars drive in naturally, never pop mid-road. */
 function safeRecycleY(lane, car) {
-  let y = -260 - Math.random() * 140;
+  let y = -110 - Math.random() * 160;
   for (const other of laneMates(lane, car)) {
     y = Math.min(y, other.y - MIN_CAR_GAP);
   }
@@ -469,10 +469,10 @@ function naturalSpeed(lane = 0) {
 
 function spawnCars(count) {
   const cars = [];
-  // Always spawn above the viewport so traffic enters from the top, never mid-road
+  // Always spawn above the top of the screen so traffic drives in from above
   for (let i = 0; i < count; i++) {
     const n = 1 + (i % 3 === 0 ? 1 : 0);
-    const base = -280 - ((i * 71) % 220) - Math.random() * 100;
+    const base = -120 - ((i * 71) % 180) - Math.random() * 90;
     for (let c = 0; c < n; c++) {
       cars.push({
         lane: i,
@@ -520,7 +520,7 @@ function softResetTraffic() {
     if (present.has(i)) continue;
     state.cars.push({
       lane: i,
-      y: -280 - Math.random() * 160,
+      y: -120 - Math.random() * 140,
       dir: 1,
       speed: naturalSpeed(i),
       cruise: 0.92 + Math.random() * 0.16,
@@ -798,7 +798,8 @@ async function serverStep() {
 }
 
 function padY(h) {
-  return h * 0.52;
+  // Slightly higher hen = shorter approach strip, but cars still enter from the top
+  return h * 0.44;
 }
 
 /** Barricade logic position — cars park and queue relative to this. */
@@ -1601,11 +1602,11 @@ function drawManhole(cx, cy, mult, cleared, isNext, lane = -1) {
 function drawOneCar(car, roadTop) {
   // Last resort: never paint a truck on the hen during a safe live step
   if (mustYieldToHen(car)) vaultPastHen(car);
+  const fr = OBJ[car.key];
+  const dw = fr ? fr.w * car.scale : 80;
+  const dh = fr ? fr.h * car.scale : 140;
   const x = state.sidewalk + car.lane * state.laneW + state.laneW / 2;
   const y = roadTop + car.y;
-  const fr = OBJ[car.key];
-  const dw = fr.w * car.scale;
-  const dh = fr.h * car.scale;
   ctx.save();
   ctx.translate(x, y);
   if (!drawObj(car.key, -dw / 2, -dh / 2, dw, dh)) {
@@ -1887,9 +1888,44 @@ function henLookOffset() {
   return { nx: L.nx, ny: L.ny };
 }
 
-/** Draw looking pupils on top of the no-pupil idle sprite (same transform as body). */
-function drawHenEyes(dw, dh, ox, oy) {
-  const look = henLookOffset();
+/** Official CR2 hop: slight body squash/stretch + lean — no long fake legs. */
+function henHopPose(t) {
+  if (t >= 1 || t <= 0) return { sx: 1, sy: 1, lean: 0, lookNx: null };
+  const dir = state.hopTo >= state.hopFrom ? 1 : -1;
+  if (t < 0.14) {
+    // Tiny crouch before leave
+    const k = t / 0.14;
+    return {
+      sx: 1 + 0.05 * k,
+      sy: 1 - 0.07 * k,
+      lean: dir * 0.03 * k,
+      lookNx: dir * 0.55,
+    };
+  }
+  if (t < 0.82) {
+    // Mid-air: slight tall stretch only (subtle, like the recording)
+    const air = (t - 0.14) / 0.68;
+    const stretch = Math.sin(air * Math.PI);
+    return {
+      sx: 1 - stretch * 0.04,
+      sy: 1 + stretch * 0.1,
+      lean: dir * (0.04 + stretch * 0.05),
+      lookNx: dir * 0.65,
+    };
+  }
+  // Soft land
+  const k = (t - 0.82) / 0.18;
+  const land = 1 - k;
+  return {
+    sx: 1 + 0.06 * land,
+    sy: 1 - 0.08 * land,
+    lean: dir * 0.03 * land,
+    lookNx: dir * 0.35 * land,
+  };
+}
+
+function drawHenEyes(dw, dh, ox, oy, lookOverride = null) {
+  const look = lookOverride || henLookOffset();
   const sx = dw / HEN_IMG_W;
   const sy = dh / HEN_IMG_H;
   for (let i = 0; i < HEN_EYES.length; i++) {
@@ -1912,7 +1948,9 @@ function drawHenEyes(dw, dh, ox, oy) {
 }
 
 function drawChicken(h) {
-  const hop = state.hopT < 1 ? Math.sin(state.hopT * Math.PI) * 34 : 0;
+  const hopT = state.hopT;
+  const hopping = hopT < 1;
+  const hop = hopping ? Math.sin(hopT * Math.PI) * HEN_HOP_LIFT : 0;
   const hit = state.hitAnim;
   const dying =
     hit > 0 ||
@@ -1928,13 +1966,26 @@ function drawChicken(h) {
   ctx.save();
   ctx.translate(x, y);
 
+  const hopPose = hopping && !dying ? henHopPose(hopT) : null;
+
+  // Idle breath when standing; hop pose takes over while jumping
+  let breath = 0;
+  if (!dying && !hopping) {
+    breath = Math.sin((performance.now() / 1000) * ((Math.PI * 2) / 1.35));
+  }
+  const bobY = hopPose ? 0 : breath * 2.4;
+  const breathSX = hopPose ? hopPose.sx : 1 + breath * 0.028;
+  const breathSY = hopPose ? hopPose.sy : 1 - breath * 0.038;
+  const lean = hopPose ? hopPose.lean : 0;
+
   ctx.fillStyle = "rgba(0,0,0,0.28)";
+  const shadowW = (dying ? 40 : 28) * (dying ? 1 : breathSX);
+  const shadowY = hopping ? 4 + hop * 0.15 : 4 + bobY * 0.35;
   ctx.beginPath();
-  ctx.ellipse(0, 4, dying ? 40 : 28, dying ? 14 : 9, 0, 0, Math.PI * 2);
+  ctx.ellipse(0, shadowY, shadowW * (hopping ? 0.85 : 1), dying ? 14 : 9 * (hopping ? 0.75 : breathSY), 0, 0, Math.PI * 2);
   ctx.fill();
 
   if (dying && state.deathPhase === "burst") {
-    // Official: white flat body with scratch marks; eyes/parts are separate particles
     const fade = Math.min(1, Math.max(0.35, (hit - 0.95) / 0.55));
     ctx.globalAlpha = fade;
     const splat = assets.splat;
@@ -1957,15 +2008,22 @@ function drawChicken(h) {
   } else if (!dying) {
     const img = assets.chick;
     const s = 0.72;
-    ctx.scale(s, s);
+    ctx.translate(0, bobY);
+    ctx.rotate(lean);
+    ctx.translate(0, 8);
+    ctx.scale(s * breathSX, s * breathSY);
+    ctx.translate(0, -8);
     if (img.complete && img.naturalWidth) {
       const dw = 118;
       const dh = dw * (img.naturalHeight / img.naturalWidth);
       const ox = -dw / 2;
       const oy = -dh + 8;
       ctx.drawImage(img, ox, oy, dw, dh);
-      // Same nervous circling pupils as the official recording
-      drawHenEyes(dw, dh, ox, oy);
+      const look =
+        hopPose && hopPose.lookNx != null
+          ? { nx: hopPose.lookNx, ny: -0.15 }
+          : null;
+      drawHenEyes(dw, dh, ox, oy, look);
     }
   }
   ctx.restore();

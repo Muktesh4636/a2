@@ -1,11 +1,10 @@
 import { useEffect, useRef } from 'react'
 import type { ReelBox } from '../api/client'
 import { formatMultiplier } from '../game/format'
+import { startSlideTicks, stopSlideTicks } from '../game/gameSounds'
+import { endOffset, SPIN_MS, smoothSlideProgress } from '../game/slideSync'
 
 const BOX_WIDTH = 92
-const BOX_GAP = 10
-const STRIDE = BOX_WIDTH + BOX_GAP
-const SPIN_MS = 7000
 const KEYFRAMES = 48
 
 type Props = {
@@ -18,20 +17,6 @@ type Props = {
 
 function toneClass(tone: string) {
   return `tone-${tone || 'gray'}`
-}
-
-function endOffset(winIndex: number, viewportWidth: number) {
-  const center = viewportWidth / 2
-  return -(winIndex * STRIDE + BOX_WIDTH / 2 - center + BOX_GAP / 2)
-}
-
-/** Continuous ease: gentle rise, long glide, soft brake — no sharp speed jumps */
-function smoothSlideProgress(t: number): number {
-  const x = Math.min(1, Math.max(0, t))
-  // Smoothstep-blended ease-out keeps motion fluid the whole way
-  const easeOut = 1 - (1 - x) ** 2.35
-  const smooth = x * x * (3 - 2 * x)
-  return easeOut * 0.82 + smooth * 0.18
 }
 
 function buildKeyframes(from: number, to: number): Keyframe[] {
@@ -73,6 +58,8 @@ export function Reel({ reel, winIndex, spinning, spinId, onSpinEnd }: Props) {
     const from = 28
     const to = endX
 
+    startSlideTicks(from, to, viewport.clientWidth, reel.length, SPIN_MS)
+
     // Promote to its own layer before animating
     track.style.transform = `translate3d(${from}px, 0, 0)`
 
@@ -88,6 +75,7 @@ export function Reel({ reel, winIndex, spinning, spinId, onSpinEnd }: Props) {
     const finish = () => {
       if (settled) return
       settled = true
+      stopSlideTicks()
       track.style.transform = `translate3d(${to}px, 0, 0)`
       onSpinEndRef.current?.()
     }
@@ -99,6 +87,7 @@ export function Reel({ reel, winIndex, spinning, spinId, onSpinEnd }: Props) {
 
     return () => {
       window.clearTimeout(timer)
+      stopSlideTicks()
       anim.cancel()
       if (animRef.current === anim) animRef.current = null
     }

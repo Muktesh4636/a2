@@ -1,0 +1,105 @@
+{
+  "id": "vegas-royale",
+  "title": "Vegas Royale",
+  "cols": 3,
+  "rows": 3,
+  "bets": [
+    0.5,
+    1,
+    2.5,
+    5,
+    10,
+    25
+  ],
+  "symbols": [
+    {
+      "id": "seven",
+      "weight": 2,
+      "pays": {
+        "3": 150
+      }
+    },
+    {
+      "id": "bars",
+      "weight": 3,
+      "pays": {
+        "3": 60
+      }
+    },
+    {
+      "id": "diamond",
+      "weight": 4,
+      "pays": {
+        "3": 40
+      }
+    },
+    {
+      "id": "bell",
+      "weight": 6,
+      "pays": {
+        "3": 25
+      }
+    },
+    {
+      "id": "bar",
+      "weight": 8,
+      "pays": {
+        "3": 15
+      }
+    },
+    {
+      "id": "horseshoe",
+      "weight": 9,
+      "pays": {
+        "3": 10
+      }
+    },
+    {
+      "id": "melon",
+      "weight": 10,
+      "pays": {
+        "3": 8
+      }
+    },
+    {
+      "id": "cherry",
+      "weight": 11,
+      "pays": {
+        "2": 2,
+        "3": 6
+      }
+    }
+  ],
+  "lines": [
+    [
+      1,
+      1,
+      1
+    ],
+    [
+      0,
+      0,
+      0
+    ],
+    [
+      2,
+      2,
+      2
+    ],
+    [
+      0,
+      1,
+      2
+    ],
+    [
+      2,
+      1,
+      0
+    ]
+  ],
+  "mode": "lines",
+  "free_spins_award": 0,
+  "pearl_goal": 0,
+  "scatter_trigger": null,
+  "cluster_pays": null
+}

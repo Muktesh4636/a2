@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Pharaoh's Fortune</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;800&family=Inter:wght@500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="scene">
+    <div class="game">
+      <h1 class="logo">PHARAOH'S FORTUNE</h1>
+
+      <div class="stage">
+        <div class="anubis left" aria-hidden="true"></div>
+        <div class="reel-shell">
+          <div class="reels" id="reels"></div>
+        </div>
+        <div class="anubis right" aria-hidden="true"></div>
+        <div class="win-banner hidden" id="winBanner">WIN $<span id="winAmount">0</span></div>
+        <div class="fs-badge hidden" id="fsBadge">FREE SPINS <span id="fsCount">0</span></div>
+      </div>
+
+      <footer class="hud">
+        <button type="button" class="icon-btn" id="infoBtn" title="Info">i</button>
+        <button type="button" class="icon-btn" id="settingsBtn" title="Settings">⚙</button>
+
+        <div class="panel balance-panel">
+          <span>BALANCE</span>
+          <strong id="balance">1000.00</strong>
+        </div>
+
+        <div class="bet-block">
+          <div class="panel bet-panel">
+            <button type="button" id="betMinus" class="adj">−</button>
+            <div>
+              <span>BET</span>
+              <strong id="bet">1.00</strong>
+            </div>
+            <button type="button" id="betPlus" class="adj">+</button>
+          </div>
+          <div class="mults" id="mults">
+            <button type="button" data-m="1" class="on">1x</button>
+            <button type="button" data-m="2">2x</button>
+            <button type="button" data-m="3">3x</button>
+            <button type="button" data-m="5">5x</button>
+          </div>
+        </div>
+
+        <button type="button" id="spinBtn" class="spin"><span>SPIN</span></button>
+
+        <div class="panel win-panel">
+          <span>WIN</span>
+          <strong id="lastWin">0.00</strong>
+        </div>
+
+        <button type="button" id="autoBtn" class="auto">AUTO PLAY</button>
+      </footer>
+    </div>
+  </div>
+  <script src="game.js"></script>
+</body>
+</html>

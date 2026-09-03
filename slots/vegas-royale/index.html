@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Vegas Royale 777</title>
+  <link href="https://fonts.googleapis.com/css2?family=Bungee&family=Nunito:wght@700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="scene">
+    <div class="game">
+      <h1 class="logo"><span class="star">✦</span> VEGAS ROYALE <b>777</b> <span class="star">✦</span></h1>
+      <section class="stage">
+        <div class="cabinet">
+          <div class="reels" id="reels"></div>
+          <div class="payline-marks"><i></i><i></i><i></i></div>
+        </div>
+        <div class="lever" id="lever" title="Pull to spin!">
+          <div class="lever-arm"><div class="lever-ball"></div></div>
+          <div class="lever-base"></div>
+        </div>
+        <div class="win-banner hidden" id="winBanner">WIN <span id="winAmount">0</span></div>
+      </section>
+      <footer class="hud">
+        <div class="panel bet-panel">
+          <button type="button" id="betMinus" class="adj">−</button>
+          <div><span>BET</span><strong id="bet">2.50</strong></div>
+          <button type="button" id="betPlus" class="adj">+</button>
+        </div>
+        <div class="panel"><span>BALANCE</span><strong id="balance">1234.56</strong></div>
+        <button type="button" id="spinBtn" class="spin"><span>SPIN</span></button>
+        <div class="marquee"><span>WIN</span><strong id="lastWin">$0.00</strong></div>
+        <button type="button" id="autoBtn" class="round">AUTO</button>
+      </footer>
+      <p class="hint">3×3 CLASSIC · 5 LINES (ROWS + DIAGONALS) · 2 CHERRIES PAY · PULL THE LEVER!</p>
+    </div>
+  </div>
+  <script src="game.js"></script>
+</body>
+</html>

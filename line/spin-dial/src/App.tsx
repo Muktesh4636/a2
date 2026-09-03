@@ -4,7 +4,13 @@ import { BetPanel } from './BetPanel'
 import { ANIM_MS, DEFAULT_BET, SEGMENTS, type MultiplierKey } from './gameConfig'
 import { Dial } from './Dial'
 import { MultiplierBar } from './MultiplierBar'
-import { playSpinSound, stopSpinSound } from './spinSound'
+import {
+  playBetSound,
+  playResultSound,
+  playSpinSoundAfterPaint,
+  stopSpinSound,
+  unlockGameAudio,
+} from './gameSounds'
 
 /** Pointer is fixed at 90° (top). Rotate dial so segment angle lands at 90. */
 function rotationForAngle(targetAngle: number, base: number) {
@@ -53,8 +59,9 @@ export default function App() {
 
   const onPlay = useCallback(async () => {
     if (!playerId || spinning || bet > balance || bet < 1) return
+    unlockGameAudio()
+    playBetSound()
     setSpinning(true)
-    playSpinSound()
     setLastMultiplier(null)
     setLastPayout(null)
     setHighlighted(null)
@@ -65,8 +72,10 @@ export default function App() {
       const result = await placePlay(playerId, bet)
       const mult = Number(result.multiplier) as MultiplierKey
       setRotation((r) => rotationForAngle(result.target_angle, r))
+      playSpinSoundAfterPaint(ANIM_MS)
       window.setTimeout(() => {
         stopSpinSound()
+        playResultSound(Number(result.payout) > 0)
         setBalance(Number(result.balance))
         setLastMultiplier(mult)
         setLastPayout(Number(result.payout))
